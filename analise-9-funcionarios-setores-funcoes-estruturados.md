@@ -40,6 +40,7 @@
 - Fluxo principal agora é seleção em catálogo ativo por empresa registrada.
 - Ao trocar empresa registrada no formulário, vínculos por ID são limpos para evitar associação inválida.
 - Validação de front impede salvar ID de setor/função que não seja ativo e da empresa correta.
+- Setor e Função/Cargo foram evoluídos para **combobox com busca** (filtro em memória, case-insensitive e por qualquer parte do nome), com estado de vazio e CTA visual para criação futura.
 
 ## Regras de integridade implementadas
 - **Proteção contra exclusão em uso:** via FK (`on delete restrict`) em `department_id` e `job_role_id`.

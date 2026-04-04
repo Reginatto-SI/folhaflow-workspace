@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import EmployeeFilters, { EmployeeFilterState, getInitialFilters } from "@/components/employees/EmployeeFilters";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 type EmployeeTab = "dados-funcionario" | "dados-funcionais" | "dados-bancarios" | "observacoes";
 
@@ -79,37 +79,12 @@ const normalizeBankField = (value?: string) => {
 };
 
 const Employees: React.FC = () => {
-  const { companies, employees, departments, jobRoles, allDepartments, allJobRoles, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
+  const { companies, employees, allDepartments, allJobRoles, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeFormState>(getInitialForm());
   const [errors, setErrors] = useState<EmployeeFormErrors>({});
   const [activeTab, setActiveTab] = useState<EmployeeTab>("dados-funcionario");
-  const [filters, setFilters] = useState<EmployeeFilterState>(getInitialFilters());
-
-  const sanitizeDigitsLocal = (v: string) => v.replace(/\D/g, "");
-
-  const filteredEmployees = useMemo(() => {
-    return employees.filter((emp) => {
-      // Search
-      if (filters.search) {
-        const term = filters.search.toLowerCase();
-        const cpfClean = sanitizeDigitsLocal(filters.search);
-        const matchName = emp.name.toLowerCase().includes(term);
-        const matchCpf = cpfClean.length > 0 && emp.cpf.includes(cpfClean);
-        if (!matchName && !matchCpf) return false;
-      }
-      // Status
-      if (filters.status === "active" && (!emp.isActive || emp.isOnLeave)) return false;
-      if (filters.status === "on_leave" && !emp.isOnLeave) return false;
-      if (filters.status === "monthly" && !emp.isMonthly) return false;
-      // Department
-      if (filters.departmentId && emp.departmentId !== filters.departmentId) return false;
-      // Job Role
-      if (filters.jobRoleId && emp.jobRoleId !== filters.jobRoleId) return false;
-      return true;
-    });
-  }, [employees, filters]);
 
   // Comentário: na transição gradual, filtros usam a empresa registrada do formulário (companyId),
   // garantindo catálogo correto por empresa mesmo que a empresa selecionada na listagem seja outra.
@@ -120,6 +95,16 @@ const Employees: React.FC = () => {
       availableJobRoles: allJobRoles.filter((jobRole) => jobRole.companyId === companyId && jobRole.isActive),
     };
   }, [allDepartments, allJobRoles, form.companyId]);
+
+  const departmentItems = useMemo(
+    () => availableDepartments.map((department) => ({ value: department.id, label: department.name })),
+    [availableDepartments]
+  );
+
+  const jobRoleItems = useMemo(
+    () => availableJobRoles.map((jobRole) => ({ value: jobRole.id, label: jobRole.name })),
+    [availableJobRoles]
+  );
 
   const openNew = () => {
     setEditing(null);
@@ -432,29 +417,26 @@ const Employees: React.FC = () => {
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div className="space-y-1.5">
                       <Label>Setor</Label>
-                      <Select
-                        value={form.departmentId || "__none__"}
+                      <SearchableCombobox
+                        className={fieldClass("departmentId")}
+                        value={form.departmentId || ""}
+                        items={departmentItems}
+                        disabled={!form.companyId}
+                        placeholder={form.companyId ? "Selecionar setor..." : "Selecione a empresa registrada primeiro"}
+                        searchPlaceholder="Buscar setor..."
+                        emptyMessage="Nenhum resultado encontrado"
+                        clearLabel="Não vincular setor agora"
+                        createActionLabel="+ Criar novo setor"
+                        onCreateActionClick={() => toast.info("Use a aba de Setores para criar novos registros.")}
                         onValueChange={(value) => {
-                          if (value === "__none__") {
+                          if (!value) {
                             setForm((prev) => ({ ...prev, departmentId: "", department: prev.department || "" }));
                             return;
                           }
                           const selectedDepartment = availableDepartments.find((department) => department.id === value);
                           setForm((prev) => ({ ...prev, departmentId: value, department: selectedDepartment?.name || prev.department || "" }));
                         }}
-                      >
-                        <SelectTrigger className={fieldClass("departmentId")}>
-                          <SelectValue placeholder={form.companyId ? "Selecione o setor" : "Selecione a empresa registrada primeiro"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Não vincular setor agora</SelectItem>
-                          {availableDepartments.map((department) => (
-                            <SelectItem key={department.id} value={department.id}>
-                              {department.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      />
                       {!!form.department && !form.departmentId && (
                         <p className="text-xs text-muted-foreground">
                           Legado: este funcionário mantém setor em texto livre ({form.department}) até associação por ID.
@@ -464,29 +446,26 @@ const Employees: React.FC = () => {
                     </div>
                     <div className="space-y-1.5">
                       <Label>Função / Cargo</Label>
-                      <Select
-                        value={form.jobRoleId || "__none__"}
+                      <SearchableCombobox
+                        className={fieldClass("jobRoleId")}
+                        value={form.jobRoleId || ""}
+                        items={jobRoleItems}
+                        disabled={!form.companyId}
+                        placeholder={form.companyId ? "Selecionar função/cargo..." : "Selecione a empresa registrada primeiro"}
+                        searchPlaceholder="Buscar função/cargo..."
+                        emptyMessage="Nenhum resultado encontrado"
+                        clearLabel="Não vincular função/cargo agora"
+                        createActionLabel="+ Criar nova função"
+                        onCreateActionClick={() => toast.info("Use a aba de Funções/Cargos para criar novos registros.")}
                         onValueChange={(value) => {
-                          if (value === "__none__") {
+                          if (!value) {
                             setForm((prev) => ({ ...prev, jobRoleId: "", role: prev.role || "" }));
                             return;
                           }
                           const selectedJobRole = availableJobRoles.find((jobRole) => jobRole.id === value);
                           setForm((prev) => ({ ...prev, jobRoleId: value, role: selectedJobRole?.name || prev.role || "" }));
                         }}
-                      >
-                        <SelectTrigger className={fieldClass("jobRoleId")}>
-                          <SelectValue placeholder={form.companyId ? "Selecione a função/cargo" : "Selecione a empresa registrada primeiro"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Não vincular função/cargo agora</SelectItem>
-                          {availableJobRoles.map((jobRole) => (
-                            <SelectItem key={jobRole.id} value={jobRole.id}>
-                              {jobRole.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      />
                       {!!form.role && !form.jobRoleId && (
                         <p className="text-xs text-muted-foreground">
                           Legado: esta função/cargo segue em texto livre ({form.role}) até associação por ID.
