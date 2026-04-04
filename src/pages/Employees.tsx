@@ -591,7 +591,7 @@ const Employees: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {employees.map((employee) => (
+              {filteredEmployees.map((employee) => (
                 <tr key={employee.id} className="border-b transition-colors hover:bg-muted/30">
                   <td className="px-4 py-3 font-medium">{employee.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{maskCpf(employee.cpf)}</td>
