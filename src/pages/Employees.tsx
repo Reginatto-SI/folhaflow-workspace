@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import EmployeeFilters, { EmployeeFilterState, getInitialFilters } from "@/components/employees/EmployeeFilters";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { BriefcaseBusiness, Landmark, NotebookPen, Pencil, Plus, Save, Trash2, User, Users, X } from "lucide-react";
+import { BriefcaseBusiness, Download, FileSpreadsheet, FileText, Landmark, NotebookPen, Pencil, Plus, Save, Trash2, Upload, User, Users, X } from "lucide-react";
 import { Employee } from "@/types/payroll";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type EmployeeTab = "dados-funcionario" | "dados-funcionais" | "dados-bancarios" | "observacoes";
 
@@ -87,6 +88,9 @@ const Employees: React.FC = () => {
   const [errors, setErrors] = useState<EmployeeFormErrors>({});
   const [activeTab, setActiveTab] = useState<EmployeeTab>("dados-funcionario");
   const [filters, setFilters] = useState<EmployeeFilterState>(getInitialFilters());
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [selectedImportFile, setSelectedImportFile] = useState<File | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   // Departments/jobRoles for the filter card (selected company)
   const departments = useMemo(
@@ -264,6 +268,46 @@ const Employees: React.FC = () => {
     }
   };
 
+  // Comentário: preparação de UX para exportação sem backend, mantendo ponto único para futura integração com API.
+  const handleExport = (type: "xlsx" | "pdf") => {
+    const label = type === "xlsx" ? "Excel (.xlsx)" : "PDF";
+    toast.success(`Exportação ${label} iniciada (simulação).`);
+  };
+
+  // Comentário: aceitamos somente planilhas nesta fase para reforçar o padrão de importação por modelo.
+  const isSpreadsheetFile = (file: File) => {
+    const acceptedMimeTypes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+    ];
+    const lowerFileName = file.name.toLowerCase();
+    return acceptedMimeTypes.includes(file.type) || lowerFileName.endsWith(".xlsx") || lowerFileName.endsWith(".xls");
+  };
+
+  // Comentário: validação local para deixar o modal pronto para backend, sem acoplar com upload real agora.
+  const handleImportFileSelection = (file?: File) => {
+    if (!file) return;
+    if (!isSpreadsheetFile(file)) {
+      toast.error("Formato inválido. Selecione um arquivo Excel (.xlsx ou .xls).");
+      return;
+    }
+    setSelectedImportFile(file);
+  };
+
+  const resetImportModal = () => {
+    setSelectedImportFile(null);
+    setImportModalOpen(false);
+  };
+
+  const handleImportSubmit = () => {
+    if (!selectedImportFile) {
+      toast.error("Selecione um arquivo para importar.");
+      return;
+    }
+    toast.success(`Importação de "${selectedImportFile.name}" enviada para processamento (simulação).`);
+    resetImportModal();
+  };
+
   const fieldClass = (field: keyof EmployeeFormErrors) => cn(errors[field] && "border-destructive focus-visible:ring-destructive/40");
 
   const kpis = useMemo(() => {
@@ -334,7 +378,87 @@ const Employees: React.FC = () => {
             {selectedCompany?.name || "Selecione uma empresa"} — {filteredEmployees.length} de {employees.length} funcionários
           </p>
         </div>
-        <Dialog
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Download className="mr-1 h-4 w-4" /> Exportar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => handleExport("xlsx")}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" /> Exportar Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("pdf")}>
+                <FileText className="mr-2 h-4 w-4" /> Exportar PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Dialog open={importModalOpen} onOpenChange={(isOpen) => (!isOpen ? resetImportModal() : setImportModalOpen(true))}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Upload className="mr-1 h-4 w-4" /> Importar
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-xl">
+              <DialogHeader className="space-y-2">
+                <DialogTitle className="text-xl">Importar funcionários</DialogTitle>
+                <p className="text-sm text-muted-foreground">
+                  Faça upload da planilha no modelo padrão para cadastrar ou atualizar funcionários em lote.
+                </p>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <Button variant="secondary" className="w-full sm:w-auto" onClick={() => toast.info("Download do modelo Excel disponível em breve.")}>
+                  <Download className="mr-1 h-4 w-4" /> Baixar modelo Excel
+                </Button>
+
+                <label
+                  htmlFor="employee-import-file"
+                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 px-4 py-8 text-center transition-colors hover:bg-muted/30"
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    handleImportFileSelection(event.dataTransfer.files?.[0]);
+                  }}
+                >
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                  <p className="text-sm font-medium">Arraste e solte o arquivo aqui</p>
+                  <p className="text-xs text-muted-foreground">ou use o botão abaixo para selecionar</p>
+                </label>
+
+                <Input
+                  id="employee-import-file"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  ref={importInputRef}
+                  onChange={(event) => handleImportFileSelection(event.target.files?.[0])}
+                />
+
+                <Button type="button" variant="outline" onClick={() => importInputRef.current?.click()}>
+                  Selecionar arquivo
+                </Button>
+
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <p>Formato suportado: Excel (.xlsx, .xls).</p>
+                  <p>{selectedImportFile ? `Arquivo selecionado: ${selectedImportFile.name}` : "Nenhum arquivo selecionado."}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t pt-4">
+                <Button variant="outline" onClick={resetImportModal}>
+                  <X className="mr-1 h-4 w-4" /> Cancelar
+                </Button>
+                <Button onClick={handleImportSubmit}>
+                  <Upload className="mr-1 h-4 w-4" /> Importar
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
           open={open}
           onOpenChange={(isOpen) => {
             setOpen(isOpen);
@@ -579,7 +703,8 @@ const Employees: React.FC = () => {
               <Button onClick={() => void handleSave()}><Save className="mr-1 h-4 w-4" />Salvar</Button>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {isLoading ? (
