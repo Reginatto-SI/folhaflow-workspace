@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,10 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const fmt = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 type EmployeeFormState = Omit<Employee, "id">;
+
+type EmployeeFormErrors = Partial<Record<"name" | "cpf" | "admissionDate" | "registration" | "bankName" | "bankBranch" | "bankAccount", string>>;
 
 const getInitialForm = (companyId = ""): EmployeeFormState => ({
   companyId,
@@ -34,22 +37,128 @@ const getInitialForm = (companyId = ""): EmployeeFormState => ({
   baseSalary: 0,
 });
 
+// Comentário: CPF sempre é persistido sem máscara para manter consistência e facilitar validação futura no banco.
+const sanitizeDigits = (value: string) => value.replace(/\D/g, "");
+
+const maskCpf = (value: string) => {
+  const digits = sanitizeDigits(value).slice(0, 11);
+  return digits
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+};
+
+const isValidCpf = (value: string) => {
+  const cpf = sanitizeDigits(value);
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+
+  const calcDigit = (slice: string, factor: number) => {
+    const total = slice
+      .split("")
+      .reduce((sum, digit) => sum + Number(digit) * factor--, 0);
+    const result = 11 - (total % 11);
+    return result > 9 ? 0 : result;
+  };
+
+  const firstDigit = calcDigit(cpf.slice(0, 9), 10);
+  const secondDigit = calcDigit(cpf.slice(0, 10), 11);
+  return firstDigit === Number(cpf[9]) && secondDigit === Number(cpf[10]);
+};
+
+const normalizeText = (value?: string) => value?.trim().replace(/\s+/g, " ") || "";
+
+const normalizeBankField = (value?: string) => {
+  const normalized = normalizeText(value);
+  return normalized.length >= 2 ? normalized : "";
+};
+
 const Employees: React.FC = () => {
   const { employees, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeFormState>(getInitialForm());
+  const [errors, setErrors] = useState<EmployeeFormErrors>({});
+
+  // Comentário: nesta fase mantemos setor/função como texto para menor mudança segura, com sugestões locais para UX.
+  const { departmentSuggestions, roleSuggestions } = useMemo(() => {
+    const departments = Array.from(new Set(employees.map((employee) => normalizeText(employee.department)).filter(Boolean))).sort();
+    const roles = Array.from(new Set(employees.map((employee) => normalizeText(employee.role)).filter(Boolean))).sort();
+    return { departmentSuggestions: departments, roleSuggestions: roles };
+  }, [employees]);
 
   const openNew = () => {
     setEditing(null);
+    setErrors({});
     setForm(getInitialForm(selectedCompany?.id || ""));
     setOpen(true);
   };
 
   const openEdit = (employee: Employee) => {
     setEditing(employee);
-    setForm({ ...employee });
+    setErrors({});
+    setForm({ ...employee, cpf: maskCpf(employee.cpf) });
     setOpen(true);
+  };
+
+  const validateForm = (draft: EmployeeFormState) => {
+    const nextErrors: EmployeeFormErrors = {};
+
+    if (!normalizeText(draft.name)) nextErrors.name = "Informe o nome completo.";
+    if (!draft.admissionDate) nextErrors.admissionDate = "Informe a data de admissão.";
+
+    if (!isValidCpf(draft.cpf)) {
+      nextErrors.cpf = "CPF inválido. Verifique os 11 dígitos.";
+    }
+
+    const registration = normalizeText(draft.registration);
+    if (registration && registration.length < 2) {
+      nextErrors.registration = "Registro/Matrícula precisa ter ao menos 2 caracteres.";
+    }
+
+    const bankName = normalizeText(draft.bankName);
+    const bankBranch = normalizeText(draft.bankBranch);
+    const bankAccount = normalizeText(draft.bankAccount);
+
+    if (bankName && bankName.length < 2) {
+      nextErrors.bankName = "Banco deve ter ao menos 2 caracteres.";
+    }
+    if (bankBranch && bankBranch.length < 2) {
+      nextErrors.bankBranch = "Agência deve ter ao menos 2 caracteres.";
+    }
+    if (bankAccount && bankAccount.length < 3) {
+      nextErrors.bankAccount = "Conta deve ter ao menos 3 caracteres.";
+    }
+
+    const hasAnyBankField = Boolean(bankName || bankBranch || bankAccount);
+    if (hasAnyBankField && (!bankName || !bankBranch || !bankAccount)) {
+      if (!bankName) nextErrors.bankName = "Preencha banco, agência e conta juntos.";
+      if (!bankBranch) nextErrors.bankBranch = "Preencha banco, agência e conta juntos.";
+      if (!bankAccount) nextErrors.bankAccount = "Preencha banco, agência e conta juntos.";
+    }
+
+    return nextErrors;
+  };
+
+  const buildPayload = (): Omit<Employee, "id"> => {
+    const normalizedName = normalizeText(form.name);
+    const normalizedRegistration = normalizeText(form.registration);
+    const normalizedDepartment = normalizeText(form.department);
+    const normalizedRole = normalizeText(form.role);
+    const normalizedNotes = normalizeText(form.notes);
+
+    return {
+      ...form,
+      companyId: form.companyId || selectedCompany?.id || "",
+      name: normalizedName,
+      cpf: sanitizeDigits(form.cpf),
+      registration: normalizedRegistration,
+      department: normalizedDepartment,
+      role: normalizedRole,
+      notes: normalizedNotes,
+      bankName: normalizeBankField(form.bankName),
+      bankBranch: normalizeBankField(form.bankBranch),
+      bankAccount: normalizeBankField(form.bankAccount),
+    };
   };
 
   const handleSave = async () => {
@@ -58,15 +167,15 @@ const Employees: React.FC = () => {
       return;
     }
 
-    if (!form.name || !form.cpf || !form.admissionDate) {
-      toast.error("Preencha Nome, CPF e Data de Admissão.");
+    const nextErrors = validateForm(form);
+    setErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      toast.error("Revise os campos destacados antes de salvar.");
       return;
     }
 
-    const payload: Omit<Employee, "id"> = {
-      ...form,
-      companyId: form.companyId || selectedCompany?.id || "",
-    };
+    const payload = buildPayload();
 
     try {
       if (editing) {
@@ -91,77 +200,188 @@ const Employees: React.FC = () => {
     }
   };
 
+  const fieldClass = (field: keyof EmployeeFormErrors) => cn(errors[field] && "border-destructive focus-visible:ring-destructive/40");
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Funcionários</h2>
-          <p className="text-sm text-muted-foreground">{selectedCompany?.name || "Selecione uma empresa"} — {employees.length} funcionários</p>
+          <p className="text-sm text-muted-foreground">
+            {selectedCompany?.name || "Selecione uma empresa"} — {employees.length} funcionários
+          </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+          open={open}
+          onOpenChange={(isOpen) => {
+            setOpen(isOpen);
+            if (!isOpen) setErrors({});
+          }}
+        >
           <DialogTrigger asChild>
             <Button onClick={openNew} size="sm">
-              <Plus className="h-4 w-4 mr-1" /> Novo Funcionário
+              <Plus className="mr-1 h-4 w-4" /> Novo Funcionário
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="max-w-4xl">
             <DialogHeader>
               <DialogTitle>{editing ? "Editar Funcionário" : "Novo Funcionário"}</DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4 py-2 max-h-[75vh] overflow-y-auto pr-2">
-              {/* Comentário: agrupamento para manter o formulário compacto e previsível para operação. */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold">Dados pessoais / vínculo</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div><Label>Nome Completo</Label><Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} /></div>
-                  <div><Label>CPF</Label><Input value={form.cpf} onChange={(event) => setForm((prev) => ({ ...prev, cpf: event.target.value }))} /></div>
-                  <div><Label>Data de Admissão</Label><Input type="date" value={form.admissionDate} onChange={(event) => setForm((prev) => ({ ...prev, admissionDate: event.target.value }))} /></div>
-                  <div><Label>Registro / Matrícula</Label><Input value={form.registration || ""} onChange={(event) => setForm((prev) => ({ ...prev, registration: event.target.value }))} /></div>
+            <div className="max-h-[75vh] space-y-4 overflow-y-auto py-2 pr-2">
+              <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
+                <h3 className="text-sm font-semibold">Dados principais</h3>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label>Nome completo *</Label>
+                    <Input
+                      className={fieldClass("name")}
+                      value={form.name}
+                      onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                    />
+                    {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>CPF *</Label>
+                    <Input
+                      className={fieldClass("cpf")}
+                      inputMode="numeric"
+                      maxLength={14}
+                      placeholder="000.000.000-00"
+                      value={form.cpf}
+                      onChange={(event) => setForm((prev) => ({ ...prev, cpf: maskCpf(event.target.value) }))}
+                    />
+                    {errors.cpf && <p className="text-xs text-destructive">{errors.cpf}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Data de admissão *</Label>
+                    <Input
+                      className={fieldClass("admissionDate")}
+                      type="date"
+                      value={form.admissionDate}
+                      onChange={(event) => setForm((prev) => ({ ...prev, admissionDate: event.target.value }))}
+                    />
+                    {errors.admissionDate && <p className="text-xs text-destructive">{errors.admissionDate}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Registro / Matrícula</Label>
+                    <Input
+                      className={fieldClass("registration")}
+                      placeholder="Identificador interno"
+                      value={form.registration || ""}
+                      onChange={(event) => setForm((prev) => ({ ...prev, registration: event.target.value }))}
+                    />
+                    {errors.registration && <p className="text-xs text-destructive">{errors.registration}</p>}
+                  </div>
                 </div>
-              </div>
+              </section>
 
-              <div className="space-y-3">
+              <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
                 <h3 className="text-sm font-semibold">Dados funcionais</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div><Label>Setor</Label><Input value={form.department || ""} onChange={(event) => setForm((prev) => ({ ...prev, department: event.target.value }))} /></div>
-                  <div><Label>Função / Cargo</Label><Input value={form.role || ""} onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))} /></div>
-                  <div><Label>Salário Base</Label><Input type="number" value={form.baseSalary} onChange={(event) => setForm((prev) => ({ ...prev, baseSalary: Number(event.target.value || 0) }))} /></div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label>Setor</Label>
+                    <Input
+                      list="department-suggestions"
+                      value={form.department || ""}
+                      onChange={(event) => setForm((prev) => ({ ...prev, department: event.target.value }))}
+                    />
+                    <datalist id="department-suggestions">
+                      {departmentSuggestions.map((department) => (
+                        <option key={department} value={department} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Função / Cargo</Label>
+                    <Input
+                      list="role-suggestions"
+                      value={form.role || ""}
+                      onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}
+                    />
+                    <datalist id="role-suggestions">
+                      {roleSuggestions.map((role) => (
+                        <option key={role} value={role} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label>Salário base</Label>
+                    <Input
+                      min={0}
+                      step="0.01"
+                      type="number"
+                      value={form.baseSalary}
+                      onChange={(event) => setForm((prev) => ({ ...prev, baseSalary: Number(event.target.value || 0) }))}
+                    />
+                  </div>
                 </div>
-              </div>
+              </section>
 
-              <div className="space-y-3">
+              <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
                 <h3 className="text-sm font-semibold">Dados bancários</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div><Label>Banco</Label><Input value={form.bankName || ""} onChange={(event) => setForm((prev) => ({ ...prev, bankName: event.target.value }))} /></div>
-                  <div><Label>Agência</Label><Input value={form.bankBranch || ""} onChange={(event) => setForm((prev) => ({ ...prev, bankBranch: event.target.value }))} /></div>
-                  <div><Label>Conta</Label><Input value={form.bankAccount || ""} onChange={(event) => setForm((prev) => ({ ...prev, bankAccount: event.target.value }))} /></div>
+                <p className="text-xs text-muted-foreground">Preencha banco, agência e conta juntos para evitar dados incompletos.</p>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label>Banco (nome)</Label>
+                    <Input
+                      className={fieldClass("bankName")}
+                      value={form.bankName || ""}
+                      onChange={(event) => setForm((prev) => ({ ...prev, bankName: event.target.value }))}
+                    />
+                    {errors.bankName && <p className="text-xs text-destructive">{errors.bankName}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Agência</Label>
+                    <Input
+                      className={fieldClass("bankBranch")}
+                      value={form.bankBranch || ""}
+                      onChange={(event) => setForm((prev) => ({ ...prev, bankBranch: event.target.value }))}
+                    />
+                    {errors.bankBranch && <p className="text-xs text-destructive">{errors.bankBranch}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Conta</Label>
+                    <Input
+                      className={fieldClass("bankAccount")}
+                      value={form.bankAccount || ""}
+                      onChange={(event) => setForm((prev) => ({ ...prev, bankAccount: event.target.value }))}
+                    />
+                    {errors.bankAccount && <p className="text-xs text-destructive">{errors.bankAccount}</p>}
+                  </div>
                 </div>
-              </div>
+              </section>
 
-              <div className="space-y-3">
+              <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
                 <h3 className="text-sm font-semibold">Status e observações</h3>
-                <div className="flex flex-wrap items-center gap-6">
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={form.isMonthly} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isMonthly: checked === true }))} />
-                    Mensalista
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={form.isOnLeave} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isOnLeave: checked === true }))} />
-                    Afastado
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
                     <Checkbox checked={form.isActive} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked === true }))} />
                     Ativo
                   </label>
+                  <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
+                    <Checkbox checked={form.isOnLeave} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isOnLeave: checked === true }))} />
+                    Afastado
+                  </label>
+                  <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
+                    <Checkbox checked={form.isMonthly} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isMonthly: checked === true }))} />
+                    Mensalista
+                  </label>
                 </div>
-                <div>
-                  <Label>Observação</Label>
-                  <Textarea value={form.notes || ""} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} />
+                <div className="space-y-1.5">
+                  <Label>Observações</Label>
+                  <Textarea
+                    className="min-h-24"
+                    placeholder="Anotações operacionais do RH/Financeiro"
+                    value={form.notes || ""}
+                    onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
+                  />
                 </div>
-              </div>
+              </section>
 
-              <Button onClick={() => void handleSave()} className="w-full">Salvar</Button>
+              <Button onClick={() => void handleSave()} className="w-full">
+                Salvar
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -170,25 +390,25 @@ const Employees: React.FC = () => {
       {isLoading ? (
         <div className="text-sm text-muted-foreground">Carregando funcionários...</div>
       ) : (
-        <div className="border rounded-lg overflow-hidden bg-card">
+        <div className="overflow-hidden rounded-lg border bg-card">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-muted/50 border-b">
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Nome</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">CPF</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Setor</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Função</th>
-                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Salário Base</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Admissão</th>
-                <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
+              <tr className="border-b bg-muted/50">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nome</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">CPF</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Setor</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Função</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Salário Base</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Admissão</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                 <th className="w-20" />
               </tr>
             </thead>
             <tbody>
               {employees.map((employee) => (
-                <tr key={employee.id} className="border-b hover:bg-muted/30 transition-colors">
+                <tr key={employee.id} className="border-b transition-colors hover:bg-muted/30">
                   <td className="px-4 py-3 font-medium">{employee.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{employee.cpf}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{maskCpf(employee.cpf)}</td>
                   <td className="px-4 py-3 text-muted-foreground">{employee.department || "-"}</td>
                   <td className="px-4 py-3 text-muted-foreground">{employee.role || "-"}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(employee.baseSalary)}</td>
@@ -199,15 +419,23 @@ const Employees: React.FC = () => {
                     </Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-1 justify-end">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(employee)}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => void handleDelete(employee.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(employee)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => void handleDelete(employee.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </td>
                 </tr>
               ))}
               {employees.length === 0 && (
-                <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum funcionário cadastrado para esta empresa.</td></tr>
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                    Nenhum funcionário cadastrado para esta empresa.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
