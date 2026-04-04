@@ -616,10 +616,10 @@ const Employees: React.FC = () => {
                   </td>
                 </tr>
               ))}
-              {employees.length === 0 && (
+              {filteredEmployees.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                    Nenhum funcionário cadastrado para esta empresa.
+                    {employees.length === 0 ? "Nenhum funcionário cadastrado para esta empresa." : "Nenhum funcionário encontrado com os filtros aplicados."}
                   </td>
                 </tr>
               )}
