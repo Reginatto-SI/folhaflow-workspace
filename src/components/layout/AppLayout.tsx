@@ -131,48 +131,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <h1 className="text-lg font-semibold truncate">{pageTitle}</h1>
           </div>
 
-          {/* Center: selectors */}
-          <div className="flex items-center gap-3 ml-auto mr-auto">
-            <Select
-              value={selectedCompany?.id || ""}
-              onValueChange={(v) => {
-                const c = companies.find((c) => c.id === v);
-                if (c) setSelectedCompany(c);
-              }}
-            >
-              <SelectTrigger className="w-[220px] h-8 text-sm">
-                <SelectValue placeholder="Selecione empresa" />
-              </SelectTrigger>
-              <SelectContent>
-                {companies.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={`${selectedMonth.month}-${selectedMonth.year}`}
-              onValueChange={(v) => {
-                const [m, y] = v.split("-").map(Number);
-                setSelectedMonth({ month: m, year: y });
-              }}
-            >
-              <SelectTrigger className="w-[160px] h-8 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[2025, 2026].flatMap((year) =>
-                  Array.from({ length: 12 }, (_, i) => (
-                    <SelectItem key={`${i + 1}-${year}`} value={`${i + 1}-${year}`}>
-                      {MONTHS[i]} {year}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Spacer */}
+          <div className="flex-1" />
 
           {/* Right: notifications + avatar */}
           <div className="flex items-center gap-2">
