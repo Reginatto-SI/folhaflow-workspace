@@ -185,7 +185,7 @@ const mapRubricRowToModel = (row: {
   formulaItems: (row.rubrica_formula_items || [])
     .map((item) => ({
       id: item.id,
-      operation: item.operation,
+      operation: item.operation as "add" | "subtract",
       sourceRubricId: item.source_rubrica_id,
       order: item.item_order,
     }))
