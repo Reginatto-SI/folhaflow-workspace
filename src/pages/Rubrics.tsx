@@ -643,31 +643,32 @@ const Rubrics: React.FC = () => {
           <table className="w-full min-w-[980px] text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <th className={compactTableHeaderClass}>Nome</th>
-                <th className={compactTableHeaderClass}>Código</th>
-                <th className={compactTableHeaderClass}>Categoria</th>
-                <th className={compactTableHeaderClass}>Tipo</th>
-                <th className={compactTableHeaderClass}>Modo</th>
-                <th className={`${compactTableHeaderClass} text-center`}>Ordem</th>
-                <th className={`${compactTableHeaderClass} text-center`}>Status</th>
+                {/* Densidade estilo Excel: py-2 + leading-tight para reduzir altura das linhas em todas as tabelas administrativas. */}
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Nome</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Código</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Categoria</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Tipo</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Modo</th>
+                <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Ordem</th>
+                <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Status</th>
                 <th className="w-20" />
               </tr>
             </thead>
             <tbody>
               {[...filteredRubrics].sort((a, b) => a.order - b.order).map((rubric) => (
                 <tr key={rubric.id} className="border-b transition-colors hover:bg-muted/30">
-                  <td className={`${compactTableCellClass} font-medium`}>{rubric.name}</td>
-                  <td className={compactTableCellClass}>{rubric.code}</td>
-                  <td className={`${compactTableCellClass} text-muted-foreground`}>{rubric.category}</td>
-                  <td className={compactTableCellClass}>{rubric.type === "provento" ? "Provento" : "Desconto"}</td>
-                  <td className={compactTableCellClass}>{rubric.mode === "manual" ? "Manual" : "Fórmula"}</td>
-                  <td className={`${compactTableCellClass} text-center tabular-nums`}>{rubric.order}</td>
-                  <td className={`${compactTableCellClass} text-center`}>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">{rubric.name}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap">{rubric.code}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{rubric.category}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap">{rubric.type === "provento" ? "Provento" : "Desconto"}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap">{rubric.mode === "manual" ? "Manual" : "Fórmula"}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-center tabular-nums">{rubric.order}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-center">
                     <Badge variant={rubric.isActive ? "default" : "secondary"} className={rubric.isActive ? "bg-success text-success-foreground" : ""}>
                       {rubric.isActive ? "Ativa" : "Inativa"}
                     </Badge>
                   </td>
-                  <td className={compactTableCellClass}>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap">
                     <div className="flex items-center justify-end">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
