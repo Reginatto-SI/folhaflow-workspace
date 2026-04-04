@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import EmployeeFilters, { EmployeeFilterState, getInitialFilters } from "@/components/employees/EmployeeFilters";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
