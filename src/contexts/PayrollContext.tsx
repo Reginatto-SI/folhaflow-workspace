@@ -168,7 +168,7 @@ const mapRubricRowToModel = (row: {
   allow_manual_override: boolean;
   rubrica_formula_items?: Array<{
     id: string;
-    operation: "add" | "subtract";
+    operation: string;
     source_rubrica_id: string;
     item_order: number;
   }>;
