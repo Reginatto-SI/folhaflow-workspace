@@ -44,6 +44,7 @@ export interface Employee {
   bankName?: string;
   bankBranch?: string;
   bankAccount?: string;
+  bankPixKey?: string;
   // Comentário: baseSalary foi preservado por compatibilidade com a Central de Folha.
   baseSalary: number;
 }

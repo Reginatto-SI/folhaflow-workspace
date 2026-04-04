@@ -41,6 +41,7 @@ const getInitialForm = (companyId = ""): EmployeeFormState => ({
   bankName: "",
   bankBranch: "",
   bankAccount: "",
+  bankPixKey: "",
   // Comentário: mantemos esse campo por compatibilidade com a Central de Folha nesta fase.
   baseSalary: 0,
 });
@@ -226,6 +227,7 @@ const Employees: React.FC = () => {
       bankName: normalizeBankField(form.bankName),
       bankBranch: normalizeBankField(form.bankBranch),
       bankAccount: normalizeBankField(form.bankAccount),
+      bankPixKey: normalizeText(form.bankPixKey),
     };
   };
 
@@ -580,7 +582,7 @@ const Employees: React.FC = () => {
                     </div>
                   </div>
                   {/* Comentário: o salário base permanece no modelo por compatibilidade de folha, mas foi removido desta UI de cadastro-base. */}
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
                     <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
                       <Checkbox checked={form.isActive} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked === true }))} />
                       Ativo
@@ -601,7 +603,7 @@ const Employees: React.FC = () => {
                 <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
                   <h3 className="text-sm font-semibold">Dados bancários</h3>
                   <p className="text-xs text-muted-foreground">Preencha banco, agência e conta juntos para evitar dados incompletos.</p>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
                     <div className="space-y-1.5">
                       <Label>Banco (nome)</Label>
                       <Input
@@ -628,6 +630,14 @@ const Employees: React.FC = () => {
                         onChange={(event) => setForm((prev) => ({ ...prev, bankAccount: event.target.value }))}
                       />
                       {errors.bankAccount && <p className="text-xs text-destructive">{errors.bankAccount}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Chave Pix</Label>
+                      <Input
+                        placeholder="CPF, e-mail, telefone ou chave aleatória"
+                        value={form.bankPixKey || ""}
+                        onChange={(event) => setForm((prev) => ({ ...prev, bankPixKey: event.target.value }))}
+                      />
                     </div>
                   </div>
                 </section>

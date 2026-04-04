@@ -87,6 +87,7 @@ const mapEmployeeRowToModel = (row: {
   bank_name: string | null;
   bank_branch: string | null;
   bank_account: string | null;
+  bank_pix_key: string | null;
   base_salary: number;
 }): Employee => ({
   id: row.id,
@@ -107,6 +108,7 @@ const mapEmployeeRowToModel = (row: {
   bankName: row.bank_name || "",
   bankBranch: row.bank_branch || "",
   bankAccount: row.bank_account || "",
+  bankPixKey: row.bank_pix_key || "",
   baseSalary: Number(row.base_salary || 0),
 });
 
@@ -128,6 +130,7 @@ const mapEmployeeInsertToRow = (employee: Omit<Employee, "id">) => ({
   bank_name: normalizeText(employee.bankName),
   bank_branch: normalizeText(employee.bankBranch),
   bank_account: normalizeText(employee.bankAccount),
+  bank_pix_key: normalizeText(employee.bankPixKey),
   base_salary: employee.baseSalary,
 });
 
@@ -149,6 +152,7 @@ const mapEmployeeUpdateToRow = (updates: Partial<Employee>) => ({
   ...(updates.bankName !== undefined ? { bank_name: normalizeText(updates.bankName) } : {}),
   ...(updates.bankBranch !== undefined ? { bank_branch: normalizeText(updates.bankBranch) } : {}),
   ...(updates.bankAccount !== undefined ? { bank_account: normalizeText(updates.bankAccount) } : {}),
+  ...(updates.bankPixKey !== undefined ? { bank_pix_key: normalizeText(updates.bankPixKey) } : {}),
   ...(updates.baseSalary !== undefined ? { base_salary: updates.baseSalary } : {}),
 });
 
