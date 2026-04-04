@@ -208,47 +208,89 @@ export type Database = {
           },
         ]
       }
-      rubrics: {
+      rubrica_formula_items: {
+        Row: {
+          created_at: string
+          id: string
+          item_order: number
+          operation: string
+          rubrica_id: string
+          source_rubrica_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_order: number
+          operation: string
+          rubrica_id: string
+          source_rubrica_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_order?: number
+          operation?: string
+          rubrica_id?: string
+          source_rubrica_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rubrica_formula_items_rubrica_id_fkey"
+            columns: ["rubrica_id"]
+            isOneToOne: false
+            referencedRelation: "rubricas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rubrica_formula_items_source_rubrica_id_fkey"
+            columns: ["source_rubrica_id"]
+            isOneToOne: false
+            referencedRelation: "rubricas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rubricas: {
         Row: {
           allow_manual_override: boolean
+          category: string
           code: string
           created_at: string
-          formula_items: Json
+          display_order: number
+          entry_mode: string
           id: string
           is_active: boolean
-          mode: "manual" | "formula"
           name: string
-          order_index: number
-          rubric_category: string
-          rubric_type: "earning" | "deduction"
+          type: string
           updated_at: string
         }
         Insert: {
           allow_manual_override?: boolean
+          category: string
           code: string
           created_at?: string
-          formula_items?: Json
+          display_order?: number
+          entry_mode: string
           id?: string
           is_active?: boolean
-          mode?: "manual" | "formula"
           name: string
-          order_index?: number
-          rubric_category: string
-          rubric_type: "earning" | "deduction"
+          type: string
           updated_at?: string
         }
         Update: {
           allow_manual_override?: boolean
+          category?: string
           code?: string
           created_at?: string
-          formula_items?: Json
+          display_order?: number
+          entry_mode?: string
           id?: string
           is_active?: boolean
-          mode?: "manual" | "formula"
           name?: string
-          order_index?: number
-          rubric_category?: string
-          rubric_type?: "earning" | "deduction"
+          type?: string
           updated_at?: string
         }
         Relationships: []

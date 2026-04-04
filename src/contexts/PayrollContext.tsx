@@ -160,50 +160,71 @@ const mapRubricRowToModel = (row: {
   id: string;
   name: string;
   code: string;
-  rubric_category: string;
-  rubric_type: "earning" | "deduction";
-  mode: "manual" | "formula";
-  order_index: number;
+  category: string;
+  type: "provento" | "desconto";
+  entry_mode: "manual" | "formula";
+  display_order: number;
   is_active: boolean;
-  formula_items: unknown;
   allow_manual_override: boolean;
+  rubrica_formula_items?: Array<{
+    id: string;
+    operation: "add" | "subtract";
+    source_rubrica_id: string;
+    item_order: number;
+  }>;
 }): Rubric => ({
   id: row.id,
   name: row.name,
   code: row.code,
-  category: row.rubric_category,
-  type: row.rubric_type,
-  mode: row.mode,
-  order: row.order_index,
+  category: row.category,
+  type: row.type,
+  mode: row.entry_mode,
+  order: row.display_order,
   isActive: row.is_active,
-  // Comentário: fórmula permanece estruturada em JSON para evitar entrada de texto livre e preservar ordem operacional.
-  formulaItems: Array.isArray(row.formula_items) ? (row.formula_items as Rubric["formulaItems"]) : [],
+  // Comentário: a composição de fórmula agora é persistida em linhas estruturadas para evitar texto livre estilo Excel.
+  formulaItems: (row.rubrica_formula_items || [])
+    .map((item) => ({
+      id: item.id,
+      operation: item.operation,
+      sourceRubricId: item.source_rubrica_id,
+      order: item.item_order,
+    }))
+    .sort((a, b) => a.order - b.order),
   allowManualOverride: row.allow_manual_override,
 });
 
 const mapRubricInsertToRow = (rubric: Omit<Rubric, "id">) => ({
   name: normalizeRequiredText(rubric.name),
   code: normalizeRequiredText(rubric.code),
-  rubric_category: normalizeRequiredText(rubric.category),
-  rubric_type: rubric.type,
-  mode: rubric.mode,
-  order_index: rubric.order,
+  category: normalizeRequiredText(rubric.category),
+  type: rubric.type,
+  entry_mode: rubric.mode,
+  display_order: rubric.order,
   is_active: rubric.isActive,
-  formula_items: rubric.formulaItems,
   allow_manual_override: rubric.allowManualOverride,
 });
 
 const mapRubricUpdateToRow = (updates: Partial<Rubric>) => ({
   ...(updates.name !== undefined ? { name: normalizeRequiredText(updates.name) } : {}),
   ...(updates.code !== undefined ? { code: normalizeRequiredText(updates.code) } : {}),
-  ...(updates.category !== undefined ? { rubric_category: normalizeRequiredText(updates.category) } : {}),
-  ...(updates.type !== undefined ? { rubric_type: updates.type } : {}),
-  ...(updates.mode !== undefined ? { mode: updates.mode } : {}),
-  ...(updates.order !== undefined ? { order_index: updates.order } : {}),
+  ...(updates.category !== undefined ? { category: normalizeRequiredText(updates.category) } : {}),
+  ...(updates.type !== undefined ? { type: updates.type } : {}),
+  ...(updates.mode !== undefined ? { entry_mode: updates.mode } : {}),
+  ...(updates.order !== undefined ? { display_order: updates.order } : {}),
   ...(updates.isActive !== undefined ? { is_active: updates.isActive } : {}),
-  ...(updates.formulaItems !== undefined ? { formula_items: updates.formulaItems } : {}),
   ...(updates.allowManualOverride !== undefined ? { allow_manual_override: updates.allowManualOverride } : {}),
 });
+
+const mapFormulaItemInsertToRow = (rubricaId: string, item: Rubric["formulaItems"][number]) => ({
+  rubrica_id: rubricaId,
+  operation: item.operation,
+  source_rubrica_id: item.sourceRubricId,
+  item_order: item.order,
+});
+
+// Comentário: a tabela de itens possui duas FKs para `rubricas`; usamos embed explícito para evitar ambiguidade no PostgREST.
+const RUBRICA_SELECT_WITH_ITEMS =
+  "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
 
 export const usePayroll = () => {
   const ctx = useContext(PayrollContext);
@@ -222,6 +243,62 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [entriesCache, setEntriesCache] = useState<Record<string, PayrollEntry[]>>({});
   const [isLoading, setIsLoading] = useState(true);
 
+  const validateRubricPayload = useCallback((rubric: Omit<Rubric, "id"> | Partial<Rubric>) => {
+    if (rubric.name !== undefined && !normalizeRequiredText(rubric.name)) throw new Error("Nome da rubrica é obrigatório.");
+    if (rubric.code !== undefined && !normalizeRequiredText(rubric.code)) throw new Error("Código da rubrica é obrigatório.");
+    if (rubric.category !== undefined && !normalizeRequiredText(rubric.category)) throw new Error("Categoria da rubrica é obrigatória.");
+    if (rubric.order !== undefined && (!Number.isFinite(rubric.order) || rubric.order < 0)) throw new Error("Ordem deve ser numérica válida.");
+    if (rubric.mode === "formula" && (!rubric.formulaItems || rubric.formulaItems.length === 0)) {
+      throw new Error("Rubrica de fórmula precisa de ao menos um item.");
+    }
+  }, []);
+
+  const validateCircularRubricDependency = useCallback(
+    async (rubricId: string, mode: Rubric["mode"], formulaItems: Rubric["formulaItems"]) => {
+      if (mode !== "formula") return;
+      if (formulaItems.some((item) => item.sourceRubricId === rubricId)) {
+        throw new Error("Rubrica não pode depender dela mesma.");
+      }
+
+      const { data, error } = await supabase
+        .from("rubrica_formula_items")
+        .select("rubrica_id, source_rubrica_id");
+      if (error) throw error;
+
+      const adjacency = new Map<string, string[]>();
+      for (const row of data || []) {
+        const deps = adjacency.get(row.rubrica_id) || [];
+        deps.push(row.source_rubrica_id);
+        adjacency.set(row.rubrica_id, deps);
+      }
+      adjacency.set(
+        rubricId,
+        formulaItems.map((item) => item.sourceRubricId)
+      );
+
+      // Comentário: validação no backend para bloquear circularidade indireta antes de persistir.
+      const visiting = new Set<string>();
+      const visited = new Set<string>();
+      const walk = (node: string): boolean => {
+        if (visiting.has(node)) return true;
+        if (visited.has(node)) return false;
+        visiting.add(node);
+        const deps = adjacency.get(node) || [];
+        for (const dep of deps) {
+          if (dep === rubricId || walk(dep)) return true;
+        }
+        visiting.delete(node);
+        visited.add(node);
+        return false;
+      };
+
+      if (walk(rubricId)) {
+        throw new Error("Referência circular detectada na fórmula.");
+      }
+    },
+    []
+  );
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
 
@@ -232,9 +309,9 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       supabase.from("departments").select("id, company_id, name, is_active").order("name", { ascending: true }),
       supabase.from("job_roles").select("id, company_id, name, is_active").order("name", { ascending: true }),
       supabase
-        .from("rubrics")
-        .select("id, name, code, rubric_category, rubric_type, mode, order_index, is_active, formula_items, allow_manual_override")
-        .order("order_index", { ascending: true }),
+        .from("rubricas")
+        .select(RUBRICA_SELECT_WITH_ITEMS)
+        .order("display_order", { ascending: true }),
     ]);
 
     if (!companiesRes.error && companiesRes.data) {
@@ -431,34 +508,84 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const addRubric = useCallback(async (rubric: Omit<Rubric, "id">) => {
+    validateRubricPayload(rubric);
     const { data, error } = await supabase
-      .from("rubrics")
+      .from("rubricas")
       .insert(mapRubricInsertToRow(rubric))
-      .select("id, name, code, rubric_category, rubric_type, mode, order_index, is_active, formula_items, allow_manual_override")
+      .select("id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override")
       .single();
     if (error || !data) throw error;
 
-    setRubrics((prev) => [...prev, mapRubricRowToModel(data)]);
-  }, []);
+    await validateCircularRubricDependency(data.id, rubric.mode, rubric.formulaItems);
+    if (rubric.mode === "formula") {
+      // Comentário: persistimos os itens da fórmula em tabela dedicada para garantir estrutura por linha e ordem.
+      const { error: formulaError } = await supabase
+        .from("rubrica_formula_items")
+        .insert(rubric.formulaItems.map((item) => mapFormulaItemInsertToRow(data.id, item)));
+      if (formulaError) {
+        await supabase.from("rubricas").delete().eq("id", data.id);
+        throw formulaError;
+      }
+    }
+
+    const { data: fullRubric, error: fullRubricError } = await supabase
+      .from("rubricas")
+      .select(RUBRICA_SELECT_WITH_ITEMS)
+      .eq("id", data.id)
+      .single();
+    if (fullRubricError || !fullRubric) throw fullRubricError;
+
+    setRubrics((prev) => [...prev, mapRubricRowToModel(fullRubric)]);
+  }, [validateCircularRubricDependency, validateRubricPayload]);
 
   const updateRubric = useCallback(async (id: string, updates: Partial<Rubric>) => {
+    validateRubricPayload(updates);
+    const modeToValidate = updates.mode ?? rubrics.find((rubric) => rubric.id === id)?.mode ?? "manual";
+    const itemsToValidate = updates.formulaItems ?? rubrics.find((rubric) => rubric.id === id)?.formulaItems ?? [];
+    await validateCircularRubricDependency(id, modeToValidate, itemsToValidate);
+
     const { data, error } = await supabase
-      .from("rubrics")
+      .from("rubricas")
       .update(mapRubricUpdateToRow(updates))
       .eq("id", id)
-      .select("id, name, code, rubric_category, rubric_type, mode, order_index, is_active, formula_items, allow_manual_override")
+      .select("id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override")
       .single();
     if (error || !data) throw error;
 
-    setRubrics((prev) => prev.map((rubric) => (rubric.id === id ? mapRubricRowToModel(data) : rubric)));
-  }, []);
+    if (updates.formulaItems !== undefined || updates.mode === "manual") {
+      const { error: deleteItemsError } = await supabase.from("rubrica_formula_items").delete().eq("rubrica_id", id);
+      if (deleteItemsError) throw deleteItemsError;
+    }
+    if (modeToValidate === "formula" && itemsToValidate.length > 0) {
+      const { error: insertItemsError } = await supabase
+        .from("rubrica_formula_items")
+        .insert(itemsToValidate.map((item) => mapFormulaItemInsertToRow(id, item)));
+      if (insertItemsError) throw insertItemsError;
+    }
+
+    const { data: fullRubric, error: fullRubricError } = await supabase
+      .from("rubricas")
+      .select(RUBRICA_SELECT_WITH_ITEMS)
+      .eq("id", id)
+      .single();
+    if (fullRubricError || !fullRubric) throw fullRubricError;
+
+    setRubrics((prev) => prev.map((rubric) => (rubric.id === id ? mapRubricRowToModel(fullRubric) : rubric)));
+  }, [rubrics, validateCircularRubricDependency, validateRubricPayload]);
 
   const deleteRubric = useCallback(async (id: string) => {
-    const { error } = await supabase.from("rubrics").delete().eq("id", id);
+    const rubric = rubrics.find((item) => item.id === id);
+    const nextStatus = !(rubric?.isActive ?? true);
+    const { data, error } = await supabase
+      .from("rubricas")
+      .update({ is_active: nextStatus })
+      .eq("id", id)
+      .select(RUBRICA_SELECT_WITH_ITEMS)
+      .single();
     if (error) throw error;
 
-    setRubrics((prev) => prev.filter((rubric) => rubric.id !== id));
-  }, []);
+    setRubrics((prev) => prev.map((item) => (item.id === id ? mapRubricRowToModel(data) : item)));
+  }, [rubrics]);
 
   return (
     <PayrollContext.Provider
