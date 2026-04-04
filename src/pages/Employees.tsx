@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { BriefcaseBusiness, Landmark, NotebookPen, Pencil, Plus, Save, Trash2, User, X } from "lucide-react";
+import { BriefcaseBusiness, Landmark, NotebookPen, Pencil, Plus, Save, Trash2, User, Users, X } from "lucide-react";
 import { Employee } from "@/types/payroll";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
