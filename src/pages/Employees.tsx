@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import EmployeeFilters, { EmployeeFilterState, getInitialFilters } from "@/components/employees/EmployeeFilters";
 
 type EmployeeTab = "dados-funcionario" | "dados-funcionais" | "dados-bancarios" | "observacoes";
 
@@ -78,12 +79,37 @@ const normalizeBankField = (value?: string) => {
 };
 
 const Employees: React.FC = () => {
-  const { companies, employees, allDepartments, allJobRoles, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
+  const { companies, employees, departments, jobRoles, allDepartments, allJobRoles, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeFormState>(getInitialForm());
   const [errors, setErrors] = useState<EmployeeFormErrors>({});
   const [activeTab, setActiveTab] = useState<EmployeeTab>("dados-funcionario");
+  const [filters, setFilters] = useState<EmployeeFilterState>(getInitialFilters());
+
+  const sanitizeDigitsLocal = (v: string) => v.replace(/\D/g, "");
+
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((emp) => {
+      // Search
+      if (filters.search) {
+        const term = filters.search.toLowerCase();
+        const cpfClean = sanitizeDigitsLocal(filters.search);
+        const matchName = emp.name.toLowerCase().includes(term);
+        const matchCpf = cpfClean.length > 0 && emp.cpf.includes(cpfClean);
+        if (!matchName && !matchCpf) return false;
+      }
+      // Status
+      if (filters.status === "active" && (!emp.isActive || emp.isOnLeave)) return false;
+      if (filters.status === "on_leave" && !emp.isOnLeave) return false;
+      if (filters.status === "monthly" && !emp.isMonthly) return false;
+      // Department
+      if (filters.departmentId && emp.departmentId !== filters.departmentId) return false;
+      // Job Role
+      if (filters.jobRoleId && emp.jobRoleId !== filters.jobRoleId) return false;
+      return true;
+    });
+  }, [employees, filters]);
 
   // Comentário: na transição gradual, filtros usam a empresa registrada do formulário (companyId),
   // garantindo catálogo correto por empresa mesmo que a empresa selecionada na listagem seja outra.
@@ -275,12 +301,22 @@ const Employees: React.FC = () => {
         </div>
       </div>
 
+      {/* Filters */}
+      <div className="mb-6">
+        <EmployeeFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          departments={departments.filter((d) => d.isActive)}
+          jobRoles={jobRoles.filter((r) => r.isActive)}
+        />
+      </div>
+
       {/* Page header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Funcionários</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {selectedCompany?.name || "Selecione uma empresa"} — {employees.length} funcionários registrados
+            {selectedCompany?.name || "Selecione uma empresa"} — {filteredEmployees.length} de {employees.length} funcionários
           </p>
         </div>
         <Dialog
@@ -555,7 +591,7 @@ const Employees: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {employees.map((employee) => (
+              {filteredEmployees.map((employee) => (
                 <tr key={employee.id} className="border-b transition-colors hover:bg-muted/30">
                   <td className="px-4 py-3 font-medium">{employee.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{maskCpf(employee.cpf)}</td>
@@ -580,10 +616,10 @@ const Employees: React.FC = () => {
                   </td>
                 </tr>
               ))}
-              {employees.length === 0 && (
+              {filteredEmployees.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                    Nenhum funcionário cadastrado para esta empresa.
+                    {employees.length === 0 ? "Nenhum funcionário cadastrado para esta empresa." : "Nenhum funcionário encontrado com os filtros aplicados."}
                   </td>
                 </tr>
               )}
