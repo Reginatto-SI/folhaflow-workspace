@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { usePayroll } from "@/contexts/PayrollContext";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Sidebar,
   SidebarContent,

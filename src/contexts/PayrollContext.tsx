@@ -177,8 +177,8 @@ const mapRubricRowToModel = (row: {
   name: row.name,
   code: row.code,
   category: row.category,
-  type: row.type,
-  mode: row.entry_mode,
+  type: row.type as "provento" | "desconto",
+  mode: row.entry_mode as "manual" | "formula",
   order: row.display_order,
   isActive: row.is_active,
   // Comentário: a composição de fórmula agora é persistida em linhas estruturadas para evitar texto livre estilo Excel.
