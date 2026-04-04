@@ -320,56 +320,7 @@ const Employees: React.FC = () => {
 
   return (
     <div>
-      {/* KPIs */}
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <Users className="h-4 w-4 text-primary" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Total</p>
-            <p className="text-xl font-bold tabular-nums">{kpis.total}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10">
-            <User className="h-4 w-4 text-success" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Ativos</p>
-            <p className="text-xl font-bold tabular-nums">{kpis.active}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/10">
-            <Users className="h-4 w-4 text-warning" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Afastados</p>
-            <p className="text-xl font-bold tabular-nums">{kpis.onLeave}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-            <BriefcaseBusiness className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Mensalistas</p>
-            <p className="text-xl font-bold tabular-nums">{kpis.monthly}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="mb-6">
-        <EmployeeFilters
-          filters={filters}
-          onFiltersChange={setFilters}
-          departments={departments.filter((d) => d.isActive)}
-          jobRoles={jobRoles.filter((r) => r.isActive)}
-        />
-      </div>
-
+      {/* Comentário: cabeçalho reposicionado para seguir o padrão visual da tela de Setores. */}
       {/* Page header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -705,6 +656,56 @@ const Employees: React.FC = () => {
           </DialogContent>
           </Dialog>
         </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <Users className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Total</p>
+            <p className="text-xl font-bold tabular-nums">{kpis.total}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10">
+            <User className="h-4 w-4 text-success" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Ativos</p>
+            <p className="text-xl font-bold tabular-nums">{kpis.active}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/10">
+            <Users className="h-4 w-4 text-warning" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Afastados</p>
+            <p className="text-xl font-bold tabular-nums">{kpis.onLeave}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+            <BriefcaseBusiness className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Mensalistas</p>
+            <p className="text-xl font-bold tabular-nums">{kpis.monthly}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="mb-6">
+        <EmployeeFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          departments={departments.filter((d) => d.isActive)}
+          jobRoles={jobRoles.filter((r) => r.isActive)}
+        />
       </div>
 
       {isLoading ? (
