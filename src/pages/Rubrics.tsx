@@ -56,6 +56,21 @@ const getInitialFilters = (): RubricFilterState => ({
   mode: "",
 });
 
+const getStatusBadgeProps = (isActive: boolean) =>
+  isActive
+    ? { variant: "default" as const, className: "bg-success text-success-foreground", label: "Ativa" }
+    : { variant: "outline" as const, className: "bg-muted text-muted-foreground", label: "Inativa" };
+
+const getModeBadgeProps = (mode: RubricMode) =>
+  mode === "formula"
+    ? { variant: "secondary" as const, className: "", label: "Fórmula" }
+    : { variant: "outline" as const, className: "bg-muted/60 text-muted-foreground", label: "Manual" };
+
+const getTypeBadgeProps = (type: Rubric["type"]) =>
+  type === "provento"
+    ? { variant: "outline" as const, className: "border-success/30 bg-success/10 text-success", label: "Provento" }
+    : { variant: "outline" as const, className: "border-destructive/30 bg-destructive/10 text-destructive", label: "Desconto" };
+
 const normalizeText = (value: string) => value.trim().replace(/\s+/g, " ");
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) return error.message;
@@ -660,13 +675,24 @@ const Rubrics: React.FC = () => {
                   <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">{rubric.name}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap">{rubric.code}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{rubric.category}</td>
-                  <td className="px-4 py-2 leading-tight whitespace-nowrap">{rubric.type === "provento" ? "Provento" : "Desconto"}</td>
-                  <td className="px-4 py-2 leading-tight whitespace-nowrap">{rubric.mode === "manual" ? "Manual" : "Fórmula"}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap">
+                    {(() => {
+                      const typeBadge = getTypeBadgeProps(rubric.type);
+                      return <Badge variant={typeBadge.variant} className={typeBadge.className}>{typeBadge.label}</Badge>;
+                    })()}
+                  </td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap">
+                    {(() => {
+                      const modeBadge = getModeBadgeProps(rubric.mode);
+                      return <Badge variant={modeBadge.variant} className={modeBadge.className}>{modeBadge.label}</Badge>;
+                    })()}
+                  </td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-center tabular-nums">{rubric.order}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-center">
-                    <Badge variant={rubric.isActive ? "default" : "secondary"} className={rubric.isActive ? "bg-success text-success-foreground" : ""}>
-                      {rubric.isActive ? "Ativa" : "Inativa"}
-                    </Badge>
+                    {(() => {
+                      const statusBadge = getStatusBadgeProps(rubric.isActive);
+                      return <Badge variant={statusBadge.variant} className={statusBadge.className}>{statusBadge.label}</Badge>;
+                    })()}
                   </td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap">
                     <div className="flex items-center justify-end">
