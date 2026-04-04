@@ -9,14 +9,16 @@ import { Employee } from "@/types/payroll";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const fmt = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+type EmployeeTab = "dados-funcionario" | "dados-funcionais" | "dados-bancarios" | "observacoes";
 
 type EmployeeFormState = Omit<Employee, "id">;
 
-type EmployeeFormErrors = Partial<Record<"name" | "cpf" | "admissionDate" | "registration" | "bankName" | "bankBranch" | "bankAccount", string>>;
+type EmployeeFormErrors = Partial<Record<"name" | "cpf" | "admissionDate" | "companyId" | "bankName" | "bankBranch" | "bankAccount", string>>;
 
 const getInitialForm = (companyId = ""): EmployeeFormState => ({
   companyId,
@@ -24,6 +26,7 @@ const getInitialForm = (companyId = ""): EmployeeFormState => ({
   cpf: "",
   admissionDate: "",
   registration: "",
+  workCardNumber: "",
   notes: "",
   department: "",
   role: "",
@@ -73,11 +76,12 @@ const normalizeBankField = (value?: string) => {
 };
 
 const Employees: React.FC = () => {
-  const { employees, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
+  const { companies, employees, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeFormState>(getInitialForm());
   const [errors, setErrors] = useState<EmployeeFormErrors>({});
+  const [activeTab, setActiveTab] = useState<EmployeeTab>("dados-funcionario");
 
   // Comentário: nesta fase mantemos setor/função como texto para menor mudança segura, com sugestões locais para UX.
   const { departmentSuggestions, roleSuggestions } = useMemo(() => {
@@ -89,6 +93,7 @@ const Employees: React.FC = () => {
   const openNew = () => {
     setEditing(null);
     setErrors({});
+    setActiveTab("dados-funcionario");
     setForm(getInitialForm(selectedCompany?.id || ""));
     setOpen(true);
   };
@@ -96,6 +101,7 @@ const Employees: React.FC = () => {
   const openEdit = (employee: Employee) => {
     setEditing(employee);
     setErrors({});
+    setActiveTab("dados-funcionario");
     setForm({ ...employee, cpf: maskCpf(employee.cpf) });
     setOpen(true);
   };
@@ -105,14 +111,10 @@ const Employees: React.FC = () => {
 
     if (!normalizeText(draft.name)) nextErrors.name = "Informe o nome completo.";
     if (!draft.admissionDate) nextErrors.admissionDate = "Informe a data de admissão.";
+    if (!draft.companyId) nextErrors.companyId = "Selecione a empresa registrada.";
 
     if (!isValidCpf(draft.cpf)) {
       nextErrors.cpf = "CPF inválido. Verifique os 11 dígitos.";
-    }
-
-    const registration = normalizeText(draft.registration);
-    if (registration && registration.length < 2) {
-      nextErrors.registration = "Registro/Matrícula precisa ter ao menos 2 caracteres.";
     }
 
     const bankName = normalizeText(draft.bankName);
@@ -208,7 +210,10 @@ const Employees: React.FC = () => {
         <div>
           <h2 className="text-xl font-semibold">Funcionários</h2>
           <p className="text-sm text-muted-foreground">
-            {selectedCompany?.name || "Selecione uma empresa"} — {employees.length} funcionários
+            {selectedCompany?.name || "Selecione uma empresa"} — {employees.length} funcionários registrados
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Cadastro-base por empresa registrada. Participação em folhas multiempresa é uma camada operacional separada.
           </p>
         </div>
         <Dialog
@@ -223,165 +228,194 @@ const Employees: React.FC = () => {
               <Plus className="mr-1 h-4 w-4" /> Novo Funcionário
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
-              <DialogTitle>{editing ? "Editar Funcionário" : "Novo Funcionário"}</DialogTitle>
+          <DialogContent className="flex h-[85vh] max-h-[85vh] max-w-4xl flex-col overflow-hidden">
+            <DialogHeader className="border-b pb-3">
+              <DialogTitle className="text-xl">{editing ? "Editar funcionário" : "Novo funcionário"}</DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                Tela piloto oficial de cadastro administrativo: dados base, sem valores de folha.
+              </p>
             </DialogHeader>
 
-            <div className="max-h-[75vh] space-y-4 overflow-y-auto py-2 pr-2">
-              <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
-                <h3 className="text-sm font-semibold">Dados principais</h3>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label>Nome completo *</Label>
-                    <Input
-                      className={fieldClass("name")}
-                      value={form.name}
-                      onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                    />
-                    {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>CPF *</Label>
-                    <Input
-                      className={fieldClass("cpf")}
-                      inputMode="numeric"
-                      maxLength={14}
-                      placeholder="000.000.000-00"
-                      value={form.cpf}
-                      onChange={(event) => setForm((prev) => ({ ...prev, cpf: maskCpf(event.target.value) }))}
-                    />
-                    {errors.cpf && <p className="text-xs text-destructive">{errors.cpf}</p>}
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Data de admissão *</Label>
-                    <Input
-                      className={fieldClass("admissionDate")}
-                      type="date"
-                      value={form.admissionDate}
-                      onChange={(event) => setForm((prev) => ({ ...prev, admissionDate: event.target.value }))}
-                    />
-                    {errors.admissionDate && <p className="text-xs text-destructive">{errors.admissionDate}</p>}
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Registro / Matrícula</Label>
-                    <Input
-                      className={fieldClass("registration")}
-                      placeholder="Identificador interno"
-                      value={form.registration || ""}
-                      onChange={(event) => setForm((prev) => ({ ...prev, registration: event.target.value }))}
-                    />
-                    {errors.registration && <p className="text-xs text-destructive">{errors.registration}</p>}
-                  </div>
-                </div>
-              </section>
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as EmployeeTab)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <TabsList className="grid w-full grid-cols-2 gap-1 rounded-lg bg-muted p-1 lg:grid-cols-4">
+                <TabsTrigger value="dados-funcionario">Dados do funcionário</TabsTrigger>
+                <TabsTrigger value="dados-funcionais">Dados funcionais</TabsTrigger>
+                <TabsTrigger value="dados-bancarios">Dados bancários</TabsTrigger>
+                <TabsTrigger value="observacoes">Observações</TabsTrigger>
+              </TabsList>
 
-              <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
-                <h3 className="text-sm font-semibold">Dados funcionais</h3>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label>Setor</Label>
-                    <Input
-                      list="department-suggestions"
-                      value={form.department || ""}
-                      onChange={(event) => setForm((prev) => ({ ...prev, department: event.target.value }))}
-                    />
-                    <datalist id="department-suggestions">
-                      {departmentSuggestions.map((department) => (
-                        <option key={department} value={department} />
-                      ))}
-                    </datalist>
+              <TabsContent value="dados-funcionario" className="mt-3 min-h-0 flex-1 overflow-y-auto pr-2">
+                <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
+                  <h3 className="text-sm font-semibold">Dados principais</h3>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>Nome completo *</Label>
+                      <Input
+                        className={fieldClass("name")}
+                        value={form.name}
+                        onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                      />
+                      {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>CPF *</Label>
+                      <Input
+                        className={fieldClass("cpf")}
+                        inputMode="numeric"
+                        maxLength={14}
+                        placeholder="000.000.000-00"
+                        value={form.cpf}
+                        onChange={(event) => setForm((prev) => ({ ...prev, cpf: maskCpf(event.target.value) }))}
+                      />
+                      {errors.cpf && <p className="text-xs text-destructive">{errors.cpf}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Data de admissão *</Label>
+                      <Input
+                        className={fieldClass("admissionDate")}
+                        type="date"
+                        value={form.admissionDate}
+                        onChange={(event) => setForm((prev) => ({ ...prev, admissionDate: event.target.value }))}
+                      />
+                      {errors.admissionDate && <p className="text-xs text-destructive">{errors.admissionDate}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Nº da carteira de trabalho (CTPS)</Label>
+                      <Input
+                        // Comentário: campo incluído por regra de negócio do cadastro-base e persistido como work_card_number.
+                        placeholder="Ex.: 1234567"
+                        value={form.workCardNumber || ""}
+                        onChange={(event) => setForm((prev) => ({ ...prev, workCardNumber: event.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label>Empresa registrada *</Label>
+                      {/* Comentário: companyId passa a ser tratado explicitamente como empresa registrada. */}
+                      <Select value={form.companyId} onValueChange={(value) => setForm((prev) => ({ ...prev, companyId: value }))}>
+                        <SelectTrigger className={fieldClass("companyId")}>
+                          <SelectValue placeholder="Selecione a empresa formal de registro" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {companies.map((company) => (
+                            <SelectItem key={company.id} value={company.id}>
+                              {company.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Esta seleção define apenas a empresa de registro formal. A participação em folhas de outras empresas do grupo será tratada em fluxo específico.
+                      </p>
+                      {errors.companyId && <p className="text-xs text-destructive">{errors.companyId}</p>}
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Função / Cargo</Label>
-                    <Input
-                      list="role-suggestions"
-                      value={form.role || ""}
-                      onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}
-                    />
-                    <datalist id="role-suggestions">
-                      {roleSuggestions.map((role) => (
-                        <option key={role} value={role} />
-                      ))}
-                    </datalist>
-                  </div>
-                  <div className="space-y-1.5 md:col-span-2">
-                    <Label>Salário base</Label>
-                    <Input
-                      min={0}
-                      step="0.01"
-                      type="number"
-                      value={form.baseSalary}
-                      onChange={(event) => setForm((prev) => ({ ...prev, baseSalary: Number(event.target.value || 0) }))}
-                    />
-                  </div>
-                </div>
-              </section>
+                </section>
+              </TabsContent>
 
-              <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
-                <h3 className="text-sm font-semibold">Dados bancários</h3>
-                <p className="text-xs text-muted-foreground">Preencha banco, agência e conta juntos para evitar dados incompletos.</p>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div className="space-y-1.5">
-                    <Label>Banco (nome)</Label>
-                    <Input
-                      className={fieldClass("bankName")}
-                      value={form.bankName || ""}
-                      onChange={(event) => setForm((prev) => ({ ...prev, bankName: event.target.value }))}
-                    />
-                    {errors.bankName && <p className="text-xs text-destructive">{errors.bankName}</p>}
+              <TabsContent value="dados-funcionais" className="mt-3 min-h-0 flex-1 overflow-y-auto pr-2">
+                <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
+                  <h3 className="text-sm font-semibold">Dados funcionais</h3>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>Setor</Label>
+                      <Input
+                        list="department-suggestions"
+                        value={form.department || ""}
+                        onChange={(event) => setForm((prev) => ({ ...prev, department: event.target.value }))}
+                      />
+                      <datalist id="department-suggestions">
+                        {departmentSuggestions.map((department) => (
+                          <option key={department} value={department} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Função / Cargo</Label>
+                      <Input
+                        list="role-suggestions"
+                        value={form.role || ""}
+                        onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}
+                      />
+                      <datalist id="role-suggestions">
+                        {roleSuggestions.map((role) => (
+                          <option key={role} value={role} />
+                        ))}
+                      </datalist>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Agência</Label>
-                    <Input
-                      className={fieldClass("bankBranch")}
-                      value={form.bankBranch || ""}
-                      onChange={(event) => setForm((prev) => ({ ...prev, bankBranch: event.target.value }))}
-                    />
-                    {errors.bankBranch && <p className="text-xs text-destructive">{errors.bankBranch}</p>}
+                  {/* Comentário: o salário base permanece no modelo por compatibilidade de folha, mas foi removido desta UI de cadastro-base. */}
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
+                      <Checkbox checked={form.isActive} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked === true }))} />
+                      Ativo
+                    </label>
+                    <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
+                      <Checkbox checked={form.isOnLeave} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isOnLeave: checked === true }))} />
+                      Afastado
+                    </label>
+                    <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
+                      <Checkbox checked={form.isMonthly} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isMonthly: checked === true }))} />
+                      Mensalista
+                    </label>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Conta</Label>
-                    <Input
-                      className={fieldClass("bankAccount")}
-                      value={form.bankAccount || ""}
-                      onChange={(event) => setForm((prev) => ({ ...prev, bankAccount: event.target.value }))}
-                    />
-                    {errors.bankAccount && <p className="text-xs text-destructive">{errors.bankAccount}</p>}
-                  </div>
-                </div>
-              </section>
+                </section>
+              </TabsContent>
 
-              <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
-                <h3 className="text-sm font-semibold">Status e observações</h3>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
-                    <Checkbox checked={form.isActive} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked === true }))} />
-                    Ativo
-                  </label>
-                  <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
-                    <Checkbox checked={form.isOnLeave} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isOnLeave: checked === true }))} />
-                    Afastado
-                  </label>
-                  <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
-                    <Checkbox checked={form.isMonthly} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isMonthly: checked === true }))} />
-                    Mensalista
-                  </label>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Observações</Label>
+              <TabsContent value="dados-bancarios" className="mt-3 min-h-0 flex-1 overflow-y-auto pr-2">
+                <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
+                  <h3 className="text-sm font-semibold">Dados bancários</h3>
+                  <p className="text-xs text-muted-foreground">Preencha banco, agência e conta juntos para evitar dados incompletos.</p>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <Label>Banco (nome)</Label>
+                      <Input
+                        className={fieldClass("bankName")}
+                        value={form.bankName || ""}
+                        onChange={(event) => setForm((prev) => ({ ...prev, bankName: event.target.value }))}
+                      />
+                      {errors.bankName && <p className="text-xs text-destructive">{errors.bankName}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Agência</Label>
+                      <Input
+                        className={fieldClass("bankBranch")}
+                        value={form.bankBranch || ""}
+                        onChange={(event) => setForm((prev) => ({ ...prev, bankBranch: event.target.value }))}
+                      />
+                      {errors.bankBranch && <p className="text-xs text-destructive">{errors.bankBranch}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Conta</Label>
+                      <Input
+                        className={fieldClass("bankAccount")}
+                        value={form.bankAccount || ""}
+                        onChange={(event) => setForm((prev) => ({ ...prev, bankAccount: event.target.value }))}
+                      />
+                      {errors.bankAccount && <p className="text-xs text-destructive">{errors.bankAccount}</p>}
+                    </div>
+                  </div>
+                </section>
+              </TabsContent>
+
+              <TabsContent value="observacoes" className="mt-3 min-h-0 flex-1 overflow-y-auto pr-2">
+                <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
+                  <h3 className="text-sm font-semibold">Observações e informações complementares</h3>
                   <Textarea
-                    className="min-h-24"
+                    className="min-h-40"
                     placeholder="Anotações operacionais do RH/Financeiro"
                     value={form.notes || ""}
                     onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
                   />
-                </div>
-              </section>
+                </section>
+              </TabsContent>
+            </Tabs>
 
-              <Button onClick={() => void handleSave()} className="w-full">
-                Salvar
+            <div className="flex items-center justify-end gap-2 border-t pt-3">
+              <p className="mr-auto text-xs text-muted-foreground">Salário e composição mensal são tratados na Central de Folha.</p>
+              <Button variant="outline" onClick={() => setOpen(false)}>
+                Cancelar
               </Button>
+              <Button onClick={() => void handleSave()}>Salvar</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -398,7 +432,7 @@ const Employees: React.FC = () => {
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">CPF</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Setor</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Função</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Salário Base</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Empresa registrada</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Admissão</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                 <th className="w-20" />
@@ -411,7 +445,7 @@ const Employees: React.FC = () => {
                   <td className="px-4 py-3 text-muted-foreground">{maskCpf(employee.cpf)}</td>
                   <td className="px-4 py-3 text-muted-foreground">{employee.department || "-"}</td>
                   <td className="px-4 py-3 text-muted-foreground">{employee.role || "-"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmt(employee.baseSalary)}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{companies.find((company) => company.id === employee.companyId)?.name || "-"}</td>
                   <td className="px-4 py-3 text-muted-foreground">{new Date(employee.admissionDate).toLocaleDateString("pt-BR")}</td>
                   <td className="px-4 py-3 text-center">
                     <Badge variant={employee.isActive ? "default" : "secondary"} className={employee.isActive ? "bg-success text-success-foreground" : ""}>

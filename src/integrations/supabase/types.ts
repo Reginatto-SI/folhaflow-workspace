@@ -61,6 +61,7 @@ export type Database = {
           registration: string | null
           role: string | null
           updated_at: string
+          work_card_number: string | null
         }
         Insert: {
           admission_date: string
@@ -81,6 +82,7 @@ export type Database = {
           registration?: string | null
           role?: string | null
           updated_at?: string
+          work_card_number?: string | null
         }
         Update: {
           admission_date?: string
@@ -101,6 +103,7 @@ export type Database = {
           registration?: string | null
           role?: string | null
           updated_at?: string
+          work_card_number?: string | null
         }
         Relationships: [
           {
