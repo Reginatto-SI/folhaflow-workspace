@@ -370,23 +370,23 @@ const JobRoles: React.FC = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Função/Cargo</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Empresa vinculada</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Função/Cargo</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Empresa vinculada</th>
+                <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Status</th>
                 <th className="w-20" />
               </tr>
             </thead>
             <tbody>
               {filteredJobRoles.map((jobRole) => (
                 <tr key={jobRole.id} className="border-b transition-colors hover:bg-muted/30">
-                  <td className="px-4 py-3 font-medium">{jobRole.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{companyNameMap[jobRole.companyId] || "-"}</td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">{jobRole.name}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{companyNameMap[jobRole.companyId] || "-"}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-center">
                     <Badge variant={jobRole.isActive ? "default" : "secondary"} className={jobRole.isActive ? "bg-success text-success-foreground" : ""}>
                       {jobRole.isActive ? "Ativo" : "Inativo"}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap">
                     <div className="flex justify-end">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

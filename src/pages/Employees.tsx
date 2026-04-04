@@ -725,31 +725,31 @@ const Employees: React.FC = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nome</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">CPF</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Setor</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Função</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Empresa registrada</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Admissão</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Nome</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">CPF</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Setor</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Função</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Empresa registrada</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Admissão</th>
+                <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Status</th>
                 <th className="w-20" />
               </tr>
             </thead>
             <tbody>
               {filteredEmployees.map((employee) => (
                 <tr key={employee.id} className="border-b transition-colors hover:bg-muted/30">
-                  <td className="px-4 py-3 font-medium">{employee.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{maskCpf(employee.cpf)}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{employee.department || "-"}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{employee.role || "-"}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{companies.find((company) => company.id === employee.companyId)?.name || "-"}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{new Date(employee.admissionDate).toLocaleDateString("pt-BR")}</td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">{employee.name}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{maskCpf(employee.cpf)}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{employee.department || "-"}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{employee.role || "-"}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{companies.find((company) => company.id === employee.companyId)?.name || "-"}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{new Date(employee.admissionDate).toLocaleDateString("pt-BR")}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-center">
                     <Badge variant={employee.isActive ? "default" : "secondary"} className={employee.isActive ? "bg-success text-success-foreground" : ""}>
                       {employee.isActive ? "Ativo" : "Inativo"}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap">
                     <div className="flex justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(employee)}>
                         <Pencil className="h-3.5 w-3.5" />

@@ -69,16 +69,16 @@ const PayrollTable: React.FC = () => {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-muted/50 border-b">
-              <th className="w-8 px-3 py-3" />
-              <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Funcionário</th>
-              <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Salário Base</th>
-              <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground border-l">Horas Extras</th>
-              <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Bônus</th>
-              <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground border-l">VT</th>
-              <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">VR</th>
-              <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">INSS</th>
-              <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">IRRF</th>
-              <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground border-l bg-muted/80">Líquido</th>
+              <th className="w-8 px-3 py-2 leading-tight whitespace-nowrap" />
+              <th className="text-left px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground">Funcionário</th>
+              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground">Salário Base</th>
+              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground border-l">Horas Extras</th>
+              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground">Bônus</th>
+              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground border-l">VT</th>
+              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground">VR</th>
+              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground">INSS</th>
+              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground">IRRF</th>
+              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground border-l bg-muted/80">Líquido</th>
             </tr>
           </thead>
           <tbody>

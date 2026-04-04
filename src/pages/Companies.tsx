@@ -338,23 +338,23 @@ const Companies: React.FC = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Empresa</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">CNPJ</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Endereço</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Empresa</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">CNPJ</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Endereço</th>
+                <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Status</th>
                 <th className="w-20" />
               </tr>
             </thead>
             <tbody>
               {filteredCompanies.map((company) => (
                 <tr key={company.id} className="border-b transition-colors hover:bg-muted/30">
-                  <td className="px-4 py-3 font-medium">{company.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{company.cnpj}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{company.address || "-"}</td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">{company.name}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{company.cnpj}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{company.address || "-"}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-center">
                     <Badge className="bg-success text-success-foreground">Ativa</Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap">
                     <div className="flex justify-end">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
