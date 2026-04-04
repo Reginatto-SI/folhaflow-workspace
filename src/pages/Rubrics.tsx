@@ -281,6 +281,11 @@ const Rubrics: React.FC = () => {
 
   const hasActiveFilters = Boolean(filters.search || filters.status || filters.type || filters.mode);
 
+  const compactTableHeaderClass =
+    "px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight";
+  // Densidade estilo Excel: reduzimos padding vertical e line-height para compactar a altura das linhas sem perder leitura.
+  const compactTableCellClass = "px-4 py-2 whitespace-nowrap leading-tight";
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -638,32 +643,32 @@ const Rubrics: React.FC = () => {
           <table className="w-full min-w-[980px] text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nome</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Código</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Categoria</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tipo</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Modo</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ordem</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                <th className={compactTableHeaderClass}>Nome</th>
+                <th className={compactTableHeaderClass}>Código</th>
+                <th className={compactTableHeaderClass}>Categoria</th>
+                <th className={compactTableHeaderClass}>Tipo</th>
+                <th className={compactTableHeaderClass}>Modo</th>
+                <th className={`${compactTableHeaderClass} text-center`}>Ordem</th>
+                <th className={`${compactTableHeaderClass} text-center`}>Status</th>
                 <th className="w-20" />
               </tr>
             </thead>
             <tbody>
               {[...filteredRubrics].sort((a, b) => a.order - b.order).map((rubric) => (
                 <tr key={rubric.id} className="border-b transition-colors hover:bg-muted/30">
-                  <td className="px-4 py-3 font-medium">{rubric.name}</td>
-                  <td className="px-4 py-3">{rubric.code}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{rubric.category}</td>
-                  <td className="px-4 py-3">{rubric.type === "provento" ? "Provento" : "Desconto"}</td>
-                  <td className="px-4 py-3">{rubric.mode === "manual" ? "Manual" : "Fórmula"}</td>
-                  <td className="px-4 py-3 text-center tabular-nums">{rubric.order}</td>
-                  <td className="px-4 py-3 text-center">
+                  <td className={`${compactTableCellClass} font-medium`}>{rubric.name}</td>
+                  <td className={compactTableCellClass}>{rubric.code}</td>
+                  <td className={`${compactTableCellClass} text-muted-foreground`}>{rubric.category}</td>
+                  <td className={compactTableCellClass}>{rubric.type === "provento" ? "Provento" : "Desconto"}</td>
+                  <td className={compactTableCellClass}>{rubric.mode === "manual" ? "Manual" : "Fórmula"}</td>
+                  <td className={`${compactTableCellClass} text-center tabular-nums`}>{rubric.order}</td>
+                  <td className={`${compactTableCellClass} text-center`}>
                     <Badge variant={rubric.isActive ? "default" : "secondary"} className={rubric.isActive ? "bg-success text-success-foreground" : ""}>
                       {rubric.isActive ? "Ativa" : "Inativa"}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end">
+                  <td className={compactTableCellClass}>
+                    <div className="flex items-center justify-end">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">
