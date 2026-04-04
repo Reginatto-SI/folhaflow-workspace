@@ -4,46 +4,91 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Employee } from "@/types/payroll";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmt = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+type EmployeeFormState = Omit<Employee, "id">;
+
+const getInitialForm = (companyId = ""): EmployeeFormState => ({
+  companyId,
+  name: "",
+  cpf: "",
+  admissionDate: "",
+  registration: "",
+  notes: "",
+  department: "",
+  role: "",
+  isMonthly: false,
+  isOnLeave: false,
+  isActive: true,
+  bankName: "",
+  bankBranch: "",
+  bankAccount: "",
+  // Comentário: mantemos esse campo por compatibilidade com a Central de Folha nesta fase.
+  baseSalary: 0,
+});
 
 const Employees: React.FC = () => {
-  const { employees, selectedCompany, addEmployee, updateEmployee, deleteEmployee } = usePayroll();
+  const { employees, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
-  const [form, setForm] = useState({ name: "", position: "", baseSalary: "", admissionDate: "", status: "active" as "active" | "inactive" });
+  const [form, setForm] = useState<EmployeeFormState>(getInitialForm());
 
   const openNew = () => {
     setEditing(null);
-    setForm({ name: "", position: "", baseSalary: "", admissionDate: "", status: "active" });
+    setForm(getInitialForm(selectedCompany?.id || ""));
     setOpen(true);
   };
 
-  const openEdit = (e: Employee) => {
-    setEditing(e);
-    setForm({ name: e.name, position: e.position, baseSalary: String(e.baseSalary), admissionDate: e.admissionDate, status: e.status });
+  const openEdit = (employee: Employee) => {
+    setEditing(employee);
+    setForm({ ...employee });
     setOpen(true);
   };
 
-  const handleSave = () => {
-    if (!form.name || !form.position || !form.baseSalary) {
-      toast.error("Preencha todos os campos obrigatórios.");
+  const handleSave = async () => {
+    if (!selectedCompany?.id && !form.companyId) {
+      toast.error("Selecione uma empresa antes de cadastrar funcionário.");
       return;
     }
-    const data = { name: form.name, position: form.position, baseSalary: parseFloat(form.baseSalary), admissionDate: form.admissionDate, status: form.status as "active" | "inactive" };
-    if (editing) {
-      updateEmployee(editing.id, data);
-      toast.success("Funcionário atualizado.");
-    } else {
-      addEmployee({ id: `e${Date.now()}`, companyId: selectedCompany?.id || "", ...data });
-      toast.success("Funcionário adicionado.");
+
+    if (!form.name || !form.cpf || !form.admissionDate) {
+      toast.error("Preencha Nome, CPF e Data de Admissão.");
+      return;
     }
-    setOpen(false);
+
+    const payload: Omit<Employee, "id"> = {
+      ...form,
+      companyId: form.companyId || selectedCompany?.id || "",
+    };
+
+    try {
+      if (editing) {
+        await updateEmployee(editing.id, payload);
+        toast.success("Funcionário atualizado.");
+      } else {
+        await addEmployee(payload);
+        toast.success("Funcionário adicionado.");
+      }
+      setOpen(false);
+    } catch {
+      toast.error("Não foi possível salvar o funcionário.");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteEmployee(id);
+      toast.success("Funcionário removido.");
+    } catch {
+      toast.error("Não foi possível remover o funcionário.");
+    }
   };
 
   return (
@@ -59,69 +104,115 @@ const Employees: React.FC = () => {
               <Plus className="h-4 w-4 mr-1" /> Novo Funcionário
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>{editing ? "Editar Funcionário" : "Novo Funcionário"}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div><Label>Nome</Label><Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} /></div>
-              <div><Label>Cargo</Label><Input value={form.position} onChange={(e) => setForm((p) => ({ ...p, position: e.target.value }))} /></div>
-              <div><Label>Salário Base</Label><Input type="number" value={form.baseSalary} onChange={(e) => setForm((p) => ({ ...p, baseSalary: e.target.value }))} /></div>
-              <div><Label>Data de Admissão</Label><Input type="date" value={form.admissionDate} onChange={(e) => setForm((p) => ({ ...p, admissionDate: e.target.value }))} /></div>
-              <div>
-                <Label>Status</Label>
-                <Select value={form.status} onValueChange={(v) => setForm((p) => ({ ...p, status: v as "active" | "inactive" }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Ativo</SelectItem>
-                    <SelectItem value="inactive">Inativo</SelectItem>
-                  </SelectContent>
-                </Select>
+
+            <div className="space-y-4 py-2 max-h-[75vh] overflow-y-auto pr-2">
+              {/* Comentário: agrupamento para manter o formulário compacto e previsível para operação. */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">Dados pessoais / vínculo</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div><Label>Nome Completo</Label><Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} /></div>
+                  <div><Label>CPF</Label><Input value={form.cpf} onChange={(event) => setForm((prev) => ({ ...prev, cpf: event.target.value }))} /></div>
+                  <div><Label>Data de Admissão</Label><Input type="date" value={form.admissionDate} onChange={(event) => setForm((prev) => ({ ...prev, admissionDate: event.target.value }))} /></div>
+                  <div><Label>Registro / Matrícula</Label><Input value={form.registration || ""} onChange={(event) => setForm((prev) => ({ ...prev, registration: event.target.value }))} /></div>
+                </div>
               </div>
-              <Button onClick={handleSave} className="w-full">Salvar</Button>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">Dados funcionais</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div><Label>Setor</Label><Input value={form.department || ""} onChange={(event) => setForm((prev) => ({ ...prev, department: event.target.value }))} /></div>
+                  <div><Label>Função / Cargo</Label><Input value={form.role || ""} onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))} /></div>
+                  <div><Label>Salário Base</Label><Input type="number" value={form.baseSalary} onChange={(event) => setForm((prev) => ({ ...prev, baseSalary: Number(event.target.value || 0) }))} /></div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">Dados bancários</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div><Label>Banco</Label><Input value={form.bankName || ""} onChange={(event) => setForm((prev) => ({ ...prev, bankName: event.target.value }))} /></div>
+                  <div><Label>Agência</Label><Input value={form.bankBranch || ""} onChange={(event) => setForm((prev) => ({ ...prev, bankBranch: event.target.value }))} /></div>
+                  <div><Label>Conta</Label><Input value={form.bankAccount || ""} onChange={(event) => setForm((prev) => ({ ...prev, bankAccount: event.target.value }))} /></div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">Status e observações</h3>
+                <div className="flex flex-wrap items-center gap-6">
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={form.isMonthly} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isMonthly: checked === true }))} />
+                    Mensalista
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={form.isOnLeave} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isOnLeave: checked === true }))} />
+                    Afastado
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={form.isActive} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked === true }))} />
+                    Ativo
+                  </label>
+                </div>
+                <div>
+                  <Label>Observação</Label>
+                  <Textarea value={form.notes || ""} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} />
+                </div>
+              </div>
+
+              <Button onClick={() => void handleSave()} className="w-full">Salvar</Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="border rounded-lg overflow-hidden bg-card">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-muted/50 border-b">
-              <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Nome</th>
-              <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Cargo</th>
-              <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Salário Base</th>
-              <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Admissão</th>
-              <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
-              <th className="w-20" />
-            </tr>
-          </thead>
-          <tbody>
-            {employees.map((e) => (
-              <tr key={e.id} className="border-b hover:bg-muted/30 transition-colors">
-                <td className="px-4 py-3 font-medium">{e.name}</td>
-                <td className="px-4 py-3 text-muted-foreground">{e.position}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{fmt(e.baseSalary)}</td>
-                <td className="px-4 py-3 text-muted-foreground">{new Date(e.admissionDate).toLocaleDateString("pt-BR")}</td>
-                <td className="px-4 py-3 text-center">
-                  <Badge variant={e.status === "active" ? "default" : "secondary"} className={e.status === "active" ? "bg-success text-success-foreground" : ""}>
-                    {e.status === "active" ? "Ativo" : "Inativo"}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-1 justify-end">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(e)}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => { deleteEmployee(e.id); toast.success("Removido."); }}><Trash2 className="h-3.5 w-3.5" /></Button>
-                  </div>
-                </td>
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground">Carregando funcionários...</div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden bg-card">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/50 border-b">
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Nome</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">CPF</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Setor</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Função</th>
+                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Salário Base</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Admissão</th>
+                <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
+                <th className="w-20" />
               </tr>
-            ))}
-            {employees.length === 0 && (
-              <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum funcionário cadastrado para esta empresa.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {employees.map((employee) => (
+                <tr key={employee.id} className="border-b hover:bg-muted/30 transition-colors">
+                  <td className="px-4 py-3 font-medium">{employee.name}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{employee.cpf}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{employee.department || "-"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{employee.role || "-"}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmt(employee.baseSalary)}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{new Date(employee.admissionDate).toLocaleDateString("pt-BR")}</td>
+                  <td className="px-4 py-3 text-center">
+                    <Badge variant={employee.isActive ? "default" : "secondary"} className={employee.isActive ? "bg-success text-success-foreground" : ""}>
+                      {employee.isActive ? "Ativo" : "Inativo"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1 justify-end">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(employee)}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => void handleDelete(employee.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {employees.length === 0 && (
+                <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum funcionário cadastrado para esta empresa.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };

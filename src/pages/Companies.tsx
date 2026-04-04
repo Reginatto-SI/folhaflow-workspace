@@ -10,7 +10,7 @@ import { Company } from "@/types/payroll";
 import { toast } from "sonner";
 
 const Companies: React.FC = () => {
-  const { companies, addCompany, updateCompany, deleteCompany } = usePayroll();
+  const { companies, addCompany, updateCompany, deleteCompany, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Company | null>(null);
   const [form, setForm] = useState({ name: "", cnpj: "", address: "" });
@@ -21,30 +21,39 @@ const Companies: React.FC = () => {
     setOpen(true);
   };
 
-  const openEdit = (c: Company) => {
-    setEditing(c);
-    setForm({ name: c.name, cnpj: c.cnpj, address: c.address || "" });
+  const openEdit = (company: Company) => {
+    setEditing(company);
+    setForm({ name: company.name, cnpj: company.cnpj, address: company.address || "" });
     setOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name || !form.cnpj) {
       toast.error("Preencha nome e CNPJ.");
       return;
     }
-    if (editing) {
-      updateCompany(editing.id, form);
-      toast.success("Empresa atualizada.");
-    } else {
-      addCompany({ id: `c${Date.now()}`, ...form });
-      toast.success("Empresa criada.");
+
+    try {
+      if (editing) {
+        await updateCompany(editing.id, form);
+        toast.success("Empresa atualizada.");
+      } else {
+        await addCompany(form);
+        toast.success("Empresa criada.");
+      }
+      setOpen(false);
+    } catch {
+      toast.error("Não foi possível salvar a empresa.");
     }
-    setOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    deleteCompany(id);
-    toast.success("Empresa removida.");
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteCompany(id);
+      toast.success("Empresa removida.");
+    } catch {
+      toast.error("Não foi possível remover a empresa.");
+    }
   };
 
   return (
@@ -67,15 +76,15 @@ const Companies: React.FC = () => {
             <div className="space-y-4 py-2">
               <div>
                 <Label>Nome</Label>
-                <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
+                <Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
               </div>
               <div>
                 <Label>CNPJ</Label>
-                <Input value={form.cnpj} onChange={(e) => setForm((p) => ({ ...p, cnpj: e.target.value }))} />
+                <Input value={form.cnpj} onChange={(event) => setForm((prev) => ({ ...prev, cnpj: event.target.value }))} />
               </div>
               <div>
                 <Label>Endereço</Label>
-                <Input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
+                <Input value={form.address} onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))} />
               </div>
               <Button onClick={handleSave} className="w-full">Salvar</Button>
             </div>
@@ -83,32 +92,36 @@ const Companies: React.FC = () => {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {companies.map((c) => (
-          <Card key={c.id}>
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-base">{c.name}</CardTitle>
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground">Carregando empresas...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {companies.map((company) => (
+            <Card key={company.id}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-base">{company.name}</CardTitle>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(company)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => void handleDelete(company.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(c)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(c.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-1">
-              <p>CNPJ: {c.cnpj}</p>
-              {c.address && <p>{c.address}</p>}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground space-y-1">
+                <p>CNPJ: {company.cnpj}</p>
+                {company.address && <p>{company.address}</p>}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

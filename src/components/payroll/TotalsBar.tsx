@@ -1,6 +1,5 @@
 import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
-import { mockEmployees } from "@/data/mock";
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });

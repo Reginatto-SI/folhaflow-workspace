@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { Company, Employee, PayrollEntry, PayrollMonth } from "@/types/payroll";
-import { mockCompanies, mockEmployees, generatePayrollEntries } from "@/data/mock";
+import { generatePayrollEntries } from "@/data/mock";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PayrollContextType {
   companies: Company[];
@@ -9,17 +10,98 @@ interface PayrollContextType {
   selectedMonth: PayrollMonth;
   setSelectedMonth: (month: PayrollMonth) => void;
   employees: Employee[];
+  allEmployees: Employee[];
   payrollEntries: PayrollEntry[];
+  isLoading: boolean;
   updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => void;
-  addCompany: (company: Company) => void;
-  updateCompany: (id: string, updates: Partial<Company>) => void;
-  deleteCompany: (id: string) => void;
-  addEmployee: (employee: Employee) => void;
-  updateEmployee: (id: string, updates: Partial<Employee>) => void;
-  deleteEmployee: (id: string) => void;
+  addCompany: (company: Omit<Company, "id">) => Promise<void>;
+  updateCompany: (id: string, updates: Partial<Company>) => Promise<void>;
+  deleteCompany: (id: string) => Promise<void>;
+  addEmployee: (employee: Omit<Employee, "id">) => Promise<void>;
+  updateEmployee: (id: string, updates: Partial<Employee>) => Promise<void>;
+  deleteEmployee: (id: string) => Promise<void>;
 }
 
 const PayrollContext = createContext<PayrollContextType | null>(null);
+
+const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; address: string | null }): Company => ({
+  id: row.id,
+  name: row.name,
+  cnpj: row.cnpj,
+  address: row.address || "",
+});
+
+const mapEmployeeRowToModel = (row: {
+  id: string;
+  company_id: string;
+  name: string;
+  cpf: string;
+  admission_date: string;
+  registration: string | null;
+  notes: string | null;
+  department: string | null;
+  role: string | null;
+  is_monthly: boolean;
+  is_on_leave: boolean;
+  is_active: boolean;
+  bank_name: string | null;
+  bank_branch: string | null;
+  bank_account: string | null;
+  base_salary: number;
+}): Employee => ({
+  id: row.id,
+  companyId: row.company_id,
+  name: row.name,
+  cpf: row.cpf,
+  admissionDate: row.admission_date,
+  registration: row.registration || "",
+  notes: row.notes || "",
+  department: row.department || "",
+  role: row.role || "",
+  isMonthly: row.is_monthly,
+  isOnLeave: row.is_on_leave,
+  isActive: row.is_active,
+  bankName: row.bank_name || "",
+  bankBranch: row.bank_branch || "",
+  bankAccount: row.bank_account || "",
+  baseSalary: Number(row.base_salary || 0),
+});
+
+const mapEmployeeInsertToRow = (employee: Omit<Employee, "id">) => ({
+  company_id: employee.companyId,
+  name: employee.name,
+  cpf: employee.cpf,
+  admission_date: employee.admissionDate,
+  registration: employee.registration || null,
+  notes: employee.notes || null,
+  department: employee.department || null,
+  role: employee.role || null,
+  is_monthly: employee.isMonthly,
+  is_on_leave: employee.isOnLeave,
+  is_active: employee.isActive,
+  bank_name: employee.bankName || null,
+  bank_branch: employee.bankBranch || null,
+  bank_account: employee.bankAccount || null,
+  base_salary: employee.baseSalary,
+});
+
+const mapEmployeeUpdateToRow = (updates: Partial<Employee>) => ({
+  ...(updates.companyId !== undefined ? { company_id: updates.companyId } : {}),
+  ...(updates.name !== undefined ? { name: updates.name } : {}),
+  ...(updates.cpf !== undefined ? { cpf: updates.cpf } : {}),
+  ...(updates.admissionDate !== undefined ? { admission_date: updates.admissionDate } : {}),
+  ...(updates.registration !== undefined ? { registration: updates.registration || null } : {}),
+  ...(updates.notes !== undefined ? { notes: updates.notes || null } : {}),
+  ...(updates.department !== undefined ? { department: updates.department || null } : {}),
+  ...(updates.role !== undefined ? { role: updates.role || null } : {}),
+  ...(updates.isMonthly !== undefined ? { is_monthly: updates.isMonthly } : {}),
+  ...(updates.isOnLeave !== undefined ? { is_on_leave: updates.isOnLeave } : {}),
+  ...(updates.isActive !== undefined ? { is_active: updates.isActive } : {}),
+  ...(updates.bankName !== undefined ? { bank_name: updates.bankName || null } : {}),
+  ...(updates.bankBranch !== undefined ? { bank_branch: updates.bankBranch || null } : {}),
+  ...(updates.bankAccount !== undefined ? { bank_account: updates.bankAccount || null } : {}),
+  ...(updates.baseSalary !== undefined ? { base_salary: updates.baseSalary } : {}),
+});
 
 export const usePayroll = () => {
   const ctx = useContext(PayrollContext);
@@ -28,56 +110,133 @@ export const usePayroll = () => {
 };
 
 export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [companies, setCompanies] = useState<Company[]>(mockCompanies);
-  const [allEmployees, setAllEmployees] = useState<Employee[]>(mockEmployees);
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(mockCompanies[0]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<PayrollMonth>({ month: 3, year: 2026 });
   const [entriesCache, setEntriesCache] = useState<Record<string, PayrollEntry[]>>({});
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+
+    // Comentário: carregamos empresas e funcionários direto do Supabase para remover dependência de mock no cadastro.
+    const [companiesRes, employeesRes] = await Promise.all([
+      supabase.from("companies").select("id, name, cnpj, address").order("name", { ascending: true }),
+      supabase.from("employees").select("*").order("name", { ascending: true }),
+    ]);
+
+    if (!companiesRes.error && companiesRes.data) {
+      const loadedCompanies = companiesRes.data.map(mapCompanyRowToModel);
+      setCompanies(loadedCompanies);
+      setSelectedCompany((prev) => {
+        if (prev && loadedCompanies.some((company) => company.id === prev.id)) return prev;
+        return loadedCompanies[0] ?? null;
+      });
+    }
+
+    if (!employeesRes.error && employeesRes.data) {
+      setAllEmployees(employeesRes.data.map(mapEmployeeRowToModel));
+    }
+
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const cacheKey = `${selectedCompany?.id}-${selectedMonth.month}-${selectedMonth.year}`;
-
-  const employees = allEmployees.filter((e) => e.companyId === selectedCompany?.id);
+  const employees = allEmployees.filter((employee) => employee.companyId === selectedCompany?.id);
 
   const payrollEntries = React.useMemo(() => {
     if (!selectedCompany) return [];
     if (entriesCache[cacheKey]) return entriesCache[cacheKey];
-    const entries = generatePayrollEntries(selectedCompany.id, selectedMonth.month, selectedMonth.year);
+
+    // Comentário: folha continua em memória; apenas substituímos a origem dos funcionários para dados persistidos.
+    const entries = generatePayrollEntries(allEmployees, selectedCompany.id, selectedMonth.month, selectedMonth.year);
     setEntriesCache((prev) => ({ ...prev, [cacheKey]: entries }));
     return entries;
-  }, [selectedCompany, selectedMonth, cacheKey, entriesCache]);
+  }, [selectedCompany, selectedMonth, cacheKey, entriesCache, allEmployees]);
 
   const updatePayrollEntry = useCallback(
     (id: string, updates: Partial<PayrollEntry>) => {
       setEntriesCache((prev) => ({
         ...prev,
-        [cacheKey]: (prev[cacheKey] || []).map((e) => (e.id === id ? { ...e, ...updates } : e)),
+        [cacheKey]: (prev[cacheKey] || []).map((entry) => (entry.id === id ? { ...entry, ...updates } : entry)),
       }));
     },
     [cacheKey]
   );
 
-  const addCompany = useCallback((company: Company) => {
-    setCompanies((prev) => [...prev, company]);
+  const addCompany = useCallback(async (company: Omit<Company, "id">) => {
+    const { data, error } = await supabase
+      .from("companies")
+      .insert({ name: company.name, cnpj: company.cnpj, address: company.address || null })
+      .select("id, name, cnpj, address")
+      .single();
+    if (error || !data) throw error;
+    const mapped = mapCompanyRowToModel(data);
+    setCompanies((prev) => [...prev, mapped]);
+    setSelectedCompany((prev) => prev ?? mapped);
   }, []);
 
-  const updateCompany = useCallback((id: string, updates: Partial<Company>) => {
-    setCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
+  const updateCompany = useCallback(async (id: string, updates: Partial<Company>) => {
+    const payload = {
+      ...(updates.name !== undefined ? { name: updates.name } : {}),
+      ...(updates.cnpj !== undefined ? { cnpj: updates.cnpj } : {}),
+      ...(updates.address !== undefined ? { address: updates.address || null } : {}),
+    };
+
+    const { data, error } = await supabase
+      .from("companies")
+      .update(payload)
+      .eq("id", id)
+      .select("id, name, cnpj, address")
+      .single();
+    if (error || !data) throw error;
+
+    const mapped = mapCompanyRowToModel(data);
+    setCompanies((prev) => prev.map((company) => (company.id === id ? mapped : company)));
+    setSelectedCompany((prev) => (prev?.id === id ? mapped : prev));
   }, []);
 
-  const deleteCompany = useCallback((id: string) => {
-    setCompanies((prev) => prev.filter((c) => c.id !== id));
+  const deleteCompany = useCallback(async (id: string) => {
+    const { error } = await supabase.from("companies").delete().eq("id", id);
+    if (error) throw error;
+
+    setCompanies((prev) => {
+      const next = prev.filter((company) => company.id !== id);
+      setSelectedCompany((selected) => {
+        if (selected?.id !== id) return selected;
+        return next[0] ?? null;
+      });
+      return next;
+    });
+    setAllEmployees((prev) => prev.filter((employee) => employee.companyId !== id));
   }, []);
 
-  const addEmployee = useCallback((employee: Employee) => {
-    setAllEmployees((prev) => [...prev, employee]);
+  const addEmployee = useCallback(async (employee: Omit<Employee, "id">) => {
+    const payload = mapEmployeeInsertToRow(employee);
+    const { data, error } = await supabase.from("employees").insert(payload).select("*").single();
+    if (error || !data) throw error;
+
+    setAllEmployees((prev) => [...prev, mapEmployeeRowToModel(data)]);
   }, []);
 
-  const updateEmployee = useCallback((id: string, updates: Partial<Employee>) => {
-    setAllEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)));
+  const updateEmployee = useCallback(async (id: string, updates: Partial<Employee>) => {
+    const payload = mapEmployeeUpdateToRow(updates);
+    const { data, error } = await supabase.from("employees").update(payload).eq("id", id).select("*").single();
+    if (error || !data) throw error;
+
+    setAllEmployees((prev) => prev.map((employee) => (employee.id === id ? mapEmployeeRowToModel(data) : employee)));
   }, []);
 
-  const deleteEmployee = useCallback((id: string) => {
-    setAllEmployees((prev) => prev.filter((e) => e.id !== id));
+  const deleteEmployee = useCallback(async (id: string) => {
+    const { error } = await supabase.from("employees").delete().eq("id", id);
+    if (error) throw error;
+
+    setAllEmployees((prev) => prev.filter((employee) => employee.id !== id));
   }, []);
 
   return (
@@ -89,7 +248,9 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         selectedMonth,
         setSelectedMonth,
         employees,
+        allEmployees,
         payrollEntries,
+        isLoading,
         updatePayrollEntry,
         addCompany,
         updateCompany,
