@@ -161,14 +161,14 @@ const mapRubricRowToModel = (row: {
   name: string;
   code: string;
   category: string;
-  type: string;
-  entry_mode: string;
+  type: "provento" | "desconto";
+  entry_mode: "manual" | "formula";
   display_order: number;
   is_active: boolean;
   allow_manual_override: boolean;
   rubrica_formula_items?: Array<{
     id: string;
-    operation: string;
+    operation: "add" | "subtract";
     source_rubrica_id: string;
     item_order: number;
   }>;
@@ -177,15 +177,15 @@ const mapRubricRowToModel = (row: {
   name: row.name,
   code: row.code,
   category: row.category,
-  type: row.type as "provento" | "desconto",
-  mode: row.entry_mode as "manual" | "formula",
+  type: row.type,
+  mode: row.entry_mode,
   order: row.display_order,
   isActive: row.is_active,
   // Comentário: a composição de fórmula agora é persistida em linhas estruturadas para evitar texto livre estilo Excel.
   formulaItems: (row.rubrica_formula_items || [])
     .map((item) => ({
       id: item.id,
-      operation: item.operation as "add" | "subtract",
+      operation: item.operation,
       sourceRubricId: item.source_rubrica_id,
       order: item.item_order,
     }))
@@ -221,6 +221,10 @@ const mapFormulaItemInsertToRow = (rubricaId: string, item: Rubric["formulaItems
   source_rubrica_id: item.sourceRubricId,
   item_order: item.order,
 });
+
+// Comentário: a tabela de itens possui duas FKs para `rubricas`; usamos embed explícito para evitar ambiguidade no PostgREST.
+const RUBRICA_SELECT_WITH_ITEMS =
+  "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
 
 export const usePayroll = () => {
   const ctx = useContext(PayrollContext);
@@ -306,7 +310,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       supabase.from("job_roles").select("id, company_id, name, is_active").order("name", { ascending: true }),
       supabase
         .from("rubricas")
-        .select("id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, rubrica_formula_items(id, operation, source_rubrica_id, item_order)")
+        .select(RUBRICA_SELECT_WITH_ITEMS)
         .order("display_order", { ascending: true }),
     ]);
 
@@ -526,7 +530,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const { data: fullRubric, error: fullRubricError } = await supabase
       .from("rubricas")
-      .select("id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, rubrica_formula_items(id, operation, source_rubrica_id, item_order)")
+      .select(RUBRICA_SELECT_WITH_ITEMS)
       .eq("id", data.id)
       .single();
     if (fullRubricError || !fullRubric) throw fullRubricError;
@@ -561,7 +565,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const { data: fullRubric, error: fullRubricError } = await supabase
       .from("rubricas")
-      .select("id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, rubrica_formula_items(id, operation, source_rubrica_id, item_order)")
+      .select(RUBRICA_SELECT_WITH_ITEMS)
       .eq("id", id)
       .single();
     if (fullRubricError || !fullRubric) throw fullRubricError;
@@ -576,7 +580,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .from("rubricas")
       .update({ is_active: nextStatus })
       .eq("id", id)
-      .select("id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, rubrica_formula_items(id, operation, source_rubrica_id, item_order)")
+      .select(RUBRICA_SELECT_WITH_ITEMS)
       .single();
     if (error) throw error;
 

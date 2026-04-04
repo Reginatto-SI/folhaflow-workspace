@@ -57,6 +57,10 @@ const getInitialFilters = (): RubricFilterState => ({
 });
 
 const normalizeText = (value: string) => value.trim().replace(/\s+/g, " ");
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+};
 
 const Rubrics: React.FC = () => {
   const { rubrics, addRubric, updateRubric, deleteRubric, isLoading } = usePayroll();
@@ -200,8 +204,10 @@ const Rubrics: React.FC = () => {
         toast.success("Rubrica criada.");
       }
       setOpen(false);
-    } catch {
-      toast.error("Não foi possível salvar a rubrica.");
+    } catch (error) {
+      // Comentário: exibimos detalhe técnico no console para diagnóstico interno e mantemos toast amigável para operação diária.
+      console.error("[Rubrics] Falha ao salvar rubrica", { error, payload: normalizedForm, editingId: editing?.id });
+      toast.error(getErrorMessage(error, "Não foi possível salvar a rubrica."));
     }
   };
 
@@ -210,8 +216,9 @@ const Rubrics: React.FC = () => {
       const current = rubrics.find((rubric) => rubric.id === id);
       await deleteRubric(id);
       toast.success(current?.isActive ? "Rubrica inativada." : "Rubrica ativada.");
-    } catch {
-      toast.error("Não foi possível atualizar o status da rubrica.");
+    } catch (error) {
+      console.error("[Rubrics] Falha ao atualizar status da rubrica", { error, rubricId: id });
+      toast.error(getErrorMessage(error, "Não foi possível atualizar o status da rubrica."));
     }
   };
 
