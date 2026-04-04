@@ -24,6 +24,16 @@ interface PayrollContextType {
 
 const PayrollContext = createContext<PayrollContextType | null>(null);
 
+
+const normalizeText = (value?: string) => {
+  const normalized = value?.trim().replace(/\s+/g, " ") || "";
+  return normalized || null;
+};
+const normalizeRequiredText = (value: string) => value.trim().replace(/\s+/g, " ");
+
+// Comentário: defesa adicional no contexto para manter CPF limpo mesmo se houver outro ponto de escrita no futuro.
+const normalizeCpf = (value: string) => value.replace(/\D/g, "");
+
 const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; address: string | null }): Company => ({
   id: row.id,
   name: row.name,
@@ -69,37 +79,37 @@ const mapEmployeeRowToModel = (row: {
 
 const mapEmployeeInsertToRow = (employee: Omit<Employee, "id">) => ({
   company_id: employee.companyId,
-  name: employee.name,
-  cpf: employee.cpf,
+  name: normalizeRequiredText(employee.name),
+  cpf: normalizeCpf(employee.cpf),
   admission_date: employee.admissionDate,
-  registration: employee.registration || null,
-  notes: employee.notes || null,
-  department: employee.department || null,
-  role: employee.role || null,
+  registration: normalizeText(employee.registration),
+  notes: normalizeText(employee.notes),
+  department: normalizeText(employee.department),
+  role: normalizeText(employee.role),
   is_monthly: employee.isMonthly,
   is_on_leave: employee.isOnLeave,
   is_active: employee.isActive,
-  bank_name: employee.bankName || null,
-  bank_branch: employee.bankBranch || null,
-  bank_account: employee.bankAccount || null,
+  bank_name: normalizeText(employee.bankName),
+  bank_branch: normalizeText(employee.bankBranch),
+  bank_account: normalizeText(employee.bankAccount),
   base_salary: employee.baseSalary,
 });
 
 const mapEmployeeUpdateToRow = (updates: Partial<Employee>) => ({
   ...(updates.companyId !== undefined ? { company_id: updates.companyId } : {}),
-  ...(updates.name !== undefined ? { name: updates.name } : {}),
-  ...(updates.cpf !== undefined ? { cpf: updates.cpf } : {}),
+  ...(updates.name !== undefined ? { name: normalizeRequiredText(updates.name) } : {}),
+  ...(updates.cpf !== undefined ? { cpf: normalizeCpf(updates.cpf) } : {}),
   ...(updates.admissionDate !== undefined ? { admission_date: updates.admissionDate } : {}),
-  ...(updates.registration !== undefined ? { registration: updates.registration || null } : {}),
-  ...(updates.notes !== undefined ? { notes: updates.notes || null } : {}),
-  ...(updates.department !== undefined ? { department: updates.department || null } : {}),
-  ...(updates.role !== undefined ? { role: updates.role || null } : {}),
+  ...(updates.registration !== undefined ? { registration: normalizeText(updates.registration) } : {}),
+  ...(updates.notes !== undefined ? { notes: normalizeText(updates.notes) } : {}),
+  ...(updates.department !== undefined ? { department: normalizeText(updates.department) } : {}),
+  ...(updates.role !== undefined ? { role: normalizeText(updates.role) } : {}),
   ...(updates.isMonthly !== undefined ? { is_monthly: updates.isMonthly } : {}),
   ...(updates.isOnLeave !== undefined ? { is_on_leave: updates.isOnLeave } : {}),
   ...(updates.isActive !== undefined ? { is_active: updates.isActive } : {}),
-  ...(updates.bankName !== undefined ? { bank_name: updates.bankName || null } : {}),
-  ...(updates.bankBranch !== undefined ? { bank_branch: updates.bankBranch || null } : {}),
-  ...(updates.bankAccount !== undefined ? { bank_account: updates.bankAccount || null } : {}),
+  ...(updates.bankName !== undefined ? { bank_name: normalizeText(updates.bankName) } : {}),
+  ...(updates.bankBranch !== undefined ? { bank_branch: normalizeText(updates.bankBranch) } : {}),
+  ...(updates.bankAccount !== undefined ? { bank_account: normalizeText(updates.bankAccount) } : {}),
   ...(updates.baseSalary !== undefined ? { base_salary: updates.baseSalary } : {}),
 });
 
