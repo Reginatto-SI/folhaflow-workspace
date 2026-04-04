@@ -88,10 +88,12 @@ export type Database = {
           created_at: string
           department_id: string | null
           department: string | null
+          department_id: string | null
           id: string
           is_active: boolean
           is_monthly: boolean
           is_on_leave: boolean
+          job_role_id: string | null
           name: string
           notes: string | null
           job_role_id: string | null
@@ -111,10 +113,12 @@ export type Database = {
           created_at?: string
           department_id?: string | null
           department?: string | null
+          department_id?: string | null
           id?: string
           is_active?: boolean
           is_monthly?: boolean
           is_on_leave?: boolean
+          job_role_id?: string | null
           name: string
           notes?: string | null
           job_role_id?: string | null
@@ -134,10 +138,12 @@ export type Database = {
           created_at?: string
           department_id?: string | null
           department?: string | null
+          department_id?: string | null
           id?: string
           is_active?: boolean
           is_monthly?: boolean
           is_on_leave?: boolean
+          job_role_id?: string | null
           name?: string
           notes?: string | null
           job_role_id?: string | null

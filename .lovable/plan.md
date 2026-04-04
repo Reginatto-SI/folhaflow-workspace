@@ -1,83 +1,88 @@
 
 
-# FolhaFlow — Plataforma de Gestão de Folha de Pagamento
+# Evolução Visual do FolhaFlow — Layout Profissional
 
-## Visão Geral
-Workspace financeiro de alta performance para processar folhas de pagamento mensais de múltiplas empresas, com edição inline tipo Excel, navegação por teclado e automação mensal.
+## Resumo
 
-## Design System
-- **Cores**: Azul profundo (#1E3A8A) primária, azul médio (#3B82F6) interação, fundo cinza claro (#F8FAFC), verde sucesso, vermelho erro
-- **Tipografia**: Inter com números tabulares, hierarquia clara
-- **Layout**: Grid 8pt, interface centrada em tabela, headers fixos, densidade otimizada
-- **Motion**: Transições 200-250ms, destaque suave em edição
+Refatorar o layout global do sistema (AppLayout) e a tela de Funcionários como piloto, sem alterar lógica de negócio ou CRUD existente. Resultado: sistema com aparência de software administrativo maduro.
 
-## Páginas e Funcionalidades
+## Arquivos Modificados
 
-### 1. Login / Autenticação
-- Login com email/senha
-- Registro de conta
-- (Google OAuth como fase futura via Lovable Cloud)
+| Arquivo | Ação |
+|---------|------|
+| `src/components/layout/AppLayout.tsx` | Reescrever: novo header + sidebar colapsável via shadcn Sidebar |
+| `src/pages/Employees.tsx` | Adicionar KPIs compactos + melhorar hierarquia visual da página |
+| `src/pages/Index.tsx` | Ajustar hierarquia visual (título/subtítulo) para seguir novo padrão |
+| `src/index.css` | Pequenos ajustes de variáveis CSS para tabelas e headers |
+| `src/App.tsx` | Envolver com `SidebarProvider` |
 
-### 2. Central de Folha (Homepage / Dashboard)
-- Seletor rápido de **empresa** e **mês/ano** no topo
-- Barra de status com totais: salários brutos, descontos totais, líquido total
-- Tabela principal de funcionários com colunas editáveis inline
-- Navegação por teclado: TAB, SHIFT+TAB, ENTER, setas
-- Expansão de linha ao clicar no funcionário (detalhamento, observações, rubricas adicionais — sem modal)
-- Ações em massa: aplicar valor a múltiplos funcionários, copiar/colar entre linhas
+## Parte 1 — Novo Header Global
 
-### 3. Gestão de Empresas
-- CRUD de empresas com dados básicos (nome, CNPJ, etc.)
-- Troca rápida entre empresas no header
-- Visão consolidada multi-empresa
+Substituir o header atual em `AppLayout.tsx` por uma estrutura de 3 zonas:
 
-### 4. Gestão de Funcionários
-- Cadastro de funcionários por empresa
-- Dados: nome, cargo, salário base, data de admissão, status
+- **Esquerda**: `SidebarTrigger` (hamburguer) + título dinâmico da página atual (derivado da rota via `useLocation`)
+- **Centro**: seletores de empresa e competência (já existentes, reposicionados)
+- **Direita**: ícone Bell (placeholder notificações) + Avatar com `DropdownMenu` contendo "Meu perfil" e "Sair"
 
-### 5. Sistema de Rubricas Dinâmicas
-- Criar rubricas com: nome, tipo (provento/desconto), comportamento (manual, fixo, percentual)
-- Configuração por empresa
-- Marcar como frequente / auto-preencher do mês anterior
+Header fixo com `h-14`, borda inferior, fundo `bg-card`.
 
-### 6. Ciclo Mensal Inteligente
-- Criar nova folha replicando dados do mês anterior automaticamente
-- Destacar alterações em relação ao mês anterior com indicadores visuais
+## Parte 2 — Sidebar Colapsável
 
-### 7. Relatórios e Exportação
-- Recibo individual por funcionário
-- Resumo por empresa
-- Folha consolidada
-- Exportação em PDF
+Migrar de sidebar manual para o componente `shadcn Sidebar` com `collapsible="icon"`:
 
-### 8. Configurações
-- Perfil do usuário
-- Preferências gerais
+- Modo expandido: ícone + texto (como atual)
+- Modo colapsado: apenas ícones com tooltips automáticos do componente
+- `SidebarTrigger` no header (sempre visível)
+- Logo "FolhaFlow" no topo da sidebar, colapsa para ícone "F"
+- Footer com versão
+- Estado persistido via `SidebarProvider` (localStorage automático)
 
-## Fases de Implementação
+Usar `NavLink` para highlight de rota ativa.
 
-**Fase 1 — Fundação (esta implementação)**
-- Design system (cores, tipografia, layout)
-- Autenticação (email/senha)
-- Estrutura de navegação e layout principal
-- Central de Folha com tabela editável inline e navegação por teclado
-- CRUD de empresas e funcionários (dados mock iniciais)
-- Seletor de empresa/mês
-- Barra de totais fixa
-- Expansão de linha
+## Parte 3 — KPIs Compactos (Funcionários como piloto)
 
-**Fase 2 — Dados reais e rubricas**
-- Integração com Lovable Cloud (banco de dados)
-- Sistema de rubricas dinâmicas
-- Ciclo mensal inteligente
+Adicionar uma faixa de 4 mini-cards no topo da página de Funcionários, calculados a partir do array `employees`:
 
-**Fase 3 — Produtividade**
-- Ações em massa
-- Relatórios e exportação PDF
-- Visão consolidada multi-empresa
+```text
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│  Total: 12   │ │  Ativos: 10  │ │ Afastados: 1 │ │ Mensalist: 8 │
+└──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘
+```
 
-**Fase 4 — IA e polish**
-- Detecção de inconsistências
-- Sugestões baseadas no mês anterior
-- Google OAuth
+- Cards com `border`, ícone pequeno, label + número
+- Cores: ícone azul para total, verde para ativos, amarelo para afastados, cinza para mensalistas
+- Altura compacta (~64px), layout `grid grid-cols-2 md:grid-cols-4 gap-3`
+
+## Parte 4 — Hierarquia Visual das Páginas
+
+Estabelecer padrão de cabeçalho de página:
+
+- Título `text-2xl font-bold` (mais forte que o atual `text-xl font-semibold`)
+- Subtítulo `text-sm text-muted-foreground`
+- Separação visual clara entre header da página, KPIs e conteúdo
+- Espaçamento consistente: `mb-6` entre blocos
+
+## Parte 5 — Refinamento Visual Global
+
+Na tabela de Funcionários:
+- Cabeçalho com `bg-muted` mais forte e `font-semibold`
+- Linhas com `hover:bg-muted/40` e melhor padding
+- Botão "Novo Funcionário" com ícone `Plus` (já tem) — manter
+
+Cards gerais:
+- Garantir `rounded-lg border shadow-sm` como padrão
+- Padding `p-4` consistente
+
+## Parte 6 — Preservação
+
+- Nenhuma alteração em modais, formulários, validações ou lógica de CRUD
+- `PayrollContext` intocado
+- Apenas layout wrapper e apresentação visual das páginas
+
+## Detalhes Técnicos
+
+- `SidebarProvider` será adicionado em `App.tsx` envolvendo `AppLayout`
+- O título dinâmico no header usa um mapa rota→label derivado de `navItems`
+- O `DropdownMenu` do avatar usa dados placeholder (nome "Usuário", email hardcoded) — será conectado à autenticação futuramente
+- Componentes shadcn já disponíveis: `Sidebar`, `DropdownMenu`, `Avatar`, `Tooltip` — nenhuma instalação necessária
 

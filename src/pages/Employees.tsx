@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { BriefcaseBusiness, Landmark, NotebookPen, Pencil, Plus, Save, Trash2, User, X } from "lucide-react";
+import { BriefcaseBusiness, Landmark, NotebookPen, Pencil, Plus, Save, Trash2, User, Users, X } from "lucide-react";
 import { Employee } from "@/types/payroll";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -236,16 +236,72 @@ const Employees: React.FC = () => {
 
   const fieldClass = (field: keyof EmployeeFormErrors) => cn(errors[field] && "border-destructive focus-visible:ring-destructive/40");
 
+  const kpis = useMemo(() => {
+    const total = employees.length;
+    const active = employees.filter((e) => e.isActive && !e.isOnLeave).length;
+    const onLeave = employees.filter((e) => e.isOnLeave).length;
+    const monthly = employees.filter((e) => e.isMonthly).length;
+    return { total, active, onLeave, monthly };
+  }, [employees]);
+
   return (
     <div>
+      {/* KPIs */}
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <Users className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Total</p>
+            <p className="text-xl font-bold tabular-nums">{kpis.total}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10">
+            <User className="h-4 w-4 text-success" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Ativos</p>
+            <p className="text-xl font-bold tabular-nums">{kpis.active}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/10">
+            <Users className="h-4 w-4 text-warning" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Afastados</p>
+            <p className="text-xl font-bold tabular-nums">{kpis.onLeave}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+            <BriefcaseBusiness className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Mensalistas</p>
+            <p className="text-xl font-bold tabular-nums">{kpis.monthly}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="mb-6">
+        <EmployeeFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          departments={departments.filter((d) => d.isActive)}
+          jobRoles={jobRoles.filter((r) => r.isActive)}
+        />
+      </div>
+
+      {/* Page header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Funcionários</h2>
-          <p className="text-sm text-muted-foreground">
-            {selectedCompany?.name || "Selecione uma empresa"} — {employees.length} funcionários registrados
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Cadastro-base por empresa registrada. Participação em folhas multiempresa é uma camada operacional separada.
+          <h2 className="text-2xl font-bold tracking-tight">Funcionários</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            {selectedCompany?.name || "Selecione uma empresa"} — {filteredEmployees.length} de {employees.length} funcionários
           </p>
         </div>
         <Dialog
@@ -514,7 +570,7 @@ const Employees: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {employees.map((employee) => (
+              {filteredEmployees.map((employee) => (
                 <tr key={employee.id} className="border-b transition-colors hover:bg-muted/30">
                   <td className="px-4 py-3 font-medium">{employee.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{maskCpf(employee.cpf)}</td>
@@ -539,10 +595,10 @@ const Employees: React.FC = () => {
                   </td>
                 </tr>
               ))}
-              {employees.length === 0 && (
+              {filteredEmployees.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                    Nenhum funcionário cadastrado para esta empresa.
+                    {employees.length === 0 ? "Nenhum funcionário cadastrado para esta empresa." : "Nenhum funcionário encontrado com os filtros aplicados."}
                   </td>
                 </tr>
               )}
