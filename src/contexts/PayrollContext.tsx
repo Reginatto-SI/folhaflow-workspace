@@ -168,7 +168,7 @@ const mapRubricRowToModel = (row: {
   allow_manual_override: boolean;
   rubrica_formula_items?: Array<{
     id: string;
-    operation: "add" | "subtract";
+    operation: string;
     source_rubrica_id: string;
     item_order: number;
   }>;
@@ -177,8 +177,8 @@ const mapRubricRowToModel = (row: {
   name: row.name,
   code: row.code,
   category: row.category,
-  type: row.type,
-  mode: row.entry_mode,
+  type: row.type as Rubric["type"],
+  mode: row.entry_mode as Rubric["mode"],
   order: row.display_order,
   isActive: row.is_active,
   // Comentário: a composição de fórmula agora é persistida em linhas estruturadas para evitar texto livre estilo Excel.
