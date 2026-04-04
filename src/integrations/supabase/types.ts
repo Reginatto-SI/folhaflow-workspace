@@ -86,7 +86,6 @@ export type Database = {
           company_id: string
           cpf: string
           created_at: string
-          department_id: string | null
           department: string | null
           department_id: string | null
           id: string
@@ -96,7 +95,6 @@ export type Database = {
           job_role_id: string | null
           name: string
           notes: string | null
-          job_role_id: string | null
           registration: string | null
           role: string | null
           updated_at: string
@@ -111,7 +109,6 @@ export type Database = {
           company_id: string
           cpf: string
           created_at?: string
-          department_id?: string | null
           department?: string | null
           department_id?: string | null
           id?: string
@@ -121,7 +118,6 @@ export type Database = {
           job_role_id?: string | null
           name: string
           notes?: string | null
-          job_role_id?: string | null
           registration?: string | null
           role?: string | null
           updated_at?: string
@@ -136,7 +132,6 @@ export type Database = {
           company_id?: string
           cpf?: string
           created_at?: string
-          department_id?: string | null
           department?: string | null
           department_id?: string | null
           id?: string
@@ -146,7 +141,6 @@ export type Database = {
           job_role_id?: string | null
           name?: string
           notes?: string | null
-          job_role_id?: string | null
           registration?: string | null
           role?: string | null
           updated_at?: string
