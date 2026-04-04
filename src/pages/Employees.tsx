@@ -301,12 +301,22 @@ const Employees: React.FC = () => {
         </div>
       </div>
 
+      {/* Filters */}
+      <div className="mb-6">
+        <EmployeeFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          departments={departments.filter((d) => d.isActive)}
+          jobRoles={jobRoles.filter((r) => r.isActive)}
+        />
+      </div>
+
       {/* Page header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Funcionários</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {selectedCompany?.name || "Selecione uma empresa"} — {employees.length} funcionários registrados
+            {selectedCompany?.name || "Selecione uma empresa"} — {filteredEmployees.length} de {employees.length} funcionários
           </p>
         </div>
         <Dialog
