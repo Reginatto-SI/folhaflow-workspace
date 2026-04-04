@@ -9,6 +9,7 @@ import { Building2, Check, ChevronDown, ChevronUp, Download, FileSpreadsheet, Fi
 import { Company } from "@/types/payroll";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const normalizeText = (value: string) => value.trim().replace(/\s+/g, " ");
 
