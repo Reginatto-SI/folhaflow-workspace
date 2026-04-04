@@ -161,8 +161,8 @@ const mapRubricRowToModel = (row: {
   name: string;
   code: string;
   category: string;
-  type: "provento" | "desconto";
-  entry_mode: "manual" | "formula";
+  type: string;
+  entry_mode: string;
   display_order: number;
   is_active: boolean;
   allow_manual_override: boolean;
