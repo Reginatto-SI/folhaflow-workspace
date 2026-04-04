@@ -1,9 +1,42 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Building2, BriefcaseBusiness, FolderTree, Users, FileSpreadsheet, Settings } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import {
+  Building2,
+  BriefcaseBusiness,
+  FolderTree,
+  Users,
+  FileSpreadsheet,
+  Settings,
+  Bell,
+  LogOut,
+  UserCircle,
+} from "lucide-react";
+import { NavLink } from "@/components/NavLink";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
 const MONTHS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -19,47 +52,87 @@ const navItems = [
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
+const routeLabels: Record<string, string> = {
+  "/": "Central de Folha",
+  "/empresas": "Empresas",
+  "/funcionarios": "Funcionários",
+  "/setores": "Setores",
+  "/funcoes-cargos": "Funções/Cargos",
+  "/configuracoes": "Configurações",
+};
+
+function AppSidebar() {
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm">
+            F
+          </div>
+          {!collapsed && (
+            <span className="text-lg font-bold tracking-tight text-sidebar-foreground">
+              FolhaFlow
+            </span>
+          )}
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navItems.map((item) => (
+                <SidebarMenuItem key={item.to}>
+                  <SidebarMenuButton asChild tooltip={item.label}>
+                    <NavLink
+                      to={item.to}
+                      end={item.to === "/"}
+                      className="flex items-center gap-3 text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {!collapsed && <span>{item.label}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
+        {!collapsed && (
+          <p className="text-xs text-sidebar-foreground/50">FolhaFlow v1.0</p>
+        )}
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
+
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { companies, selectedCompany, setSelectedCompany, selectedMonth, setSelectedMonth } = usePayroll();
   const location = useLocation();
+  const pageTitle = routeLabels[location.pathname] || "FolhaFlow";
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar */}
-      <aside className="w-60 flex-shrink-0 bg-sidebar text-sidebar-foreground flex flex-col">
-        <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
-          <h1 className="text-lg font-bold tracking-tight">FolhaFlow</h1>
-        </div>
-        <nav className="flex-1 py-4 px-3 space-y-1">
-          {navItems.map((item) => {
-            const active = location.pathname === item.to;
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors duration-200",
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="p-4 border-t border-sidebar-border text-xs text-sidebar-foreground/50">
-          FolhaFlow v1.0
-        </div>
-      </aside>
+    <div className="flex h-screen w-full overflow-hidden bg-background">
+      <AppSidebar />
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-16 border-b bg-card flex items-center justify-between px-6 flex-shrink-0">
-          <div className="flex items-center gap-4">
+        <header className="flex h-14 shrink-0 items-center border-b bg-card px-4 gap-4">
+          {/* Left: trigger + page title */}
+          <div className="flex items-center gap-3">
+            <SidebarTrigger className="-ml-1" />
+            <h1 className="text-lg font-semibold truncate">{pageTitle}</h1>
+          </div>
+
+          {/* Center: selectors */}
+          <div className="flex items-center gap-3 ml-auto mr-auto">
             <Select
               value={selectedCompany?.id || ""}
               onValueChange={(v) => {
@@ -67,7 +140,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 if (c) setSelectedCompany(c);
               }}
             >
-              <SelectTrigger className="w-[240px] h-9">
+              <SelectTrigger className="w-[220px] h-8 text-sm">
                 <SelectValue placeholder="Selecione empresa" />
               </SelectTrigger>
               <SelectContent>
@@ -86,7 +159,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 setSelectedMonth({ month: m, year: y });
               }}
             >
-              <SelectTrigger className="w-[180px] h-9">
+              <SelectTrigger className="w-[160px] h-8 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -99,6 +172,41 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 )}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Right: notifications + avatar */}
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+              <Bell className="h-4 w-4" />
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 rounded-full p-0">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
+                      U
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>
+                  <p className="text-sm font-medium">Usuário</p>
+                  <p className="text-xs text-muted-foreground">usuario@email.com</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                  <UserCircle className="mr-2 h-4 w-4" />
+                  Meu perfil
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 

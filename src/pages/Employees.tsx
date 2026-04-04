@@ -209,16 +209,62 @@ const Employees: React.FC = () => {
 
   const fieldClass = (field: keyof EmployeeFormErrors) => cn(errors[field] && "border-destructive focus-visible:ring-destructive/40");
 
+  const kpis = useMemo(() => {
+    const total = employees.length;
+    const active = employees.filter((e) => e.isActive && !e.isOnLeave).length;
+    const onLeave = employees.filter((e) => e.isOnLeave).length;
+    const monthly = employees.filter((e) => e.isMonthly).length;
+    return { total, active, onLeave, monthly };
+  }, [employees]);
+
   return (
     <div>
+      {/* KPIs */}
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <Users className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Total</p>
+            <p className="text-xl font-bold tabular-nums">{kpis.total}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10">
+            <User className="h-4 w-4 text-success" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Ativos</p>
+            <p className="text-xl font-bold tabular-nums">{kpis.active}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/10">
+            <Users className="h-4 w-4 text-warning" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Afastados</p>
+            <p className="text-xl font-bold tabular-nums">{kpis.onLeave}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+            <BriefcaseBusiness className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Mensalistas</p>
+            <p className="text-xl font-bold tabular-nums">{kpis.monthly}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Page header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Funcionários</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="text-2xl font-bold tracking-tight">Funcionários</h2>
+          <p className="text-sm text-muted-foreground mt-1">
             {selectedCompany?.name || "Selecione uma empresa"} — {employees.length} funcionários registrados
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Cadastro-base por empresa registrada. Participação em folhas multiempresa é uma camada operacional separada.
           </p>
         </div>
         <Dialog
