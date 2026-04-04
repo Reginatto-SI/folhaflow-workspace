@@ -79,12 +79,37 @@ const normalizeBankField = (value?: string) => {
 };
 
 const Employees: React.FC = () => {
-  const { companies, employees, allDepartments, allJobRoles, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
+  const { companies, employees, departments, jobRoles, allDepartments, allJobRoles, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeFormState>(getInitialForm());
   const [errors, setErrors] = useState<EmployeeFormErrors>({});
   const [activeTab, setActiveTab] = useState<EmployeeTab>("dados-funcionario");
+  const [filters, setFilters] = useState<EmployeeFilterState>(getInitialFilters());
+
+  const sanitizeDigitsLocal = (v: string) => v.replace(/\D/g, "");
+
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((emp) => {
+      // Search
+      if (filters.search) {
+        const term = filters.search.toLowerCase();
+        const cpfClean = sanitizeDigitsLocal(filters.search);
+        const matchName = emp.name.toLowerCase().includes(term);
+        const matchCpf = cpfClean.length > 0 && emp.cpf.includes(cpfClean);
+        if (!matchName && !matchCpf) return false;
+      }
+      // Status
+      if (filters.status === "active" && (!emp.isActive || emp.isOnLeave)) return false;
+      if (filters.status === "on_leave" && !emp.isOnLeave) return false;
+      if (filters.status === "monthly" && !emp.isMonthly) return false;
+      // Department
+      if (filters.departmentId && emp.departmentId !== filters.departmentId) return false;
+      // Job Role
+      if (filters.jobRoleId && emp.jobRoleId !== filters.jobRoleId) return false;
+      return true;
+    });
+  }, [employees, filters]);
 
   // Comentário: na transição gradual, filtros usam a empresa registrada do formulário (companyId),
   // garantindo catálogo correto por empresa mesmo que a empresa selecionada na listagem seja outra.
