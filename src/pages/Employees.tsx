@@ -86,6 +86,35 @@ const Employees: React.FC = () => {
   const [form, setForm] = useState<EmployeeFormState>(getInitialForm());
   const [errors, setErrors] = useState<EmployeeFormErrors>({});
   const [activeTab, setActiveTab] = useState<EmployeeTab>("dados-funcionario");
+  const [filters, setFilters] = useState<EmployeeFilterState>(getInitialFilters());
+
+  // Departments/jobRoles for the filter card (selected company)
+  const departments = useMemo(
+    () => allDepartments.filter((d) => d.companyId === selectedCompany?.id),
+    [allDepartments, selectedCompany?.id]
+  );
+  const jobRoles = useMemo(
+    () => allJobRoles.filter((r) => r.companyId === selectedCompany?.id),
+    [allJobRoles, selectedCompany?.id]
+  );
+
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((emp) => {
+      if (filters.search) {
+        const q = filters.search.toLowerCase();
+        const cpfDigits = sanitizeDigits(filters.search);
+        const matchName = emp.name.toLowerCase().includes(q);
+        const matchCpf = cpfDigits.length > 0 && emp.cpf.includes(cpfDigits);
+        if (!matchName && !matchCpf) return false;
+      }
+      if (filters.status === "active" && !emp.isActive) return false;
+      if (filters.status === "on_leave" && !emp.isOnLeave) return false;
+      if (filters.status === "monthly" && !emp.isMonthly) return false;
+      if (filters.departmentId && emp.departmentId !== filters.departmentId) return false;
+      if (filters.jobRoleId && emp.jobRoleId !== filters.jobRoleId) return false;
+      return true;
+    });
+  }, [employees, filters]);
 
   // Comentário: na transição gradual, filtros usam a empresa registrada do formulário (companyId),
   // garantindo catálogo correto por empresa mesmo que a empresa selecionada na listagem seja outra.
