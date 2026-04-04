@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
-import { mockEmployees } from "@/data/mock";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import EditableCell from "./EditableCell";
 import EmployeeRowExpansion from "./EmployeeRowExpansion";
@@ -12,7 +11,7 @@ const fmt = (v: number) =>
 const EDITABLE_COLS = ["baseSalary", "horasExtras", "bonus", "vt", "vr", "inss", "irrf"];
 
 const PayrollTable: React.FC = () => {
-  const { payrollEntries, updatePayrollEntry } = usePayroll();
+  const { payrollEntries, updatePayrollEntry, allEmployees } = usePayroll();
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [activeCell, setActiveCell] = useState<{ row: number; col: number } | null>(null);
 
@@ -84,7 +83,7 @@ const PayrollTable: React.FC = () => {
           </thead>
           <tbody>
             {payrollEntries.map((entry, rowIndex) => {
-              const employee = mockEmployees.find((e) => e.id === entry.employeeId);
+              const employee = allEmployees.find((e) => e.id === entry.employeeId);
               const totalEarnings = Object.values(entry.earnings).reduce((a, b) => a + b, 0);
               const totalDeductions = Object.values(entry.deductions).reduce((a, b) => a + b, 0);
               const gross = entry.baseSalary + totalEarnings;
@@ -103,7 +102,7 @@ const PayrollTable: React.FC = () => {
                     <td className="px-3 py-2 font-medium border-r">
                       <div>
                         <span className="text-sm">{employee?.name}</span>
-                        <span className="block text-xs text-muted-foreground">{employee?.position}</span>
+                        <span className="block text-xs text-muted-foreground">{employee?.role || "-"}</span>
                       </div>
                     </td>
                     {EDITABLE_COLS.map((colKey, colIndex) => (

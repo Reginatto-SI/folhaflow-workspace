@@ -1,6 +1,5 @@
 import React from "react";
 import { PayrollEntry } from "@/types/payroll";
-import { mockEmployees } from "@/data/mock";
 import { Textarea } from "@/components/ui/textarea";
 import { usePayroll } from "@/contexts/PayrollContext";
 
@@ -13,8 +12,8 @@ interface Props {
 }
 
 const EmployeeRowExpansion: React.FC<Props> = ({ entry, colSpan }) => {
-  const { updatePayrollEntry } = usePayroll();
-  const employee = mockEmployees.find((e) => e.id === entry.employeeId);
+  const { updatePayrollEntry, allEmployees } = usePayroll();
+  const employee = allEmployees.find((e) => e.id === entry.employeeId);
 
   const totalEarnings = Object.values(entry.earnings).reduce((a, b) => a + b, 0);
   const totalDeductions = Object.values(entry.deductions).reduce((a, b) => a + b, 0);
@@ -29,9 +28,9 @@ const EmployeeRowExpansion: React.FC<Props> = ({ entry, colSpan }) => {
           <div>
             <h4 className="text-sm font-semibold mb-2">Dados do Funcionário</h4>
             <div className="space-y-1 text-sm">
-              <p><span className="text-muted-foreground">Cargo:</span> {employee?.position}</p>
+              <p><span className="text-muted-foreground">Cargo:</span> {employee?.role}</p>
               <p><span className="text-muted-foreground">Admissão:</span> {employee?.admissionDate ? new Date(employee.admissionDate).toLocaleDateString("pt-BR") : "-"}</p>
-              <p><span className="text-muted-foreground">Status:</span> <span className="text-success font-medium">{employee?.status === "active" ? "Ativo" : "Inativo"}</span></p>
+              <p><span className="text-muted-foreground">Status:</span> <span className="text-success font-medium">{employee?.isActive ? "Ativo" : "Inativo"}</span></p>
             </div>
           </div>
 

@@ -1,23 +1,4 @@
-import { Company, Employee, PayrollEntry, Rubric } from "@/types/payroll";
-
-export const mockCompanies: Company[] = [
-  { id: "c1", name: "Tech Solutions Ltda", cnpj: "12.345.678/0001-90", address: "Av. Paulista, 1000 - SP" },
-  { id: "c2", name: "Comércio Global S/A", cnpj: "98.765.432/0001-10", address: "Rua das Flores, 200 - RJ" },
-  { id: "c3", name: "Indústria Beta ME", cnpj: "11.222.333/0001-44", address: "Rod. BR-101, Km 50 - SC" },
-];
-
-export const mockEmployees: Employee[] = [
-  { id: "e1", companyId: "c1", name: "Ana Silva", position: "Desenvolvedora Senior", baseSalary: 12000, admissionDate: "2021-03-15", status: "active" },
-  { id: "e2", companyId: "c1", name: "Carlos Santos", position: "Gerente de Projetos", baseSalary: 15000, admissionDate: "2019-08-01", status: "active" },
-  { id: "e3", companyId: "c1", name: "Maria Oliveira", position: "Analista de RH", baseSalary: 8500, admissionDate: "2022-01-10", status: "active" },
-  { id: "e4", companyId: "c1", name: "João Pereira", position: "Designer UX", baseSalary: 9000, admissionDate: "2020-06-20", status: "active" },
-  { id: "e5", companyId: "c1", name: "Fernanda Lima", position: "Estagiária", baseSalary: 2000, admissionDate: "2024-02-01", status: "active" },
-  { id: "e6", companyId: "c2", name: "Roberto Costa", position: "Diretor Comercial", baseSalary: 18000, admissionDate: "2018-05-01", status: "active" },
-  { id: "e7", companyId: "c2", name: "Juliana Alves", position: "Vendedora", baseSalary: 5500, admissionDate: "2023-03-10", status: "active" },
-  { id: "e8", companyId: "c2", name: "Pedro Mendes", position: "Analista Financeiro", baseSalary: 7800, admissionDate: "2021-11-15", status: "active" },
-  { id: "e9", companyId: "c3", name: "Lucia Ferreira", position: "Eng. de Produção", baseSalary: 11000, admissionDate: "2020-09-01", status: "active" },
-  { id: "e10", companyId: "c3", name: "Marcos Souza", position: "Operador", baseSalary: 3500, admissionDate: "2022-07-01", status: "active" },
-];
+import { Employee, PayrollEntry, Rubric } from "@/types/payroll";
 
 export const mockRubrics: Rubric[] = [
   { id: "r1", companyId: "c1", name: "Horas Extras", type: "earning", behavior: "manual", isFrequent: true },
@@ -28,9 +9,15 @@ export const mockRubrics: Rubric[] = [
   { id: "r6", companyId: "c1", name: "IRRF", type: "deduction", behavior: "percentage", defaultValue: 27.5, isFrequent: true },
 ];
 
-export const generatePayrollEntries = (companyId: string, month: number, year: number): PayrollEntry[] => {
-  const employees = mockEmployees.filter((e) => e.companyId === companyId && e.status === "active");
-  return employees.map((emp) => ({
+// Comentário: geração mantida em memória, separada do cadastro oficial para não misturar com persistência de RH.
+export const generatePayrollEntries = (
+  employees: Employee[],
+  companyId: string,
+  month: number,
+  year: number
+): PayrollEntry[] => {
+  const activeEmployees = employees.filter((e) => e.companyId === companyId && e.isActive);
+  return activeEmployees.map((emp) => ({
     id: `p-${emp.id}-${month}-${year}`,
     employeeId: emp.id,
     companyId,

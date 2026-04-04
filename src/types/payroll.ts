@@ -9,10 +9,20 @@ export interface Employee {
   id: string;
   companyId: string;
   name: string;
-  position: string;
-  baseSalary: number;
+  cpf: string;
   admissionDate: string;
-  status: "active" | "inactive";
+  registration?: string;
+  notes?: string;
+  department?: string;
+  role?: string;
+  isMonthly: boolean;
+  isOnLeave: boolean;
+  isActive: boolean;
+  bankName?: string;
+  bankBranch?: string;
+  bankAccount?: string;
+  // Comentário: baseSalary foi preservado por compatibilidade com a Central de Folha.
+  baseSalary: number;
 }
 
 export interface PayrollEntry {
