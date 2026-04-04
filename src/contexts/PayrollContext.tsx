@@ -161,14 +161,14 @@ const mapRubricRowToModel = (row: {
   name: string;
   code: string;
   category: string;
-  type: "provento" | "desconto";
-  entry_mode: "manual" | "formula";
+  type: string;
+  entry_mode: string;
   display_order: number;
   is_active: boolean;
   allow_manual_override: boolean;
   rubrica_formula_items?: Array<{
     id: string;
-    operation: "add" | "subtract";
+    operation: string;
     source_rubrica_id: string;
     item_order: number;
   }>;
@@ -177,15 +177,15 @@ const mapRubricRowToModel = (row: {
   name: row.name,
   code: row.code,
   category: row.category,
-  type: row.type,
-  mode: row.entry_mode,
+  type: row.type as "provento" | "desconto",
+  mode: row.entry_mode as "manual" | "formula",
   order: row.display_order,
   isActive: row.is_active,
   // Comentário: a composição de fórmula agora é persistida em linhas estruturadas para evitar texto livre estilo Excel.
   formulaItems: (row.rubrica_formula_items || [])
     .map((item) => ({
       id: item.id,
-      operation: item.operation,
+      operation: item.operation as "add" | "subtract",
       sourceRubricId: item.source_rubrica_id,
       order: item.item_order,
     }))
