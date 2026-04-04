@@ -5,6 +5,22 @@ export interface Company {
   address?: string;
 }
 
+export interface Department {
+  id: string;
+  // Comentário: departamento é vinculado por empresa para preservar autonomia multiempresa e evitar mistura indevida entre estruturas.
+  companyId: string;
+  name: string;
+  isActive: boolean;
+}
+
+export interface JobRole {
+  id: string;
+  // Comentário: função/cargo também é por empresa, mantendo consistência com cenários de grupos empresariais com nomenclaturas distintas.
+  companyId: string;
+  name: string;
+  isActive: boolean;
+}
+
 export interface Employee {
   id: string;
   // Comentário: nesta fase, companyId representa a empresa formal de registro (empresa registrada), não o vínculo completo de folha multiempresa.

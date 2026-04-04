@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { Company, Employee, PayrollEntry, PayrollMonth } from "@/types/payroll";
+import { Company, Department, Employee, JobRole, PayrollEntry, PayrollMonth } from "@/types/payroll";
 import { generatePayrollEntries } from "@/data/mock";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -11,6 +11,8 @@ interface PayrollContextType {
   setSelectedMonth: (month: PayrollMonth) => void;
   employees: Employee[];
   allEmployees: Employee[];
+  departments: Department[];
+  jobRoles: JobRole[];
   payrollEntries: PayrollEntry[];
   isLoading: boolean;
   updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => void;
@@ -20,10 +22,15 @@ interface PayrollContextType {
   addEmployee: (employee: Omit<Employee, "id">) => Promise<void>;
   updateEmployee: (id: string, updates: Partial<Employee>) => Promise<void>;
   deleteEmployee: (id: string) => Promise<void>;
+  addDepartment: (department: Omit<Department, "id">) => Promise<void>;
+  updateDepartment: (id: string, updates: Partial<Department>) => Promise<void>;
+  deleteDepartment: (id: string) => Promise<void>;
+  addJobRole: (jobRole: Omit<JobRole, "id">) => Promise<void>;
+  updateJobRole: (id: string, updates: Partial<JobRole>) => Promise<void>;
+  deleteJobRole: (id: string) => Promise<void>;
 }
 
 const PayrollContext = createContext<PayrollContextType | null>(null);
-
 
 const normalizeText = (value?: string) => {
   const normalized = value?.trim().replace(/\s+/g, " ") || "";
@@ -39,6 +46,20 @@ const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; add
   name: row.name,
   cnpj: row.cnpj,
   address: row.address || "",
+});
+
+const mapDepartmentRowToModel = (row: { id: string; company_id: string; name: string; is_active: boolean }): Department => ({
+  id: row.id,
+  companyId: row.company_id,
+  name: row.name,
+  isActive: row.is_active,
+});
+
+const mapJobRoleRowToModel = (row: { id: string; company_id: string; name: string; is_active: boolean }): JobRole => ({
+  id: row.id,
+  companyId: row.company_id,
+  name: row.name,
+  isActive: row.is_active,
 });
 
 const mapEmployeeRowToModel = (row: {
@@ -126,6 +147,8 @@ export const usePayroll = () => {
 export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+  const [allDepartments, setAllDepartments] = useState<Department[]>([]);
+  const [allJobRoles, setAllJobRoles] = useState<JobRole[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<PayrollMonth>({ month: 3, year: 2026 });
   const [entriesCache, setEntriesCache] = useState<Record<string, PayrollEntry[]>>({});
@@ -134,10 +157,12 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const loadData = useCallback(async () => {
     setIsLoading(true);
 
-    // Comentário: carregamos empresas e funcionários direto do Supabase para remover dependência de mock no cadastro.
-    const [companiesRes, employeesRes] = await Promise.all([
+    // Comentário: carregamos cadastros administrativos da mesma origem para manter o padrão piloto consistente e reaproveitável.
+    const [companiesRes, employeesRes, departmentsRes, rolesRes] = await Promise.all([
       supabase.from("companies").select("id, name, cnpj, address").order("name", { ascending: true }),
       supabase.from("employees").select("*").order("name", { ascending: true }),
+      supabase.from("departments").select("id, company_id, name, is_active").order("name", { ascending: true }),
+      supabase.from("job_roles").select("id, company_id, name, is_active").order("name", { ascending: true }),
     ]);
 
     if (!companiesRes.error && companiesRes.data) {
@@ -153,6 +178,14 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setAllEmployees(employeesRes.data.map(mapEmployeeRowToModel));
     }
 
+    if (!departmentsRes.error && departmentsRes.data) {
+      setAllDepartments(departmentsRes.data.map(mapDepartmentRowToModel));
+    }
+
+    if (!rolesRes.error && rolesRes.data) {
+      setAllJobRoles(rolesRes.data.map(mapJobRoleRowToModel));
+    }
+
     setIsLoading(false);
   }, []);
 
@@ -164,6 +197,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Comentário: nesta fase, a listagem de /funcionarios usa companyId como empresa registrada.
   // A participação em folha por múltiplas empresas do grupo será modelada em camada própria futura.
   const employees = allEmployees.filter((employee) => employee.companyId === selectedCompany?.id);
+  const departments = allDepartments.filter((department) => department.companyId === selectedCompany?.id);
+  const jobRoles = allJobRoles.filter((jobRole) => jobRole.companyId === selectedCompany?.id);
 
   const payrollEntries = React.useMemo(() => {
     if (!selectedCompany) return [];
@@ -230,6 +265,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return next;
     });
     setAllEmployees((prev) => prev.filter((employee) => employee.companyId !== id));
+    setAllDepartments((prev) => prev.filter((department) => department.companyId !== id));
+    setAllJobRoles((prev) => prev.filter((jobRole) => jobRole.companyId !== id));
   }, []);
 
   const addEmployee = useCallback(async (employee: Omit<Employee, "id">) => {
@@ -255,6 +292,68 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAllEmployees((prev) => prev.filter((employee) => employee.id !== id));
   }, []);
 
+  const addDepartment = useCallback(async (department: Omit<Department, "id">) => {
+    const { data, error } = await supabase
+      .from("departments")
+      .insert({ company_id: department.companyId, name: normalizeRequiredText(department.name), is_active: department.isActive })
+      .select("id, company_id, name, is_active")
+      .single();
+    if (error || !data) throw error;
+
+    setAllDepartments((prev) => [...prev, mapDepartmentRowToModel(data)]);
+  }, []);
+
+  const updateDepartment = useCallback(async (id: string, updates: Partial<Department>) => {
+    const payload = {
+      ...(updates.companyId !== undefined ? { company_id: updates.companyId } : {}),
+      ...(updates.name !== undefined ? { name: normalizeRequiredText(updates.name) } : {}),
+      ...(updates.isActive !== undefined ? { is_active: updates.isActive } : {}),
+    };
+
+    const { data, error } = await supabase.from("departments").update(payload).eq("id", id).select("id, company_id, name, is_active").single();
+    if (error || !data) throw error;
+
+    setAllDepartments((prev) => prev.map((department) => (department.id === id ? mapDepartmentRowToModel(data) : department)));
+  }, []);
+
+  const deleteDepartment = useCallback(async (id: string) => {
+    const { error } = await supabase.from("departments").delete().eq("id", id);
+    if (error) throw error;
+
+    setAllDepartments((prev) => prev.filter((department) => department.id !== id));
+  }, []);
+
+  const addJobRole = useCallback(async (jobRole: Omit<JobRole, "id">) => {
+    const { data, error } = await supabase
+      .from("job_roles")
+      .insert({ company_id: jobRole.companyId, name: normalizeRequiredText(jobRole.name), is_active: jobRole.isActive })
+      .select("id, company_id, name, is_active")
+      .single();
+    if (error || !data) throw error;
+
+    setAllJobRoles((prev) => [...prev, mapJobRoleRowToModel(data)]);
+  }, []);
+
+  const updateJobRole = useCallback(async (id: string, updates: Partial<JobRole>) => {
+    const payload = {
+      ...(updates.companyId !== undefined ? { company_id: updates.companyId } : {}),
+      ...(updates.name !== undefined ? { name: normalizeRequiredText(updates.name) } : {}),
+      ...(updates.isActive !== undefined ? { is_active: updates.isActive } : {}),
+    };
+
+    const { data, error } = await supabase.from("job_roles").update(payload).eq("id", id).select("id, company_id, name, is_active").single();
+    if (error || !data) throw error;
+
+    setAllJobRoles((prev) => prev.map((jobRole) => (jobRole.id === id ? mapJobRoleRowToModel(data) : jobRole)));
+  }, []);
+
+  const deleteJobRole = useCallback(async (id: string) => {
+    const { error } = await supabase.from("job_roles").delete().eq("id", id);
+    if (error) throw error;
+
+    setAllJobRoles((prev) => prev.filter((jobRole) => jobRole.id !== id));
+  }, []);
+
   return (
     <PayrollContext.Provider
       value={{
@@ -265,6 +364,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setSelectedMonth,
         employees,
         allEmployees,
+        departments,
+        jobRoles,
         payrollEntries,
         isLoading,
         updatePayrollEntry,
@@ -274,6 +375,12 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addEmployee,
         updateEmployee,
         deleteEmployee,
+        addDepartment,
+        updateDepartment,
+        deleteDepartment,
+        addJobRole,
+        updateJobRole,
+        deleteJobRole,
       }}
     >
       {children}
