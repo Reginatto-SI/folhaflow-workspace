@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { Company, Department, Employee, JobRole, PayrollEntry, PayrollMonth } from "@/types/payroll";
+import { Company, Department, Employee, JobRole, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
 import { generatePayrollEntries } from "@/data/mock";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -14,6 +14,7 @@ interface PayrollContextType {
   departments: Department[];
   allDepartments: Department[];
   jobRoles: JobRole[];
+  rubrics: Rubric[];
   allJobRoles: JobRole[];
   payrollEntries: PayrollEntry[];
   isLoading: boolean;
@@ -30,6 +31,9 @@ interface PayrollContextType {
   addJobRole: (jobRole: Omit<JobRole, "id">) => Promise<void>;
   updateJobRole: (id: string, updates: Partial<JobRole>) => Promise<void>;
   deleteJobRole: (id: string) => Promise<void>;
+  addRubric: (rubric: Omit<Rubric, "id">) => Promise<void>;
+  updateRubric: (id: string, updates: Partial<Rubric>) => Promise<void>;
+  deleteRubric: (id: string) => Promise<void>;
 }
 
 const PayrollContext = createContext<PayrollContextType | null>(null);
@@ -148,6 +152,55 @@ const mapEmployeeUpdateToRow = (updates: Partial<Employee>) => ({
   ...(updates.baseSalary !== undefined ? { base_salary: updates.baseSalary } : {}),
 });
 
+const mapRubricRowToModel = (row: {
+  id: string;
+  name: string;
+  code: string;
+  rubric_category: string;
+  rubric_type: "earning" | "deduction";
+  mode: "manual" | "formula";
+  order_index: number;
+  is_active: boolean;
+  formula_items: unknown;
+  allow_manual_override: boolean;
+}): Rubric => ({
+  id: row.id,
+  name: row.name,
+  code: row.code,
+  category: row.rubric_category,
+  type: row.rubric_type,
+  mode: row.mode,
+  order: row.order_index,
+  isActive: row.is_active,
+  // Comentário: fórmula permanece estruturada em JSON para evitar entrada de texto livre e preservar ordem operacional.
+  formulaItems: Array.isArray(row.formula_items) ? (row.formula_items as Rubric["formulaItems"]) : [],
+  allowManualOverride: row.allow_manual_override,
+});
+
+const mapRubricInsertToRow = (rubric: Omit<Rubric, "id">) => ({
+  name: normalizeRequiredText(rubric.name),
+  code: normalizeRequiredText(rubric.code),
+  rubric_category: normalizeRequiredText(rubric.category),
+  rubric_type: rubric.type,
+  mode: rubric.mode,
+  order_index: rubric.order,
+  is_active: rubric.isActive,
+  formula_items: rubric.formulaItems,
+  allow_manual_override: rubric.allowManualOverride,
+});
+
+const mapRubricUpdateToRow = (updates: Partial<Rubric>) => ({
+  ...(updates.name !== undefined ? { name: normalizeRequiredText(updates.name) } : {}),
+  ...(updates.code !== undefined ? { code: normalizeRequiredText(updates.code) } : {}),
+  ...(updates.category !== undefined ? { rubric_category: normalizeRequiredText(updates.category) } : {}),
+  ...(updates.type !== undefined ? { rubric_type: updates.type } : {}),
+  ...(updates.mode !== undefined ? { mode: updates.mode } : {}),
+  ...(updates.order !== undefined ? { order_index: updates.order } : {}),
+  ...(updates.isActive !== undefined ? { is_active: updates.isActive } : {}),
+  ...(updates.formulaItems !== undefined ? { formula_items: updates.formulaItems } : {}),
+  ...(updates.allowManualOverride !== undefined ? { allow_manual_override: updates.allowManualOverride } : {}),
+});
+
 export const usePayroll = () => {
   const ctx = useContext(PayrollContext);
   if (!ctx) throw new Error("usePayroll must be used within PayrollProvider");
@@ -159,6 +212,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [allJobRoles, setAllJobRoles] = useState<JobRole[]>([]);
+  const [rubrics, setRubrics] = useState<Rubric[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<PayrollMonth>({ month: 3, year: 2026 });
   const [entriesCache, setEntriesCache] = useState<Record<string, PayrollEntry[]>>({});
@@ -168,11 +222,15 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsLoading(true);
 
     // Comentário: carregamos cadastros administrativos da mesma origem para manter o padrão piloto consistente e reaproveitável.
-    const [companiesRes, employeesRes, departmentsRes, rolesRes] = await Promise.all([
+    const [companiesRes, employeesRes, departmentsRes, rolesRes, rubricsRes] = await Promise.all([
       supabase.from("companies").select("id, name, cnpj, address").order("name", { ascending: true }),
       supabase.from("employees").select("*").order("name", { ascending: true }),
       supabase.from("departments").select("id, company_id, name, is_active").order("name", { ascending: true }),
       supabase.from("job_roles").select("id, company_id, name, is_active").order("name", { ascending: true }),
+      supabase
+        .from("rubrics")
+        .select("id, name, code, rubric_category, rubric_type, mode, order_index, is_active, formula_items, allow_manual_override")
+        .order("order_index", { ascending: true }),
     ]);
 
     if (!companiesRes.error && companiesRes.data) {
@@ -194,6 +252,10 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (!rolesRes.error && rolesRes.data) {
       setAllJobRoles(rolesRes.data.map(mapJobRoleRowToModel));
+    }
+
+    if (!rubricsRes.error && rubricsRes.data) {
+      setRubrics(rubricsRes.data.map(mapRubricRowToModel));
     }
 
     setIsLoading(false);
@@ -364,6 +426,36 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAllJobRoles((prev) => prev.filter((jobRole) => jobRole.id !== id));
   }, []);
 
+  const addRubric = useCallback(async (rubric: Omit<Rubric, "id">) => {
+    const { data, error } = await supabase
+      .from("rubrics")
+      .insert(mapRubricInsertToRow(rubric))
+      .select("id, name, code, rubric_category, rubric_type, mode, order_index, is_active, formula_items, allow_manual_override")
+      .single();
+    if (error || !data) throw error;
+
+    setRubrics((prev) => [...prev, mapRubricRowToModel(data)]);
+  }, []);
+
+  const updateRubric = useCallback(async (id: string, updates: Partial<Rubric>) => {
+    const { data, error } = await supabase
+      .from("rubrics")
+      .update(mapRubricUpdateToRow(updates))
+      .eq("id", id)
+      .select("id, name, code, rubric_category, rubric_type, mode, order_index, is_active, formula_items, allow_manual_override")
+      .single();
+    if (error || !data) throw error;
+
+    setRubrics((prev) => prev.map((rubric) => (rubric.id === id ? mapRubricRowToModel(data) : rubric)));
+  }, []);
+
+  const deleteRubric = useCallback(async (id: string) => {
+    const { error } = await supabase.from("rubrics").delete().eq("id", id);
+    if (error) throw error;
+
+    setRubrics((prev) => prev.filter((rubric) => rubric.id !== id));
+  }, []);
+
   return (
     <PayrollContext.Provider
       value={{
@@ -378,6 +470,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         allDepartments,
         jobRoles,
         allJobRoles,
+        rubrics,
         payrollEntries,
         isLoading,
         updatePayrollEntry,
@@ -393,6 +486,9 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addJobRole,
         updateJobRole,
         deleteJobRole,
+        addRubric,
+        updateRubric,
+        deleteRubric,
       }}
     >
       {children}

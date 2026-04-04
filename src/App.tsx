@@ -11,6 +11,7 @@ import Companies from "./pages/Companies";
 import Employees from "./pages/Employees";
 import Departments from "./pages/Departments";
 import JobRoles from "./pages/JobRoles";
+import Rubrics from "./pages/Rubrics";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
@@ -31,6 +32,7 @@ const App = () => (
                 <Route path="/funcionarios" element={<Employees />} />
                 <Route path="/setores" element={<Departments />} />
                 <Route path="/funcoes-cargos" element={<JobRoles />} />
+                <Route path="/rubricas" element={<Rubrics />} />
                 <Route path="/configuracoes" element={<SettingsPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

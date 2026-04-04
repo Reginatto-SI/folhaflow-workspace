@@ -205,6 +205,51 @@ export type Database = {
           },
         ]
       }
+      rubrics: {
+        Row: {
+          allow_manual_override: boolean
+          code: string
+          created_at: string
+          formula_items: Json
+          id: string
+          is_active: boolean
+          mode: "manual" | "formula"
+          name: string
+          order_index: number
+          rubric_category: string
+          rubric_type: "earning" | "deduction"
+          updated_at: string
+        }
+        Insert: {
+          allow_manual_override?: boolean
+          code: string
+          created_at?: string
+          formula_items?: Json
+          id?: string
+          is_active?: boolean
+          mode?: "manual" | "formula"
+          name: string
+          order_index?: number
+          rubric_category: string
+          rubric_type: "earning" | "deduction"
+          updated_at?: string
+        }
+        Update: {
+          allow_manual_override?: boolean
+          code?: string
+          created_at?: string
+          formula_items?: Json
+          id?: string
+          is_active?: boolean
+          mode?: "manual" | "formula"
+          name?: string
+          order_index?: number
+          rubric_category?: string
+          rubric_type?: "earning" | "deduction"
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
