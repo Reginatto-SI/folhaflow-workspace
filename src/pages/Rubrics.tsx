@@ -12,7 +12,7 @@ import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Check, Download, FileSpreadsheet, FileText, MoreHorizontal, NotebookText, Pencil, Plus, Save, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Calculator, Check, Download, FileSpreadsheet, FileText, MoreHorizontal, NotebookText, Pencil, Plus, Save, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
 
 type RubricTab = "dados-gerais" | "formula";
 type RubricMode = Rubric["mode"];
@@ -359,19 +359,20 @@ const Rubrics: React.FC = () => {
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="flex h-[80vh] max-h-[80vh] max-w-4xl flex-col overflow-hidden">
+            <DialogContent className="flex h-[90vh] max-h-[90vh] max-w-4xl flex-col overflow-hidden">
               <DialogHeader className="border-b pb-3">
                 <DialogTitle className="text-xl">{editing ? "Editar rubrica" : "Nova rubrica"}</DialogTitle>
                 <p className="text-sm text-muted-foreground">Cadastro padronizado com abas para dados gerais e composição de fórmula.</p>
               </DialogHeader>
 
-              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as RubricTab)} className="min-h-0 flex-1 overflow-hidden pt-3">
+              {/* Comentário: mantém cabeçalho/abas/rodapé fixos e aplica scroll apenas na área de conteúdo. */}
+              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as RubricTab)} className="flex min-h-0 flex-1 flex-col overflow-hidden pt-3">
                 <TabsList className="mb-3 grid w-full grid-cols-2">
-                  <TabsTrigger value="dados-gerais">Dados Gerais</TabsTrigger>
-                  <TabsTrigger value="formula" disabled={form.mode !== "formula"}>Fórmula</TabsTrigger>
+                  <TabsTrigger value="dados-gerais"><FileText className="mr-1 h-4 w-4" />Dados Gerais</TabsTrigger>
+                  <TabsTrigger value="formula" disabled={form.mode !== "formula"}><Calculator className="mr-1 h-4 w-4" />Fórmula</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="dados-gerais" className="mt-0 min-h-0 h-full overflow-y-auto pr-1">
+                <TabsContent value="dados-gerais" className="mt-0 min-h-0 flex-1 overflow-y-auto pr-2">
                   <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
                     <h3 className="text-sm font-semibold">Dados principais</h3>
                     <div className="grid gap-3 md:grid-cols-2">
@@ -440,7 +441,7 @@ const Rubrics: React.FC = () => {
                   </section>
                 </TabsContent>
 
-                <TabsContent value="formula" className="mt-0 min-h-0 h-full overflow-y-auto pr-1">
+                <TabsContent value="formula" className="mt-0 min-h-0 flex-1 overflow-y-auto pr-2">
                   <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold">Composição da fórmula</h3>
