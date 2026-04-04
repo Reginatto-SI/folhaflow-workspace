@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, SlidersHorizontal, Building2, BriefcaseBusiness, ChevronDown, ChevronUp, X } from "lucide-react";
 import { Department, JobRole } from "@/types/payroll";
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 
 export interface EmployeeFilterState {
   search: string;
@@ -98,53 +97,51 @@ const EmployeeFilters: React.FC<EmployeeFiltersProps> = ({ filters, onFiltersCha
         </Button>
       </div>
 
-      <Collapsible open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
-        {/* Comentário: conteúdo avançado permanece montado para não perder estado dos filtros ao recolher. */}
-        <CollapsibleContent forceMount className={showAdvancedFilters ? "mt-4" : "mt-0 h-0 overflow-hidden"}>
-          <div
-            className={`grid gap-4 transition-all duration-200 ease-out ${
-              showAdvancedFilters ? "opacity-100" : "pointer-events-none opacity-0"
-            }`}
-            style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}
-          >
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Building2 className="h-3.5 w-3.5" />
-                Setor
-              </Label>
-              <Select value={filters.departmentId || "__all__"} onValueChange={(v) => update({ departmentId: v === "__all__" ? "" : v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos os setores" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">Todos os setores</SelectItem>
-                  {departments.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <BriefcaseBusiness className="h-3.5 w-3.5" />
-                Função / Cargo
-              </Label>
-              <Select value={filters.jobRoleId || "__all__"} onValueChange={(v) => update({ jobRoleId: v === "__all__" ? "" : v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas as funções" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">Todas as funções</SelectItem>
-                  {jobRoles.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <div
+        aria-hidden={!showAdvancedFilters}
+        className={`overflow-hidden transition-all duration-200 ease-out ${showAdvancedFilters ? "mt-4 max-h-[520px] opacity-100" : "max-h-0 opacity-0"}`}
+      >
+        <div
+          className={`grid gap-4 ${showAdvancedFilters ? "pointer-events-auto" : "pointer-events-none"}`}
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}
+        >
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Building2 className="h-3.5 w-3.5" />
+              Setor
+            </Label>
+            <Select value={filters.departmentId || "__all__"} onValueChange={(v) => update({ departmentId: v === "__all__" ? "" : v })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todos os setores" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos os setores</SelectItem>
+                {departments.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </CollapsibleContent>
-      </Collapsible>
+
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <BriefcaseBusiness className="h-3.5 w-3.5" />
+              Função / Cargo
+            </Label>
+            <Select value={filters.jobRoleId || "__all__"} onValueChange={(v) => update({ jobRoleId: v === "__all__" ? "" : v })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todas as funções" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todas as funções</SelectItem>
+                {jobRoles.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
