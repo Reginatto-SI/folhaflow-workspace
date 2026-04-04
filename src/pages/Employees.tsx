@@ -13,12 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 type EmployeeTab = "dados-funcionario" | "dados-funcionais" | "dados-bancarios" | "observacoes";
 
 type EmployeeFormState = Omit<Employee, "id">;
 
-type EmployeeFormErrors = Partial<Record<"name" | "cpf" | "admissionDate" | "companyId" | "bankName" | "bankBranch" | "bankAccount", string>>;
+type EmployeeFormErrors = Partial<Record<"name" | "cpf" | "admissionDate" | "companyId" | "departmentId" | "jobRoleId" | "bankName" | "bankBranch" | "bankAccount", string>>;
 
 const getInitialForm = (companyId = ""): EmployeeFormState => ({
   companyId,
@@ -28,7 +29,9 @@ const getInitialForm = (companyId = ""): EmployeeFormState => ({
   registration: "",
   workCardNumber: "",
   notes: "",
+  departmentId: "",
   department: "",
+  jobRoleId: "",
   role: "",
   isMonthly: false,
   isOnLeave: false,
@@ -76,24 +79,32 @@ const normalizeBankField = (value?: string) => {
 };
 
 const Employees: React.FC = () => {
-  const { companies, employees, departments, jobRoles, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
+  const { companies, employees, allDepartments, allJobRoles, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeFormState>(getInitialForm());
   const [errors, setErrors] = useState<EmployeeFormErrors>({});
   const [activeTab, setActiveTab] = useState<EmployeeTab>("dados-funcionario");
 
-  // Comentário: transição segura para integração futura - usamos cadastros estruturados (setores/funções) como sugestão principal,
-  // mantendo fallback para históricos já digitados em texto livre até o vínculo por ID ser implementado no funcionário.
-  const { departmentSuggestions, roleSuggestions } = useMemo(() => {
-    const departmentNames = Array.from(
-      new Set([...departments.filter((department) => department.isActive).map((department) => normalizeText(department.name)), ...employees.map((employee) => normalizeText(employee.department))].filter(Boolean))
-    ).sort();
-    const roleNames = Array.from(
-      new Set([...jobRoles.filter((jobRole) => jobRole.isActive).map((jobRole) => normalizeText(jobRole.name)), ...employees.map((employee) => normalizeText(employee.role))].filter(Boolean))
-    ).sort();
-    return { departmentSuggestions: departmentNames, roleSuggestions: roleNames };
-  }, [departments, employees, jobRoles]);
+  // Comentário: na transição gradual, filtros usam a empresa registrada do formulário (companyId),
+  // garantindo catálogo correto por empresa mesmo que a empresa selecionada na listagem seja outra.
+  const { availableDepartments, availableJobRoles } = useMemo(() => {
+    const companyId = form.companyId;
+    return {
+      availableDepartments: allDepartments.filter((department) => department.companyId === companyId && department.isActive),
+      availableJobRoles: allJobRoles.filter((jobRole) => jobRole.companyId === companyId && jobRole.isActive),
+    };
+  }, [allDepartments, allJobRoles, form.companyId]);
+
+  const departmentItems = useMemo(
+    () => availableDepartments.map((department) => ({ value: department.id, label: department.name })),
+    [availableDepartments]
+  );
+
+  const jobRoleItems = useMemo(
+    () => availableJobRoles.map((jobRole) => ({ value: jobRole.id, label: jobRole.name })),
+    [availableJobRoles]
+  );
 
   const openNew = () => {
     setEditing(null);
@@ -120,6 +131,20 @@ const Employees: React.FC = () => {
 
     if (!isValidCpf(draft.cpf)) {
       nextErrors.cpf = "CPF inválido. Verifique os 11 dígitos.";
+    }
+
+    if (draft.departmentId) {
+      const validDepartment = allDepartments.some((department) => department.id === draft.departmentId && department.companyId === draft.companyId && department.isActive);
+      if (!validDepartment) {
+        nextErrors.departmentId = "Selecione um setor ativo válido da empresa registrada.";
+      }
+    }
+
+    if (draft.jobRoleId) {
+      const validJobRole = allJobRoles.some((jobRole) => jobRole.id === draft.jobRoleId && jobRole.companyId === draft.companyId && jobRole.isActive);
+      if (!validJobRole) {
+        nextErrors.jobRoleId = "Selecione uma função/cargo ativa válida da empresa registrada.";
+      }
     }
 
     const bankName = normalizeText(draft.bankName);
@@ -159,7 +184,9 @@ const Employees: React.FC = () => {
       name: normalizedName,
       cpf: sanitizeDigits(form.cpf),
       registration: normalizedRegistration,
+      departmentId: form.departmentId || "",
       department: normalizedDepartment,
+      jobRoleId: form.jobRoleId || "",
       role: normalizedRole,
       notes: normalizedNotes,
       bankName: normalizeBankField(form.bankName),
@@ -296,7 +323,18 @@ const Employees: React.FC = () => {
                     <div className="space-y-1.5 md:col-span-2">
                       <Label>Empresa registrada *</Label>
                       {/* Comentário: companyId passa a ser tratado explicitamente como empresa registrada. */}
-                      <Select value={form.companyId} onValueChange={(value) => setForm((prev) => ({ ...prev, companyId: value }))}>
+                      <Select
+                        value={form.companyId}
+                        onValueChange={(value) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            companyId: value,
+                            // Comentário: ao trocar empresa registrada, removemos vínculos por ID incompatíveis.
+                            departmentId: "",
+                            jobRoleId: "",
+                          }))
+                        }
+                      >
                         <SelectTrigger className={fieldClass("companyId")}>
                           <SelectValue placeholder="Selecione a empresa formal de registro" />
                         </SelectTrigger>
@@ -323,29 +361,61 @@ const Employees: React.FC = () => {
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div className="space-y-1.5">
                       <Label>Setor</Label>
-                      <Input
-                        list="department-suggestions"
-                        value={form.department || ""}
-                        onChange={(event) => setForm((prev) => ({ ...prev, department: event.target.value }))}
+                      <SearchableCombobox
+                        className={fieldClass("departmentId")}
+                        value={form.departmentId || ""}
+                        items={departmentItems}
+                        disabled={!form.companyId}
+                        placeholder={form.companyId ? "Selecionar setor..." : "Selecione a empresa registrada primeiro"}
+                        searchPlaceholder="Buscar setor..."
+                        emptyMessage="Nenhum resultado encontrado"
+                        clearLabel="Não vincular setor agora"
+                        createActionLabel="+ Criar novo setor"
+                        onCreateActionClick={() => toast.info("Use a aba de Setores para criar novos registros.")}
+                        onValueChange={(value) => {
+                          if (!value) {
+                            setForm((prev) => ({ ...prev, departmentId: "", department: prev.department || "" }));
+                            return;
+                          }
+                          const selectedDepartment = availableDepartments.find((department) => department.id === value);
+                          setForm((prev) => ({ ...prev, departmentId: value, department: selectedDepartment?.name || prev.department || "" }));
+                        }}
                       />
-                      <datalist id="department-suggestions">
-                        {departmentSuggestions.map((department) => (
-                          <option key={department} value={department} />
-                        ))}
-                      </datalist>
+                      {!!form.department && !form.departmentId && (
+                        <p className="text-xs text-muted-foreground">
+                          Legado: este funcionário mantém setor em texto livre ({form.department}) até associação por ID.
+                        </p>
+                      )}
+                      {errors.departmentId && <p className="text-xs text-destructive">{errors.departmentId}</p>}
                     </div>
                     <div className="space-y-1.5">
                       <Label>Função / Cargo</Label>
-                      <Input
-                        list="role-suggestions"
-                        value={form.role || ""}
-                        onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}
+                      <SearchableCombobox
+                        className={fieldClass("jobRoleId")}
+                        value={form.jobRoleId || ""}
+                        items={jobRoleItems}
+                        disabled={!form.companyId}
+                        placeholder={form.companyId ? "Selecionar função/cargo..." : "Selecione a empresa registrada primeiro"}
+                        searchPlaceholder="Buscar função/cargo..."
+                        emptyMessage="Nenhum resultado encontrado"
+                        clearLabel="Não vincular função/cargo agora"
+                        createActionLabel="+ Criar nova função"
+                        onCreateActionClick={() => toast.info("Use a aba de Funções/Cargos para criar novos registros.")}
+                        onValueChange={(value) => {
+                          if (!value) {
+                            setForm((prev) => ({ ...prev, jobRoleId: "", role: prev.role || "" }));
+                            return;
+                          }
+                          const selectedJobRole = availableJobRoles.find((jobRole) => jobRole.id === value);
+                          setForm((prev) => ({ ...prev, jobRoleId: value, role: selectedJobRole?.name || prev.role || "" }));
+                        }}
                       />
-                      <datalist id="role-suggestions">
-                        {roleSuggestions.map((role) => (
-                          <option key={role} value={role} />
-                        ))}
-                      </datalist>
+                      {!!form.role && !form.jobRoleId && (
+                        <p className="text-xs text-muted-foreground">
+                          Legado: esta função/cargo segue em texto livre ({form.role}) até associação por ID.
+                        </p>
+                      )}
+                      {errors.jobRoleId && <p className="text-xs text-destructive">{errors.jobRoleId}</p>}
                     </div>
                   </div>
                   {/* Comentário: o salário base permanece no modelo por compatibilidade de folha, mas foi removido desta UI de cadastro-base. */}

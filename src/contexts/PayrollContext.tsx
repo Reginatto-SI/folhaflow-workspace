@@ -12,7 +12,9 @@ interface PayrollContextType {
   employees: Employee[];
   allEmployees: Employee[];
   departments: Department[];
+  allDepartments: Department[];
   jobRoles: JobRole[];
+  allJobRoles: JobRole[];
   payrollEntries: PayrollEntry[];
   isLoading: boolean;
   updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => void;
@@ -71,7 +73,9 @@ const mapEmployeeRowToModel = (row: {
   registration: string | null;
   work_card_number: string | null;
   notes: string | null;
+  department_id: string | null;
   department: string | null;
+  job_role_id: string | null;
   role: string | null;
   is_monthly: boolean;
   is_on_leave: boolean;
@@ -89,7 +93,9 @@ const mapEmployeeRowToModel = (row: {
   registration: row.registration || "",
   workCardNumber: row.work_card_number || "",
   notes: row.notes || "",
+  departmentId: row.department_id || "",
   department: row.department || "",
+  jobRoleId: row.job_role_id || "",
   role: row.role || "",
   isMonthly: row.is_monthly,
   isOnLeave: row.is_on_leave,
@@ -108,7 +114,9 @@ const mapEmployeeInsertToRow = (employee: Omit<Employee, "id">) => ({
   registration: normalizeText(employee.registration),
   work_card_number: normalizeText(employee.workCardNumber),
   notes: normalizeText(employee.notes),
+  department_id: employee.departmentId || null,
   department: normalizeText(employee.department),
+  job_role_id: employee.jobRoleId || null,
   role: normalizeText(employee.role),
   is_monthly: employee.isMonthly,
   is_on_leave: employee.isOnLeave,
@@ -127,7 +135,9 @@ const mapEmployeeUpdateToRow = (updates: Partial<Employee>) => ({
   ...(updates.registration !== undefined ? { registration: normalizeText(updates.registration) } : {}),
   ...(updates.workCardNumber !== undefined ? { work_card_number: normalizeText(updates.workCardNumber) } : {}),
   ...(updates.notes !== undefined ? { notes: normalizeText(updates.notes) } : {}),
+  ...(updates.departmentId !== undefined ? { department_id: updates.departmentId || null } : {}),
   ...(updates.department !== undefined ? { department: normalizeText(updates.department) } : {}),
+  ...(updates.jobRoleId !== undefined ? { job_role_id: updates.jobRoleId || null } : {}),
   ...(updates.role !== undefined ? { role: normalizeText(updates.role) } : {}),
   ...(updates.isMonthly !== undefined ? { is_monthly: updates.isMonthly } : {}),
   ...(updates.isOnLeave !== undefined ? { is_on_leave: updates.isOnLeave } : {}),
@@ -365,7 +375,9 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         employees,
         allEmployees,
         departments,
+        allDepartments,
         jobRoles,
+        allJobRoles,
         payrollEntries,
         isLoading,
         updatePayrollEntry,

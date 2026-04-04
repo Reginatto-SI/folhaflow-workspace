@@ -86,6 +86,7 @@ export type Database = {
           company_id: string
           cpf: string
           created_at: string
+          department_id: string | null
           department: string | null
           id: string
           is_active: boolean
@@ -93,6 +94,7 @@ export type Database = {
           is_on_leave: boolean
           name: string
           notes: string | null
+          job_role_id: string | null
           registration: string | null
           role: string | null
           updated_at: string
@@ -107,6 +109,7 @@ export type Database = {
           company_id: string
           cpf: string
           created_at?: string
+          department_id?: string | null
           department?: string | null
           id?: string
           is_active?: boolean
@@ -114,6 +117,7 @@ export type Database = {
           is_on_leave?: boolean
           name: string
           notes?: string | null
+          job_role_id?: string | null
           registration?: string | null
           role?: string | null
           updated_at?: string
@@ -128,6 +132,7 @@ export type Database = {
           company_id?: string
           cpf?: string
           created_at?: string
+          department_id?: string | null
           department?: string | null
           id?: string
           is_active?: boolean
@@ -135,6 +140,7 @@ export type Database = {
           is_on_leave?: boolean
           name?: string
           notes?: string | null
+          job_role_id?: string | null
           registration?: string | null
           role?: string | null
           updated_at?: string
@@ -146,6 +152,20 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_job_role_id_fkey"
+            columns: ["job_role_id"]
+            isOneToOne: false
+            referencedRelation: "job_roles"
             referencedColumns: ["id"]
           },
         ]

@@ -32,7 +32,11 @@ export interface Employee {
   // Comentário: campo novo para carteira de trabalho no cadastro-base de RH.
   workCardNumber?: string;
   notes?: string;
+  // Comentário: vínculo estruturado por ID em transição gradual; ainda convivendo com campo legado de texto.
+  departmentId?: string;
   department?: string;
+  // Comentário: vínculo estruturado por ID em transição gradual; ainda convivendo com campo legado de texto.
+  jobRoleId?: string;
   role?: string;
   isMonthly: boolean;
   isOnLeave: boolean;
