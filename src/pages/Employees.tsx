@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import EmployeeFilters, { EmployeeFilterState, getInitialFilters } from "@/components/employees/EmployeeFilters";
 
 type EmployeeTab = "dados-funcionario" | "dados-funcionais" | "dados-bancarios" | "observacoes";
 
