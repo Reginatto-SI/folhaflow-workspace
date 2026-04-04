@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { BriefcaseBusiness, Landmark, NotebookPen, Pencil, Plus, Save, Trash2, User, X } from "lucide-react";
 import { Employee } from "@/types/payroll";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -76,19 +76,24 @@ const normalizeBankField = (value?: string) => {
 };
 
 const Employees: React.FC = () => {
-  const { companies, employees, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
+  const { companies, employees, departments, jobRoles, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeFormState>(getInitialForm());
   const [errors, setErrors] = useState<EmployeeFormErrors>({});
   const [activeTab, setActiveTab] = useState<EmployeeTab>("dados-funcionario");
 
-  // Comentário: nesta fase mantemos setor/função como texto para menor mudança segura, com sugestões locais para UX.
+  // Comentário: transição segura para integração futura - usamos cadastros estruturados (setores/funções) como sugestão principal,
+  // mantendo fallback para históricos já digitados em texto livre até o vínculo por ID ser implementado no funcionário.
   const { departmentSuggestions, roleSuggestions } = useMemo(() => {
-    const departments = Array.from(new Set(employees.map((employee) => normalizeText(employee.department)).filter(Boolean))).sort();
-    const roles = Array.from(new Set(employees.map((employee) => normalizeText(employee.role)).filter(Boolean))).sort();
-    return { departmentSuggestions: departments, roleSuggestions: roles };
-  }, [employees]);
+    const departmentNames = Array.from(
+      new Set([...departments.filter((department) => department.isActive).map((department) => normalizeText(department.name)), ...employees.map((employee) => normalizeText(employee.department))].filter(Boolean))
+    ).sort();
+    const roleNames = Array.from(
+      new Set([...jobRoles.filter((jobRole) => jobRole.isActive).map((jobRole) => normalizeText(jobRole.name)), ...employees.map((employee) => normalizeText(employee.role))].filter(Boolean))
+    ).sort();
+    return { departmentSuggestions: departmentNames, roleSuggestions: roleNames };
+  }, [departments, employees, jobRoles]);
 
   const openNew = () => {
     setEditing(null);
@@ -238,10 +243,10 @@ const Employees: React.FC = () => {
 
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as EmployeeTab)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <TabsList className="grid w-full grid-cols-2 gap-1 rounded-lg bg-muted p-1 lg:grid-cols-4">
-                <TabsTrigger value="dados-funcionario">Dados do funcionário</TabsTrigger>
-                <TabsTrigger value="dados-funcionais">Dados funcionais</TabsTrigger>
-                <TabsTrigger value="dados-bancarios">Dados bancários</TabsTrigger>
-                <TabsTrigger value="observacoes">Observações</TabsTrigger>
+                <TabsTrigger value="dados-funcionario"><User className="mr-1 h-4 w-4" />Dados do funcionário</TabsTrigger>
+                <TabsTrigger value="dados-funcionais"><BriefcaseBusiness className="mr-1 h-4 w-4" />Dados funcionais</TabsTrigger>
+                <TabsTrigger value="dados-bancarios"><Landmark className="mr-1 h-4 w-4" />Dados bancários</TabsTrigger>
+                <TabsTrigger value="observacoes"><NotebookPen className="mr-1 h-4 w-4" />Observações</TabsTrigger>
               </TabsList>
 
               <TabsContent value="dados-funcionario" className="mt-3 min-h-0 flex-1 overflow-y-auto pr-2">
@@ -413,9 +418,9 @@ const Employees: React.FC = () => {
             <div className="flex items-center justify-end gap-2 border-t pt-3">
               <p className="mr-auto text-xs text-muted-foreground">Salário e composição mensal são tratados na Central de Folha.</p>
               <Button variant="outline" onClick={() => setOpen(false)}>
-                Cancelar
+                <X className="mr-1 h-4 w-4" /> Cancelar
               </Button>
-              <Button onClick={() => void handleSave()}>Salvar</Button>
+              <Button onClick={() => void handleSave()}><Save className="mr-1 h-4 w-4" />Salvar</Button>
             </div>
           </DialogContent>
         </Dialog>

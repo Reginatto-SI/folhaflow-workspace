@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Building2, Users, FileSpreadsheet, Settings, ChevronDown } from "lucide-react";
+import { Building2, BriefcaseBusiness, FolderTree, Users, FileSpreadsheet, Settings } from "lucide-react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,8 @@ const navItems = [
   { to: "/", label: "Central de Folha", icon: FileSpreadsheet },
   { to: "/empresas", label: "Empresas", icon: Building2 },
   { to: "/funcionarios", label: "Funcionários", icon: Users },
+  { to: "/setores", label: "Setores", icon: FolderTree },
+  { to: "/funcoes-cargos", label: "Funções/Cargos", icon: BriefcaseBusiness },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
