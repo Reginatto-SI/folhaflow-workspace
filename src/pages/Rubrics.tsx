@@ -41,7 +41,7 @@ const getInitialForm = (): RubricFormState => ({
   name: "",
   code: "",
   category: "",
-  type: "earning",
+  type: "provento",
   mode: "manual",
   order: 1,
   isActive: true,
@@ -207,10 +207,11 @@ const Rubrics: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     try {
+      const current = rubrics.find((rubric) => rubric.id === id);
       await deleteRubric(id);
-      toast.success("Rubrica removida.");
+      toast.success(current?.isActive ? "Rubrica inativada." : "Rubrica ativada.");
     } catch {
-      toast.error("Não foi possível remover a rubrica.");
+      toast.error("Não foi possível atualizar o status da rubrica.");
     }
   };
 
@@ -401,8 +402,8 @@ const Rubrics: React.FC = () => {
                         <Select value={form.type} onValueChange={(value) => setForm((prev) => ({ ...prev, type: value as Rubric["type"] }))}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="earning">Provento</SelectItem>
-                            <SelectItem value="deduction">Desconto</SelectItem>
+                            <SelectItem value="provento">Provento</SelectItem>
+                            <SelectItem value="desconto">Desconto</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -603,8 +604,8 @@ const Rubrics: React.FC = () => {
               <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todos</SelectItem>
-                <SelectItem value="earning">Proventos</SelectItem>
-                <SelectItem value="deduction">Descontos</SelectItem>
+                <SelectItem value="provento">Proventos</SelectItem>
+                <SelectItem value="desconto">Descontos</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -646,7 +647,7 @@ const Rubrics: React.FC = () => {
                   <td className="px-4 py-3 font-medium">{rubric.name}</td>
                   <td className="px-4 py-3">{rubric.code}</td>
                   <td className="px-4 py-3 text-muted-foreground">{rubric.category}</td>
-                  <td className="px-4 py-3">{rubric.type === "earning" ? "Provento" : "Desconto"}</td>
+                  <td className="px-4 py-3">{rubric.type === "provento" ? "Provento" : "Desconto"}</td>
                   <td className="px-4 py-3">{rubric.mode === "manual" ? "Manual" : "Fórmula"}</td>
                   <td className="px-4 py-3 text-center tabular-nums">{rubric.order}</td>
                   <td className="px-4 py-3 text-center">
@@ -667,7 +668,7 @@ const Rubrics: React.FC = () => {
                             <Pencil className="mr-2 h-4 w-4" /> Editar
                           </DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive" onClick={() => void handleDelete(rubric.id)}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                            <Trash2 className="mr-2 h-4 w-4" /> {rubric.isActive ? "Inativar" : "Ativar"}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

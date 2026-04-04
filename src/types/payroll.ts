@@ -73,7 +73,7 @@ export interface Rubric {
   name: string;
   code: string;
   category: string;
-  type: "earning" | "deduction";
+  type: "provento" | "desconto";
   mode: "manual" | "formula";
   order: number;
   isActive: boolean;
