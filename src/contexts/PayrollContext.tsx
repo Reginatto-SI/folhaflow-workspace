@@ -48,6 +48,7 @@ const mapEmployeeRowToModel = (row: {
   cpf: string;
   admission_date: string;
   registration: string | null;
+  work_card_number: string | null;
   notes: string | null;
   department: string | null;
   role: string | null;
@@ -65,6 +66,7 @@ const mapEmployeeRowToModel = (row: {
   cpf: row.cpf,
   admissionDate: row.admission_date,
   registration: row.registration || "",
+  workCardNumber: row.work_card_number || "",
   notes: row.notes || "",
   department: row.department || "",
   role: row.role || "",
@@ -83,6 +85,7 @@ const mapEmployeeInsertToRow = (employee: Omit<Employee, "id">) => ({
   cpf: normalizeCpf(employee.cpf),
   admission_date: employee.admissionDate,
   registration: normalizeText(employee.registration),
+  work_card_number: normalizeText(employee.workCardNumber),
   notes: normalizeText(employee.notes),
   department: normalizeText(employee.department),
   role: normalizeText(employee.role),
@@ -101,6 +104,7 @@ const mapEmployeeUpdateToRow = (updates: Partial<Employee>) => ({
   ...(updates.cpf !== undefined ? { cpf: normalizeCpf(updates.cpf) } : {}),
   ...(updates.admissionDate !== undefined ? { admission_date: updates.admissionDate } : {}),
   ...(updates.registration !== undefined ? { registration: normalizeText(updates.registration) } : {}),
+  ...(updates.workCardNumber !== undefined ? { work_card_number: normalizeText(updates.workCardNumber) } : {}),
   ...(updates.notes !== undefined ? { notes: normalizeText(updates.notes) } : {}),
   ...(updates.department !== undefined ? { department: normalizeText(updates.department) } : {}),
   ...(updates.role !== undefined ? { role: normalizeText(updates.role) } : {}),

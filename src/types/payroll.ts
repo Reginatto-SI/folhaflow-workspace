@@ -7,11 +7,14 @@ export interface Company {
 
 export interface Employee {
   id: string;
+  // Comentário: nesta fase, companyId representa a empresa formal de registro (empresa registrada), não o vínculo completo de folha multiempresa.
   companyId: string;
   name: string;
   cpf: string;
   admissionDate: string;
   registration?: string;
+  // Comentário: campo novo para carteira de trabalho no cadastro-base de RH.
+  workCardNumber?: string;
   notes?: string;
   department?: string;
   role?: string;
