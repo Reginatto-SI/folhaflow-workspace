@@ -60,14 +60,24 @@ export interface PayrollEntry {
   notes: string;
 }
 
+export interface RubricFormulaItem {
+  id: string;
+  operation: "add" | "subtract";
+  sourceRubricId: string;
+  order: number;
+}
+
 export interface Rubric {
   id: string;
-  companyId: string;
   name: string;
+  code: string;
+  category: string;
   type: "earning" | "deduction";
-  behavior: "manual" | "fixed" | "percentage";
-  defaultValue?: number;
-  isFrequent: boolean;
+  mode: "manual" | "formula";
+  order: number;
+  isActive: boolean;
+  formulaItems: RubricFormulaItem[];
+  allowManualOverride: boolean;
 }
 
 export type PayrollMonth = {

@@ -7,6 +7,7 @@ import {
   Users,
   FileSpreadsheet,
   Settings,
+  NotebookText,
   Bell,
   LogOut,
   UserCircle,
@@ -49,6 +50,7 @@ const navItems = [
   { to: "/funcionarios", label: "Funcionários", icon: Users },
   { to: "/setores", label: "Setores", icon: FolderTree },
   { to: "/funcoes-cargos", label: "Funções/Cargos", icon: BriefcaseBusiness },
+  { to: "/rubricas", label: "Rubricas", icon: NotebookText },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
@@ -58,6 +60,7 @@ const routeLabels: Record<string, string> = {
   "/funcionarios": "Funcionários",
   "/setores": "Setores",
   "/funcoes-cargos": "Funções/Cargos",
+  "/rubricas": "Rubricas",
   "/configuracoes": "Configurações",
 };
 
