@@ -104,11 +104,6 @@ function AppSidebar() {
             // Estado expandido: usa a logo oficial já disponível em /public.
             <img src="/logo_Branca_Laranja.svg" alt="Delicious Fish" className="h-8 w-auto shrink-0" />
           )}
-          {!collapsed && (
-            <span className="text-lg font-bold tracking-tight text-sidebar-foreground">
-              FolhaFlow
-            </span>
-          )}
         </div>
       </SidebarHeader>
 
@@ -188,7 +183,8 @@ function AppSidebar() {
 
       <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
         {!collapsed && (
-          <p className="text-xs text-sidebar-foreground/50">FolhaFlow v1.0</p>
+          // Mantém apenas a versão sem exibir o nome da marca em texto.
+          <p className="text-xs text-sidebar-foreground/50">v1.0</p>
         )}
       </SidebarFooter>
     </Sidebar>
@@ -200,7 +196,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const pageTitle = routeLabels[location.pathname] || "FolhaFlow";
+  // Evita fallback com o nome da marca em texto visível no header.
+  const pageTitle = routeLabels[location.pathname] || "";
 
   const initials = profile?.name
     ? profile.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
