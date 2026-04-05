@@ -95,9 +95,15 @@ function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm">
-            F
-          </div>
+          {collapsed ? (
+            // Estado colapsado: abreviação intencional e legível da marca.
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm">
+              DF
+            </div>
+          ) : (
+            // Estado expandido: usa a logo oficial já disponível em /public.
+            <img src="/logo_Branca_Laranja.svg" alt="Delicious Fish" className="h-8 w-auto shrink-0" />
+          )}
           {!collapsed && (
             <span className="text-lg font-bold tracking-tight text-sidebar-foreground">
               FolhaFlow
