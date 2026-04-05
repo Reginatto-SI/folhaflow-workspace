@@ -1,88 +1,155 @@
 
 
-# Evolução Visual do FolhaFlow — Layout Profissional
+# Plano: Cadastro de Usuários com Login
 
 ## Resumo
 
-Refatorar o layout global do sistema (AppLayout) e a tela de Funcionários como piloto, sem alterar lógica de negócio ou CRUD existente. Resultado: sistema com aparência de software administrativo maduro.
+Implementar autenticação simples com: login por e-mail/senha, tela administrativa de usuários, e controle de ativo/inativo. Sem roles, sem multi-tenant, sem recuperação de senha.
 
-## Arquivos Modificados
+---
 
-| Arquivo | Ação |
-|---------|------|
-| `src/components/layout/AppLayout.tsx` | Reescrever: novo header + sidebar colapsável via shadcn Sidebar |
-| `src/pages/Employees.tsx` | Adicionar KPIs compactos + melhorar hierarquia visual da página |
-| `src/pages/Index.tsx` | Ajustar hierarquia visual (título/subtítulo) para seguir novo padrão |
-| `src/index.css` | Pequenos ajustes de variáveis CSS para tabelas e headers |
-| `src/App.tsx` | Envolver com `SidebarProvider` |
+## Arquitetura
 
-## Parte 1 — Novo Header Global
+- **Autenticação**: Supabase Auth (email+senha)
+- **Tabela `profiles`**: armazena nome, status ativo/inativo, vinculada a `auth.users`
+- **Criação de usuários**: via Edge Function usando `service_role` (admin cria com senha definida)
+- **Controle de acesso**: verificação de `is_active` no login e via listener de sessão
+- **Auto-confirm habilitado**: como o admin cria os usuários, não faz sentido exigir confirmação por e-mail
 
-Substituir o header atual em `AppLayout.tsx` por uma estrutura de 3 zonas:
+---
 
-- **Esquerda**: `SidebarTrigger` (hamburguer) + título dinâmico da página atual (derivado da rota via `useLocation`)
-- **Centro**: seletores de empresa e competência (já existentes, reposicionados)
-- **Direita**: ícone Bell (placeholder notificações) + Avatar com `DropdownMenu` contendo "Meu perfil" e "Sair"
+## Etapas
 
-Header fixo com `h-14`, borda inferior, fundo `bg-card`.
+### 1. Banco de dados — tabela `profiles`
 
-## Parte 2 — Sidebar Colapsável
+Criar migration:
 
-Migrar de sidebar manual para o componente `shadcn Sidebar` com `collapsible="icon"`:
+```sql
+CREATE TABLE public.profiles (
+  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  email text NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 
-- Modo expandido: ícone + texto (como atual)
-- Modo colapsado: apenas ícones com tooltips automáticos do componente
-- `SidebarTrigger` no header (sempre visível)
-- Logo "FolhaFlow" no topo da sidebar, colapsa para ícone "F"
-- Footer com versão
-- Estado persistido via `SidebarProvider` (localStorage automático)
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
-Usar `NavLink` para highlight de rota ativa.
+-- Políticas abertas (sem roles por enquanto, sistema interno)
+CREATE POLICY "profiles_select_all" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "profiles_update_all" ON public.profiles FOR UPDATE USING (true);
+CREATE POLICY "profiles_insert_all" ON public.profiles FOR INSERT WITH CHECK (true);
 
-## Parte 3 — KPIs Compactos (Funcionários como piloto)
+-- Trigger para atualizar updated_at
+CREATE TRIGGER set_profiles_updated_at
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-Adicionar uma faixa de 4 mini-cards no topo da página de Funcionários, calculados a partir do array `employees`:
+-- Trigger para criar perfil automaticamente no signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, name, email)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'name', ''),
+    NEW.email
+  );
+  RETURN NEW;
+END;
+$$;
 
-```text
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│  Total: 12   │ │  Ativos: 10  │ │ Afastados: 1 │ │ Mensalist: 8 │
-└──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 ```
 
-- Cards com `border`, ícone pequeno, label + número
-- Cores: ícone azul para total, verde para ativos, amarelo para afastados, cinza para mensalistas
-- Altura compacta (~64px), layout `grid grid-cols-2 md:grid-cols-4 gap-3`
+### 2. Edge Function — `admin-create-user`
 
-## Parte 4 — Hierarquia Visual das Páginas
+Cria usuário via `supabase.auth.admin.createUser()` com senha definida e `email_confirm: true`. Recebe `{ name, email, password }`. Retorna o perfil criado.
 
-Estabelecer padrão de cabeçalho de página:
+### 3. Habilitar auto-confirm de e-mail
 
-- Título `text-2xl font-bold` (mais forte que o atual `text-xl font-semibold`)
-- Subtítulo `text-sm text-muted-foreground`
-- Separação visual clara entre header da página, KPIs e conteúdo
-- Espaçamento consistente: `mb-6` entre blocos
+Usar `cloud--configure_auth` para habilitar auto-confirm, já que usuários são criados pelo admin.
 
-## Parte 5 — Refinamento Visual Global
+### 4. Contexto de autenticação — `src/contexts/AuthContext.tsx`
 
-Na tabela de Funcionários:
-- Cabeçalho com `bg-muted` mais forte e `font-semibold`
-- Linhas com `hover:bg-muted/40` e melhor padding
-- Botão "Novo Funcionário" com ícone `Plus` (já tem) — manter
+- Estado: `user`, `profile`, `loading`, `isAuthenticated`
+- `onAuthStateChange` para gerenciar sessão
+- Ao fazer login, busca `profiles` e verifica `is_active`
+- Se inativo: faz `signOut` e mostra erro
+- Funções: `signIn`, `signOut`
 
-Cards gerais:
-- Garantir `rounded-lg border shadow-sm` como padrão
-- Padding `p-4` consistente
+### 5. Tela de Login — `src/pages/Login.tsx`
 
-## Parte 6 — Preservação
+- Formulário simples: e-mail + senha + botão "Entrar"
+- Visual limpo, centralizado, com logo "FolhaFlow"
+- Redireciona para `/` após login
 
-- Nenhuma alteração em modais, formulários, validações ou lógica de CRUD
-- `PayrollContext` intocado
-- Apenas layout wrapper e apresentação visual das páginas
+### 6. Proteção de rotas — `src/components/auth/ProtectedRoute.tsx`
 
-## Detalhes Técnicos
+- Wrapper que verifica `isAuthenticated`
+- Se não autenticado, redireciona para `/login`
+- Loading state enquanto verifica sessão
 
-- `SidebarProvider` será adicionado em `App.tsx` envolvendo `AppLayout`
-- O título dinâmico no header usa um mapa rota→label derivado de `navItems`
-- O `DropdownMenu` do avatar usa dados placeholder (nome "Usuário", email hardcoded) — será conectado à autenticação futuramente
-- Componentes shadcn já disponíveis: `Sidebar`, `DropdownMenu`, `Avatar`, `Tooltip` — nenhuma instalação necessária
+### 7. Atualizar `App.tsx`
+
+- Adicionar `AuthProvider` envolvendo tudo
+- Rota `/login` pública
+- Todas as outras rotas protegidas via `ProtectedRoute`
+
+### 8. Tela de Usuários — `src/pages/UsersAdmin.tsx`
+
+Seguindo o padrão existente (igual a Departments):
+- Header com título + botão "Novo Usuário"
+- KPIs: total, ativos, inativos
+- Tabela: nome, e-mail, status (badge), menu de ações (...)
+- Modal de cadastro: nome, e-mail, senha
+- Modal de edição: nome, e-mail (senha opcional para redefinir)
+- Ação de ativar/inativar via menu de contexto
+
+### 9. Atualizar sidebar e rotas
+
+- Adicionar rota `/usuarios` no `App.tsx`
+- Adicionar item "Usuários" no menu de Cadastros do `AppLayout.tsx`
+- Atualizar avatar no header com dados reais do perfil logado
+- Botão "Sair" funcional
+
+### 10. Edge Function — `admin-update-user`
+
+Para redefinir senha de um usuário existente (via `supabase.auth.admin.updateUserById`).
+
+---
+
+## Detalhes técnicos
+
+- A criação de usuários precisa de Edge Function porque `auth.admin` exige `service_role_key` (não exposta no client)
+- O `SUPABASE_SERVICE_ROLE_KEY` já está disponível como secret
+- A verificação de `is_active` acontece no client após login — se inativo, força logout imediato
+- Sem roles nesta fase: qualquer usuário logado pode acessar a tela de usuários
+
+---
+
+## Arquivos novos
+
+| Arquivo | Descrição |
+|---|---|
+| `src/contexts/AuthContext.tsx` | Provider de autenticação |
+| `src/pages/Login.tsx` | Tela de login |
+| `src/pages/UsersAdmin.tsx` | Tela administrativa de usuários |
+| `src/components/auth/ProtectedRoute.tsx` | Wrapper de rota protegida |
+| `supabase/functions/admin-create-user/index.ts` | Edge Function para criar usuário |
+| `supabase/functions/admin-update-user/index.ts` | Edge Function para atualizar usuário |
+
+## Arquivos modificados
+
+| Arquivo | Mudança |
+|---|---|
+| `src/App.tsx` | AuthProvider, rota /login, ProtectedRoute, rota /usuarios |
+| `src/components/layout/AppLayout.tsx` | Item "Usuários" no menu, avatar real, logout funcional |
 
