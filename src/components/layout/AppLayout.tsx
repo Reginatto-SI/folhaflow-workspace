@@ -1,5 +1,6 @@
 import React from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Building2,
   BriefcaseBusiness,
@@ -58,6 +59,7 @@ const cadastrosNavItems = [
   { to: "/setores", label: "Setores", icon: FolderTree },
   { to: "/funcoes-cargos", label: "Funções/Cargos", icon: BriefcaseBusiness },
   { to: "/rubricas", label: "Rubricas", icon: NotebookText },
+  { to: "/usuarios", label: "Usuários", icon: UserCircle },
 ];
 
 const secondaryNavItems = [
@@ -71,6 +73,7 @@ const routeLabels: Record<string, string> = {
   "/setores": "Setores",
   "/funcoes-cargos": "Funções/Cargos",
   "/rubricas": "Rubricas",
+  "/usuarios": "Usuários",
   "/configuracoes": "Configurações",
 };
 
@@ -188,8 +191,19 @@ function AppSidebar() {
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { companies, selectedCompany, setSelectedCompany, selectedMonth, setSelectedMonth } = usePayroll();
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
   const pageTitle = routeLabels[location.pathname] || "FolhaFlow";
+
+  const initials = profile?.name
+    ? profile.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
+    : "U";
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -218,23 +232,18 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 <Button variant="ghost" className="h-8 w-8 rounded-full p-0">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
-                      U
+                      {initials}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>
-                  <p className="text-sm font-medium">Usuário</p>
-                  <p className="text-xs text-muted-foreground">usuario@email.com</p>
+                  <p className="text-sm font-medium">{profile?.name || "Usuário"}</p>
+                  <p className="text-xs text-muted-foreground">{profile?.email || ""}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <UserCircle className="mr-2 h-4 w-4" />
-                  Meu perfil
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
+                <DropdownMenuItem className="text-destructive" onClick={() => void handleLogout()}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Sair
                 </DropdownMenuItem>
