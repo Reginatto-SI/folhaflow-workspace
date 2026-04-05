@@ -36,9 +36,10 @@ const Login: React.FC = () => {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-2">
-          {/* Tela de login com a logo oficial da marca para reforçar identidade corporativa. */}
-          <img src="/logo_Vermelha_Laranja.svg" alt="Delicious Fish" className="h-16 w-auto" />
-          <h1 className="text-2xl font-bold tracking-tight">FolhaFlow</h1>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-lg">
+            F
+          </div>
+
           <p className="text-sm text-muted-foreground">Acesse sua conta</p>
         </div>
 
