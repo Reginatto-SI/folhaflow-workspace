@@ -76,8 +76,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // Garante que o provider assuma a sessão antes de a tela navegar.
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    await handleSession(data.session);
   };
 
   const signOut = async () => {
