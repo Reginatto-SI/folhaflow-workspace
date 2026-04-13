@@ -126,8 +126,10 @@ const Employees: React.FC = () => {
   const { availableDepartments, availableJobRoles } = useMemo(() => {
     const companyId = form.companyId;
     return {
-      availableDepartments: allDepartments.filter((department) => department.companyId === companyId && department.isActive),
-      availableJobRoles: allJobRoles.filter((jobRole) => jobRole.companyId === companyId && jobRole.isActive),
+      // Comentário: para cadastro/edição, exibimos todo o catálogo da empresa (ativos e inativos)
+      // para evitar dropdown vazio em bases legadas e manter vínculo atual editável.
+      availableDepartments: allDepartments.filter((department) => department.companyId === companyId),
+      availableJobRoles: allJobRoles.filter((jobRole) => jobRole.companyId === companyId),
     };
   }, [allDepartments, allJobRoles, form.companyId]);
 
@@ -169,16 +171,16 @@ const Employees: React.FC = () => {
     }
 
     if (draft.departmentId) {
-      const validDepartment = allDepartments.some((department) => department.id === draft.departmentId && department.companyId === draft.companyId && department.isActive);
+      const validDepartment = allDepartments.some((department) => department.id === draft.departmentId && department.companyId === draft.companyId);
       if (!validDepartment) {
-        nextErrors.departmentId = "Selecione um setor ativo válido da empresa registrada.";
+        nextErrors.departmentId = "Selecione um setor válido da empresa registrada.";
       }
     }
 
     if (draft.jobRoleId) {
-      const validJobRole = allJobRoles.some((jobRole) => jobRole.id === draft.jobRoleId && jobRole.companyId === draft.companyId && jobRole.isActive);
+      const validJobRole = allJobRoles.some((jobRole) => jobRole.id === draft.jobRoleId && jobRole.companyId === draft.companyId);
       if (!validJobRole) {
-        nextErrors.jobRoleId = "Selecione uma função/cargo ativa válida da empresa registrada.";
+        nextErrors.jobRoleId = "Selecione uma função/cargo válida da empresa registrada.";
       }
     }
 
