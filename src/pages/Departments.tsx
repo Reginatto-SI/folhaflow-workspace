@@ -56,7 +56,7 @@ const getInitialFilters = (): FilterState => ({
 });
 
 const Departments: React.FC = () => {
-  const { companies, selectedCompany, departments, addDepartment, updateDepartment, deleteDepartment, isLoading } = usePayroll();
+  const { companies, selectedCompany, allDepartments: departments, addDepartment, updateDepartment, deleteDepartment, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
   const [form, setForm] = useState<FormState>(getInitialForm());

@@ -29,7 +29,7 @@ const getInitialForm = (companyId = ""): FormState => ({ name: "", companyId, is
 const getInitialFilters = (): FilterState => ({ search: "", status: "", companyId: "" });
 
 const JobRoles: React.FC = () => {
-  const { companies, selectedCompany, jobRoles, addJobRole, updateJobRole, deleteJobRole, isLoading } = usePayroll();
+  const { companies, selectedCompany, allJobRoles: jobRoles, addJobRole, updateJobRole, deleteJobRole, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<JobRole | null>(null);
   const [form, setForm] = useState<FormState>(getInitialForm());
