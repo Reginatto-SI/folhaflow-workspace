@@ -1,47 +1,83 @@
 
 
-# Plano: Corrigir CRUD funcional de /setores e /funcoes-cargos
+# Plano: Refatorar Central de Folha
 
-## Problema identificado
+## Situação atual
 
-As telas já têm toda a integração com banco (insert, update, delete via Supabase no PayrollContext). O problema é que ambas importam `departments` e `jobRoles` do contexto — que são **pré-filtrados** pela empresa selecionada no header global (`selectedCompany`). Isso causa:
+A tela `/` (Index.tsx) usa `PayrollTable` com edição inline célula a célula (estilo planilha) e `TotalsBar` com KPIs. Os dados de folha são gerados por `generatePayrollEntries` (mock em memória com valores aleatórios). Não há filtros, seletores de empresa/mês na tela, nem drawer lateral.
 
-1. Listagem vazia se nenhuma empresa estiver selecionada
-2. Filtro por empresa na própria tela não funciona (dados já chegam filtrados)
-3. KPIs mostram apenas dados da empresa atual, não o total real
+## O que muda
 
-## Solução
+Refatorar `Index.tsx` para ser a tela operacional principal, com:
 
-Trocar `departments` por `allDepartments` e `jobRoles` por `allJobRoles` nas respectivas páginas. Ambos já estão expostos no contexto. Nenhuma alteração de banco, contexto ou layout necessária.
+1. **Header da folha** - selects de empresa e competência (mês/ano) + status + botões de ação
+2. **KPIs** - manter TotalsBar existente (já funciona)
+3. **Filtros** - busca por nome, select de setor, select de função
+4. **Tabela simplificada** - colunas: Funcionário, Setor, Função, Salário Base, Proventos, Descontos, Líquido (sem edição inline na tabela principal)
+5. **Drawer lateral** - ao clicar numa linha, abre Sheet (componente já existe) com dados do funcionário, proventos/descontos editáveis, totais automáticos e botões de ação
 
-## Mudanças por arquivo
+## Arquivos
 
-### 1. `src/pages/Departments.tsx` (linha 59)
+### Novos
+| Arquivo | Descrição |
+|---|---|
+| `src/components/payroll/PayrollHeader.tsx` | Header com selects de empresa, mês e botões de ação |
+| `src/components/payroll/PayrollFilters.tsx` | Linha de filtros (busca, setor, função) |
+| `src/components/payroll/EmployeeDrawer.tsx` | Sheet lateral com detalhes e edição do funcionário |
 
-Alterar de:
-```typescript
-const { companies, selectedCompany, departments, addDepartment, ... } = usePayroll();
+### Modificados
+| Arquivo | Mudança |
+|---|---|
+| `src/pages/Index.tsx` | Reescrito para compor os novos componentes |
+| `src/components/payroll/PayrollTable.tsx` | Simplificado: tabela de leitura com clique na linha para abrir drawer |
+
+### Mantidos sem alteração
+- `TotalsBar.tsx` - já funciona bem
+- `EditableCell.tsx` - preservado para uso futuro, não usado na tabela principal por agora
+- `EmployeeRowExpansion.tsx` - preservado, substituído pelo drawer
+- `PayrollContext.tsx` - sem mudanças
+
+## Detalhes de implementação
+
+### PayrollHeader
+- Select de empresa (lista de `companies` do contexto, muda `selectedCompany`)
+- Select de mês/ano (muda `selectedMonth`)
+- Badge "Em edição" como status
+- Botões "Novo lançamento" e "Gerar relatório" (desabilitados/placeholder por agora)
+
+### PayrollFilters
+- Input de busca por nome
+- Select de setor (filtrado pela empresa selecionada)
+- Select de função (filtrado pela empresa selecionada)
+- Botão limpar filtros
+
+### PayrollTable (refatorado)
+- Colunas: Funcionário (nome + CPF), Setor, Função, Salário Base, Proventos, Descontos, Líquido
+- Clique na linha abre o drawer com os dados daquele funcionário
+- Sem edição inline na tabela (edição vai para o drawer)
+- Dados vêm de `payrollEntries` + lookup em `allEmployees`, `allDepartments`, `allJobRoles`
+
+### EmployeeDrawer (Sheet)
+- Usa `Sheet` do shadcn (já existe no projeto)
+- Seção 1: dados do funcionário (somente leitura)
+- Seção 2: inputs de proventos e descontos (editáveis, com formatação de moeda)
+- Seção 3: totais calculados automaticamente
+- Footer: botões Salvar, Gerar recibo (placeholder), Fechar
+- Salvar chama `updatePayrollEntry` e fecha o drawer com toast de sucesso
+
+### Index.tsx
+Composição:
+```text
+PayrollHeader
+TotalsBar
+PayrollFilters
+PayrollTable + EmployeeDrawer
 ```
-Para:
-```typescript
-const { companies, selectedCompany, allDepartments: departments, addDepartment, ... } = usePayroll();
-```
 
-### 2. `src/pages/JobRoles.tsx` (linha 32)
-
-Alterar de:
-```typescript
-const { companies, selectedCompany, jobRoles, addJobRole, ... } = usePayroll();
-```
-Para:
-```typescript
-const { companies, selectedCompany, allJobRoles: jobRoles, addJobRole, ... } = usePayroll();
-```
-
-## Impacto
-
-- Zero mudança em outros arquivos
-- Filtros da própria tela passam a funcionar corretamente (incluindo filtro por empresa)
-- KPIs refletem totais reais
-- CRUD já funciona — apenas a listagem estava limitada
+## Observações
+- Dados continuam vindo do mock em memória (folha ainda não persistida no banco) -- isso é consistente com o estado atual do projeto
+- Nenhuma alteração de banco de dados necessária
+- Reutiliza componentes existentes: Sheet, Select, Input, Badge, Button, toast
+- Filtros aplicados localmente sobre `payrollEntries`
+- O drawer recebe o `PayrollEntry` selecionado e permite edição dos valores
 
