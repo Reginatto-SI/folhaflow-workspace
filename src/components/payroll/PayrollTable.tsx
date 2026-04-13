@@ -1,67 +1,38 @@
-import React, { useState, useCallback } from "react";
-import { usePayroll } from "@/contexts/PayrollContext";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import EditableCell from "./EditableCell";
-import EmployeeRowExpansion from "./EmployeeRowExpansion";
+import React from "react";
+import { PayrollEntry, Employee, Department, JobRole } from "@/types/payroll";
 import { cn } from "@/lib/utils";
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const EDITABLE_COLS = ["baseSalary", "horasExtras", "bonus", "vt", "vr", "inss", "irrf"];
+interface PayrollTableProps {
+  entries: PayrollEntry[];
+  allEmployees: Employee[];
+  allDepartments: Department[];
+  allJobRoles: JobRole[];
+  onRowClick: (entry: PayrollEntry) => void;
+}
 
-const PayrollTable: React.FC = () => {
-  const { payrollEntries, updatePayrollEntry, allEmployees } = usePayroll();
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [activeCell, setActiveCell] = useState<{ row: number; col: number } | null>(null);
-
-  const toggleRow = (id: string) => {
-    setExpandedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+const PayrollTable: React.FC<PayrollTableProps> = ({
+  entries, allEmployees, allDepartments, allJobRoles, onRowClick,
+}) => {
+  const getEmployee = (id: string) => allEmployees.find((e) => e.id === id);
+  const getDeptName = (emp?: Employee) => {
+    if (!emp?.departmentId) return emp?.department || "—";
+    return allDepartments.find((d) => d.id === emp.departmentId)?.name || emp.department || "—";
+  };
+  const getRoleName = (emp?: Employee) => {
+    if (!emp?.jobRoleId) return emp?.role || "—";
+    return allJobRoles.find((j) => j.id === emp.jobRoleId)?.name || emp.role || "—";
   };
 
-  const handleNavigate = useCallback(
-    (row: number, col: number) => {
-      const maxRow = payrollEntries.length - 1;
-      const maxCol = EDITABLE_COLS.length - 1;
-      const clampedRow = Math.max(0, Math.min(row, maxRow));
-      const clampedCol = Math.max(0, Math.min(col, maxCol));
-      setActiveCell({ row: clampedRow, col: clampedCol });
-    },
-    [payrollEntries.length]
-  );
-
-  const handleCellChange = useCallback(
-    (entryId: string, colKey: string, value: number) => {
-      const entry = payrollEntries.find((e) => e.id === entryId);
-      if (!entry) return;
-
-      if (colKey === "baseSalary") {
-        updatePayrollEntry(entryId, { baseSalary: value });
-      } else if (["horasExtras", "bonus"].includes(colKey)) {
-        const key = colKey === "horasExtras" ? "Horas Extras" : "Bônus";
-        updatePayrollEntry(entryId, { earnings: { ...entry.earnings, [key]: value } });
-      } else {
-        const keyMap: Record<string, string> = { vt: "Vale Transporte", vr: "Vale Refeição", inss: "INSS", irrf: "IRRF" };
-        updatePayrollEntry(entryId, { deductions: { ...entry.deductions, [keyMap[colKey]]: value } });
-      }
-    },
-    [payrollEntries, updatePayrollEntry]
-  );
-
-  const getCellValue = (entry: (typeof payrollEntries)[0], colKey: string): number => {
-    if (colKey === "baseSalary") return entry.baseSalary;
-    if (colKey === "horasExtras") return entry.earnings["Horas Extras"] || 0;
-    if (colKey === "bonus") return entry.earnings["Bônus"] || 0;
-    const keyMap: Record<string, string> = { vt: "Vale Transporte", vr: "Vale Refeição", inss: "INSS", irrf: "IRRF" };
-    return entry.deductions[keyMap[colKey]] || 0;
-  };
-
-  const colSpan = 10;
+  if (entries.length === 0) {
+    return (
+      <div className="border rounded-lg bg-card p-8 text-center text-muted-foreground text-sm">
+        Nenhum funcionário encontrado para os filtros selecionados.
+      </div>
+    );
+  }
 
   return (
     <div className="border rounded-lg overflow-hidden bg-card">
@@ -69,60 +40,42 @@ const PayrollTable: React.FC = () => {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-muted/50 border-b">
-              <th className="w-8 px-3 py-2 leading-tight whitespace-nowrap" />
-              <th className="text-left px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground">Funcionário</th>
-              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground">Salário Base</th>
-              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground border-l">Horas Extras</th>
-              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground">Bônus</th>
-              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground border-l">VT</th>
-              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground">VR</th>
-              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground">INSS</th>
-              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground">IRRF</th>
-              <th className="text-right px-3 py-2 leading-tight whitespace-nowrap font-semibold text-xs uppercase tracking-wider text-muted-foreground border-l bg-muted/80">Líquido</th>
+              <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Funcionário</th>
+              <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Setor</th>
+              <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Função</th>
+              <th className="text-right px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Salário Base</th>
+              <th className="text-right px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Proventos</th>
+              <th className="text-right px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Descontos</th>
+              <th className="text-right px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground bg-muted/80">Líquido</th>
             </tr>
           </thead>
           <tbody>
-            {payrollEntries.map((entry, rowIndex) => {
-              const employee = allEmployees.find((e) => e.id === entry.employeeId);
+            {entries.map((entry) => {
+              const emp = getEmployee(entry.employeeId);
               const totalEarnings = Object.values(entry.earnings).reduce((a, b) => a + b, 0);
               const totalDeductions = Object.values(entry.deductions).reduce((a, b) => a + b, 0);
               const gross = entry.baseSalary + totalEarnings;
               const net = gross - totalDeductions;
-              const isExpanded = expandedRows.has(entry.id);
 
               return (
-                <React.Fragment key={entry.id}>
-                  <tr className={cn("border-b transition-colors duration-150 hover:bg-muted/30", isExpanded && "bg-muted/20")}>
-                    <td
-                      className="px-3 py-2 cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
-                      onClick={() => toggleRow(entry.id)}
-                    >
-                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    </td>
-                    <td className="px-3 py-2 font-medium border-r">
-                      <div>
-                        <span className="text-sm">{employee?.name}</span>
-                        <span className="block text-xs text-muted-foreground">{employee?.role || "-"}</span>
-                      </div>
-                    </td>
-                    {EDITABLE_COLS.map((colKey, colIndex) => (
-                      <EditableCell
-                        key={colKey}
-                        value={getCellValue(entry, colKey)}
-                        onChange={(v) => handleCellChange(entry.id, colKey, v)}
-                        rowIndex={rowIndex}
-                        colIndex={colIndex}
-                        onNavigate={handleNavigate}
-                        isActive={activeCell?.row === rowIndex && activeCell?.col === colIndex}
-                        setActive={() => setActiveCell({ row: rowIndex, col: colIndex })}
-                      />
-                    ))}
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold border-l bg-muted/30">
-                      <span className="text-sm">{fmt(net)}</span>
-                    </td>
-                  </tr>
-                  {isExpanded && <EmployeeRowExpansion entry={entry} colSpan={colSpan} />}
-                </React.Fragment>
+                <tr
+                  key={entry.id}
+                  className={cn(
+                    "border-b transition-colors duration-150 hover:bg-muted/30 cursor-pointer"
+                  )}
+                  onClick={() => onRowClick(entry)}
+                >
+                  <td className="px-3 py-2 font-medium">
+                    <span className="text-sm">{emp?.name || "—"}</span>
+                    <span className="block text-xs text-muted-foreground">{emp?.cpf || ""}</span>
+                  </td>
+                  <td className="px-3 py-2 text-sm text-muted-foreground">{getDeptName(emp)}</td>
+                  <td className="px-3 py-2 text-sm text-muted-foreground">{getRoleName(emp)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmt(entry.baseSalary)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmt(totalEarnings)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-destructive">{fmt(totalDeductions)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold bg-muted/30">{fmt(net)}</td>
+                </tr>
               );
             })}
           </tbody>
