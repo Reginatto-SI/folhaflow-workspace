@@ -18,6 +18,7 @@ interface PayrollContextType {
   allJobRoles: JobRole[];
   payrollEntries: PayrollEntry[];
   isLoading: boolean;
+  addPayrollEntry: (entry: PayrollEntry) => void;
   updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => void;
   addCompany: (company: Omit<Company, "id">) => Promise<void>;
   updateCompany: (id: string, updates: Partial<Company>) => Promise<void>;
@@ -373,6 +374,21 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [cacheKey]
   );
 
+  const addPayrollEntry = useCallback(
+    (entry: PayrollEntry) => {
+      setEntriesCache((prev) => {
+        const current = prev[cacheKey] || [];
+        // Comentário: bloqueia duplicidade no mês/empresa atual para manter apenas um lançamento por funcionário.
+        if (current.some((item) => item.employeeId === entry.employeeId)) return prev;
+        return {
+          ...prev,
+          [cacheKey]: [...current, entry],
+        };
+      });
+    },
+    [cacheKey]
+  );
+
   const addCompany = useCallback(async (company: Omit<Company, "id">) => {
     const { data, error } = await supabase
       .from("companies")
@@ -604,6 +620,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         rubrics,
         payrollEntries,
         isLoading,
+        addPayrollEntry,
         updatePayrollEntry,
         addCompany,
         updateCompany,
