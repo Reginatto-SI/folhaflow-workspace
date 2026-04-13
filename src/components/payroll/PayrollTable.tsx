@@ -14,7 +14,7 @@ interface PayrollTableProps {
 }
 
 const PayrollTable: React.FC<PayrollTableProps> = ({
-  entries, allEmployees, allDepartments, allJobRoles, onRowClick,
+  entries = [], allEmployees = [], allDepartments = [], allJobRoles = [], onRowClick,
 }) => {
   const getEmployee = (id: string) => allEmployees.find((e) => e.id === id);
   const getDeptName = (emp?: Employee) => {
