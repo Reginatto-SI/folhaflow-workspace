@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,6 +7,7 @@ import { PayrollEntry, Employee, Rubric } from "@/types/payroll";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { FileText, Save } from "lucide-react";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -225,13 +226,33 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-hidden px-0">
+        {/* Header reorganizado: metadados ficam no topo e ações logo abaixo para não competir com o botão de fechar. */}
         <SheetHeader className="px-5 pb-3 border-b">
-          <SheetTitle className="text-lg">{isCreateMode ? "Novo lançamento" : employee?.name}</SheetTitle>
-          <SheetDescription className="text-xs space-y-0.5">
-            <div>CPF: {employee?.cpf || "—"}</div>
-            <div>Empresa: {companyName || "—"}</div>
-            <div>Competência: {competenceLabel || "—"}</div>
-          </SheetDescription>
+          <div className="min-w-0">
+            <SheetTitle className="text-lg">{isCreateMode ? "Novo lançamento" : employee?.name}</SheetTitle>
+            <SheetDescription className="text-xs space-y-0.5">
+              <div>CPF: {employee?.cpf || "—"}</div>
+              <div>Empresa: {companyName || "—"}</div>
+              <div>Competência: {competenceLabel || "—"}</div>
+            </SheetDescription>
+          </div>
+
+          {/* Responsividade: botões quebram para nova linha quando necessário, sem corte e sem encostar no "X" do drawer. */}
+          <div className="mt-2 flex w-full flex-wrap justify-end gap-2">
+            <Button
+              onClick={handleSave}
+              size="sm"
+              className="h-8 rounded-md px-4"
+              disabled={!canEditValues}
+            >
+              <Save className="mr-1 h-4 w-4" />
+              {isCreateMode ? "Criar" : "Salvar"}
+            </Button>
+            <Button variant="outline" size="sm" disabled className="h-8 rounded-md px-4">
+              <FileText className="mr-1 h-4 w-4" />
+              Gerar recibo
+            </Button>
+          </div>
         </SheetHeader>
 
         <div className="h-[calc(100vh-170px)] overflow-y-auto px-5 py-4 space-y-4">
@@ -339,12 +360,6 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
           </section>
         </div>
 
-        <SheetFooter className="border-t px-5 py-3 flex-row gap-2">
-          <Button onClick={handleSave} className="flex-1" disabled={!canEditValues}>
-            {isCreateMode ? "Criar" : "Salvar"}
-          </Button>
-          <Button variant="outline" disabled className="flex-1">Gerar recibo</Button>
-        </SheetFooter>
       </SheetContent>
     </Sheet>
   );
