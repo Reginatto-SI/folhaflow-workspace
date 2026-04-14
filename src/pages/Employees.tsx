@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import EmployeeFilters, { EmployeeFilterState, getInitialFilters } from "@/components/employees/EmployeeFilters";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Button } from "@/components/ui/button";
@@ -82,7 +82,18 @@ const normalizeBankField = (value?: string) => {
 };
 
 const Employees: React.FC = () => {
-  const { companies, employees, allDepartments, allJobRoles, selectedCompany, addEmployee, updateEmployee, deleteEmployee, isLoading } = usePayroll();
+  const {
+    companies,
+    employees,
+    allDepartments,
+    allJobRoles,
+    selectedCompany,
+    addEmployee,
+    updateEmployee,
+    deleteEmployee,
+    payrollCatalogErrors,
+    isLoading,
+  } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeFormState>(getInitialForm());
@@ -142,6 +153,7 @@ const Employees: React.FC = () => {
     () => availableJobRoles.map((jobRole) => ({ value: jobRole.id, label: jobRole.name })),
     [availableJobRoles]
   );
+  const functionalCatalogError = payrollCatalogErrors.departments || payrollCatalogErrors.jobRoles;
 
   const openNew = () => {
     setEditing(null);
@@ -158,6 +170,18 @@ const Employees: React.FC = () => {
     setForm({ ...employee, cpf: maskCpf(employee.cpf) });
     setOpen(true);
   };
+
+  useEffect(() => {
+    // Comentário: em novo cadastro, sincronizamos automaticamente a empresa registrada quando a empresa ativa carregar depois.
+    if (!open || editing) return;
+    if (form.companyId || !selectedCompany?.id) return;
+    setForm((prev) => ({ ...prev, companyId: selectedCompany.id }));
+  }, [open, editing, form.companyId, selectedCompany?.id]);
+
+  useEffect(() => {
+    if (!open || !functionalCatalogError) return;
+    toast.error(functionalCatalogError);
+  }, [open, functionalCatalogError]);
 
   const validateForm = (draft: EmployeeFormState) => {
     const nextErrors: EmployeeFormErrors = {};
@@ -551,6 +575,12 @@ const Employees: React.FC = () => {
                           Legado: este funcionário mantém setor em texto livre ({form.department}) até associação por ID.
                         </p>
                       )}
+                      {!form.companyId && (
+                        <p className="text-xs text-muted-foreground">Selecione a empresa registrada para carregar setores.</p>
+                      )}
+                      {payrollCatalogErrors.departments && (
+                        <p className="text-xs text-destructive">{payrollCatalogErrors.departments}</p>
+                      )}
                       {errors.departmentId && <p className="text-xs text-destructive">{errors.departmentId}</p>}
                     </div>
                     <div className="space-y-1.5">
@@ -579,6 +609,12 @@ const Employees: React.FC = () => {
                         <p className="text-xs text-muted-foreground">
                           Legado: esta função/cargo segue em texto livre ({form.role}) até associação por ID.
                         </p>
+                      )}
+                      {!form.companyId && (
+                        <p className="text-xs text-muted-foreground">Selecione a empresa registrada para carregar funções/cargos.</p>
+                      )}
+                      {payrollCatalogErrors.jobRoles && (
+                        <p className="text-xs text-destructive">{payrollCatalogErrors.jobRoles}</p>
                       )}
                       {errors.jobRoleId && <p className="text-xs text-destructive">{errors.jobRoleId}</p>}
                     </div>

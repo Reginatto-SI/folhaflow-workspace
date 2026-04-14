@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { Company, Department, Employee, JobRole, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
-import { generatePayrollEntries } from "@/data/mock";
 import { supabase } from "@/integrations/supabase/client";
 
 interface PayrollContextType {
@@ -17,9 +16,10 @@ interface PayrollContextType {
   rubrics: Rubric[];
   allJobRoles: JobRole[];
   payrollEntries: PayrollEntry[];
+  payrollCatalogErrors: { departments?: string; jobRoles?: string; payrollEntries?: string };
   isLoading: boolean;
-  addPayrollEntry: (entry: PayrollEntry) => void;
-  updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => void;
+  updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
+  addPayrollEntry: (entry: Omit<PayrollEntry, "id">) => Promise<void>;
   addCompany: (company: Omit<Company, "id">) => Promise<void>;
   updateCompany: (id: string, updates: Partial<Company>) => Promise<void>;
   deleteCompany: (id: string) => Promise<void>;
@@ -223,6 +223,39 @@ const mapFormulaItemInsertToRow = (rubricaId: string, item: Rubric["formulaItems
   item_order: item.order,
 });
 
+const mapPayrollEntryRowToModel = (row: {
+  id: string;
+  employee_id: string;
+  company_id: string;
+  month: number;
+  year: number;
+  base_salary: number;
+  earnings: Record<string, number> | null;
+  deductions: Record<string, number> | null;
+  notes: string | null;
+}): PayrollEntry => ({
+  id: row.id,
+  employeeId: row.employee_id,
+  companyId: row.company_id,
+  month: row.month,
+  year: row.year,
+  baseSalary: Number(row.base_salary || 0),
+  earnings: row.earnings || {},
+  deductions: row.deductions || {},
+  notes: row.notes || "",
+});
+
+const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
+  employee_id: entry.employeeId,
+  company_id: entry.companyId,
+  month: entry.month,
+  year: entry.year,
+  base_salary: entry.baseSalary,
+  earnings: entry.earnings,
+  deductions: entry.deductions,
+  notes: normalizeText(entry.notes),
+});
+
 // Comentário: a tabela de itens possui duas FKs para `rubricas`; usamos embed explícito para evitar ambiguidade no PostgREST.
 const RUBRICA_SELECT_WITH_ITEMS =
   "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
@@ -238,10 +271,11 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [allJobRoles, setAllJobRoles] = useState<JobRole[]>([]);
+  const [allPayrollEntries, setAllPayrollEntries] = useState<PayrollEntry[]>([]);
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
+  const [payrollCatalogErrors, setPayrollCatalogErrors] = useState<{ departments?: string; jobRoles?: string; payrollEntries?: string }>({});
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<PayrollMonth>({ month: 3, year: 2026 });
-  const [entriesCache, setEntriesCache] = useState<Record<string, PayrollEntry[]>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   const validateRubricPayload = useCallback((rubric: Omit<Rubric, "id"> | Partial<Rubric>) => {
@@ -304,7 +338,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsLoading(true);
 
     // Comentário: carregamos cadastros administrativos da mesma origem para manter o padrão piloto consistente e reaproveitável.
-    const [companiesRes, employeesRes, departmentsRes, rolesRes, rubricsRes] = await Promise.all([
+    const [companiesRes, employeesRes, departmentsRes, rolesRes, rubricsRes, payrollEntriesRes] = await Promise.all([
       supabase.from("companies").select("id, name, cnpj, address").order("name", { ascending: true }),
       supabase.from("employees").select("*").order("name", { ascending: true }),
       supabase.from("departments").select("id, company_id, name, is_active").order("name", { ascending: true }),
@@ -313,7 +347,12 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .from("rubricas")
         .select(RUBRICA_SELECT_WITH_ITEMS)
         .order("display_order", { ascending: true }),
+      supabase
+        .from("payroll_entries")
+        .select("id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes")
+        .order("created_at", { ascending: false }),
     ]);
+    const nextCatalogErrors: { departments?: string; jobRoles?: string; payrollEntries?: string } = {};
 
     if (!companiesRes.error && companiesRes.data) {
       const loadedCompanies = companiesRes.data.map(mapCompanyRowToModel);
@@ -330,15 +369,27 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (!departmentsRes.error && departmentsRes.data) {
       setAllDepartments(departmentsRes.data.map(mapDepartmentRowToModel));
+    } else if (departmentsRes.error) {
+      nextCatalogErrors.departments = `Falha ao carregar setores: ${departmentsRes.error.message}`;
     }
 
     if (!rolesRes.error && rolesRes.data) {
       setAllJobRoles(rolesRes.data.map(mapJobRoleRowToModel));
+    } else if (rolesRes.error) {
+      nextCatalogErrors.jobRoles = `Falha ao carregar funções/cargos: ${rolesRes.error.message}`;
     }
 
     if (!rubricsRes.error && rubricsRes.data) {
       setRubrics(rubricsRes.data.map(mapRubricRowToModel));
     }
+
+    if (!payrollEntriesRes.error && payrollEntriesRes.data) {
+      setAllPayrollEntries(payrollEntriesRes.data.map(mapPayrollEntryRowToModel));
+    } else if (payrollEntriesRes.error) {
+      nextCatalogErrors.payrollEntries = `Falha ao carregar lançamentos de folha: ${payrollEntriesRes.error.message}`;
+    }
+
+    setPayrollCatalogErrors(nextCatalogErrors);
 
     setIsLoading(false);
   }, []);
@@ -347,7 +398,6 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     void loadData();
   }, [loadData]);
 
-  const cacheKey = `${selectedCompany?.id}-${selectedMonth.month}-${selectedMonth.year}`;
   // Comentário: nesta fase, a listagem de /funcionarios usa companyId como empresa registrada.
   // A participação em folha por múltiplas empresas do grupo será modelada em camada própria futura.
   const employees = allEmployees.filter((employee) => employee.companyId === selectedCompany?.id);
@@ -356,22 +406,48 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const payrollEntries = React.useMemo(() => {
     if (!selectedCompany) return [];
-    if (entriesCache[cacheKey]) return entriesCache[cacheKey];
-
-    // Comentário: folha continua em memória; apenas substituímos a origem dos funcionários para dados persistidos.
-    const entries = generatePayrollEntries(allEmployees, selectedCompany.id, selectedMonth.month, selectedMonth.year);
-    setEntriesCache((prev) => ({ ...prev, [cacheKey]: entries }));
-    return entries;
-  }, [selectedCompany, selectedMonth, cacheKey, entriesCache, allEmployees]);
+    return allPayrollEntries.filter(
+      (entry) =>
+        entry.companyId === selectedCompany.id &&
+        entry.month === selectedMonth.month &&
+        entry.year === selectedMonth.year
+    );
+  }, [allPayrollEntries, selectedCompany, selectedMonth]);
 
   const updatePayrollEntry = useCallback(
-    (id: string, updates: Partial<PayrollEntry>) => {
-      setEntriesCache((prev) => ({
-        ...prev,
-        [cacheKey]: (prev[cacheKey] || []).map((entry) => (entry.id === id ? { ...entry, ...updates } : entry)),
-      }));
+    async (id: string, updates: Partial<PayrollEntry>) => {
+      const payload = {
+        ...(updates.baseSalary !== undefined ? { base_salary: updates.baseSalary } : {}),
+        ...(updates.earnings !== undefined ? { earnings: updates.earnings } : {}),
+        ...(updates.deductions !== undefined ? { deductions: updates.deductions } : {}),
+        ...(updates.notes !== undefined ? { notes: normalizeText(updates.notes) } : {}),
+      };
+      const { data, error } = await supabase
+        .from("payroll_entries")
+        .update(payload)
+        .eq("id", id)
+        .select("id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes")
+        .single();
+      if (error || !data) throw error;
+
+      const mapped = mapPayrollEntryRowToModel(data);
+      setAllPayrollEntries((prev) => prev.map((entry) => (entry.id === id ? mapped : entry)));
     },
-    [cacheKey]
+    []
+  );
+
+  const addPayrollEntry = useCallback(
+    async (entry: Omit<PayrollEntry, "id">) => {
+      const { data, error } = await supabase
+        .from("payroll_entries")
+        .insert(mapPayrollEntryInsertToRow(entry))
+        .select("id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes")
+        .single();
+      if (error || !data) throw error;
+
+      setAllPayrollEntries((prev) => [mapPayrollEntryRowToModel(data), ...prev]);
+    },
+    []
   );
 
   const addPayrollEntry = useCallback(
@@ -436,6 +512,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAllEmployees((prev) => prev.filter((employee) => employee.companyId !== id));
     setAllDepartments((prev) => prev.filter((department) => department.companyId !== id));
     setAllJobRoles((prev) => prev.filter((jobRole) => jobRole.companyId !== id));
+    setAllPayrollEntries((prev) => prev.filter((entry) => entry.companyId !== id));
   }, []);
 
   const addEmployee = useCallback(async (employee: Omit<Employee, "id">) => {
@@ -459,6 +536,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (error) throw error;
 
     setAllEmployees((prev) => prev.filter((employee) => employee.id !== id));
+    setAllPayrollEntries((prev) => prev.filter((entry) => entry.employeeId !== id));
   }, []);
 
   const addDepartment = useCallback(async (department: Omit<Department, "id">) => {
@@ -619,9 +697,11 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         allJobRoles,
         rubrics,
         payrollEntries,
+        payrollCatalogErrors,
         isLoading,
         addPayrollEntry,
         updatePayrollEntry,
+        addPayrollEntry,
         addCompany,
         updateCompany,
         deleteCompany,

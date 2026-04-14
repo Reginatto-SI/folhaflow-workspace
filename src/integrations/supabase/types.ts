@@ -208,6 +208,63 @@ export type Database = {
           },
         ]
       }
+      payroll_entries: {
+        Row: {
+          base_salary: number
+          company_id: string
+          created_at: string
+          deductions: Json
+          earnings: Json
+          employee_id: string
+          id: string
+          month: number
+          notes: string | null
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          base_salary?: number
+          company_id: string
+          created_at?: string
+          deductions?: Json
+          earnings?: Json
+          employee_id: string
+          id?: string
+          month: number
+          notes?: string | null
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          base_salary?: number
+          company_id?: string
+          created_at?: string
+          deductions?: Json
+          earnings?: Json
+          employee_id?: string
+          id?: string
+          month?: number
+          notes?: string | null
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entries_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string

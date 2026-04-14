@@ -38,6 +38,7 @@ const App = () => (
                       <AppLayout>
                         <Routes>
                           <Route path="/" element={<Index />} />
+                          <Route path="/central-de-folha" element={<Index />} />
                           <Route path="/empresas" element={<Companies />} />
                           <Route path="/funcionarios" element={<Employees />} />
                           <Route path="/setores" element={<Departments />} />
