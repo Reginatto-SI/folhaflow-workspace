@@ -430,7 +430,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .single();
       if (error || !data) throw error;
 
-      const mapped = mapPayrollEntryRowToModel(data);
+      const mapped = mapPayrollEntryRowToModel(data as any);
       setAllPayrollEntries((prev) => prev.map((entry) => (entry.id === id ? mapped : entry)));
     },
     []
@@ -445,25 +445,11 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .single();
       if (error || !data) throw error;
 
-      setAllPayrollEntries((prev) => [mapPayrollEntryRowToModel(data), ...prev]);
+      setAllPayrollEntries((prev) => [mapPayrollEntryRowToModel(data as any), ...prev]);
     },
     []
   );
 
-  const addPayrollEntry = useCallback(
-    (entry: PayrollEntry) => {
-      setEntriesCache((prev) => {
-        const current = prev[cacheKey] || [];
-        // Comentário: bloqueia duplicidade no mês/empresa atual para manter apenas um lançamento por funcionário.
-        if (current.some((item) => item.employeeId === entry.employeeId)) return prev;
-        return {
-          ...prev,
-          [cacheKey]: [...current, entry],
-        };
-      });
-    },
-    [cacheKey]
-  );
 
   const addCompany = useCallback(async (company: Omit<Company, "id">) => {
     const { data, error } = await supabase
@@ -701,7 +687,6 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isLoading,
         addPayrollEntry,
         updatePayrollEntry,
-        addPayrollEntry,
         addCompany,
         updateCompany,
         deleteCompany,

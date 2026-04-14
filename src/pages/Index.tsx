@@ -5,7 +5,7 @@ import TotalsBar from "@/components/payroll/TotalsBar";
 import PayrollFilters from "@/components/payroll/PayrollFilters";
 import PayrollTable from "@/components/payroll/PayrollTable";
 import EmployeeDrawer from "@/components/payroll/EmployeeDrawer";
-import { PayrollEntry } from "@/types/payroll";
+import { PayrollEntry, Employee } from "@/types/payroll";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -194,11 +194,9 @@ const Index = () => {
         employees={availableCreateEmployees}
         selectedEmployeeId={createEmployeeId}
         onSelectedEmployeeIdChange={setCreateEmployeeId}
-        defaultRubrics={rubrics}
         departmentName={deptName}
         jobRoleName={roleName}
         onSave={handleSave}
-        onCreate={handleCreate}
       />
       <Dialog open={newEntryOpen} onOpenChange={setNewEntryOpen}>
         <DialogContent className="sm:max-w-md">

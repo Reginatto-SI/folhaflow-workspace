@@ -62,7 +62,7 @@ const CurrencyInput: React.FC<{
 };
 
 const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
-  open, onOpenChange, mode = "edit", entry, employee, employees = [], selectedEmployeeId = "", onSelectedEmployeeIdChange, defaultRubrics = [], departmentName, jobRoleName, onSave, onCreate,
+  open, onOpenChange, mode = "edit", entry, employee, employees = [], selectedEmployeeId = "", onSelectedEmployeeIdChange, defaultRubrics = [], departmentName, jobRoleName, onSave,
 }) => {
   const isCreateMode = mode === "create";
   const [baseSalary, setBaseSalary] = useState(0);
