@@ -14,8 +14,18 @@ import { toast } from "sonner";
 
 const Index = () => {
   const {
-    payrollEntries, employees, allEmployees, allDepartments, allJobRoles,
-    departments, jobRoles, updatePayrollEntry, addPayrollEntry, selectedCompany, selectedMonth,
+    payrollEntries,
+    employees,
+    allEmployees,
+    allDepartments,
+    allJobRoles,
+    departments,
+    jobRoles,
+    rubrics,
+    updatePayrollEntry,
+    addPayrollEntry,
+    selectedCompany,
+    selectedMonth,
   } = usePayroll();
 
   const [search, setSearch] = useState("");
@@ -28,6 +38,11 @@ const Index = () => {
   const [newEntryOpen, setNewEntryOpen] = useState(false);
   const [newEmployeeId, setNewEmployeeId] = useState("");
   const [isSavingNewEntry, setIsSavingNewEntry] = useState(false);
+
+  const competenceLabel = useMemo(
+    () => new Date(selectedMonth.year, selectedMonth.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+    [selectedMonth.month, selectedMonth.year]
+  );
 
   const filteredEntries = useMemo(() => {
     return payrollEntries.filter((entry) => {
@@ -55,20 +70,12 @@ const Index = () => {
     setDrawerOpen(true);
   }, []);
 
-  const handleNewEntry = useCallback(() => {
-    if (!selectedCompany) {
-      toast.error("Selecione uma empresa antes de criar um lançamento.");
-      return;
-    }
-    setDrawerMode("create");
-    setSelectedEntry(null);
-    setCreateEmployeeId("");
-    setDrawerOpen(true);
-  }, [selectedCompany]);
-
-  const handleSave = useCallback((id: string, updates: Partial<PayrollEntry>) => {
-    return updatePayrollEntry(id, updates);
-  }, [updatePayrollEntry]);
+  const handleSave = useCallback(
+    (id: string, updates: Partial<PayrollEntry>) => {
+      return updatePayrollEntry(id, updates);
+    },
+    [updatePayrollEntry]
+  );
 
   const availableEmployeesForEntry = useMemo(() => {
     const alreadyInPayroll = new Set(payrollEntries.map((entry) => entry.employeeId));
@@ -129,40 +136,24 @@ const Index = () => {
     setFilterRole("");
   };
 
-  const selectedEmployee = selectedEntry
-    ? allEmployees.find((e) => e.id === selectedEntry.employeeId) || null
-    : null;
-  const selectedCreateEmployee = createEmployeeId
-    ? allEmployees.find((e) => e.id === createEmployeeId) || null
-    : null;
+  const selectedEmployee = selectedEntry ? allEmployees.find((e) => e.id === selectedEntry.employeeId) || null : null;
+  const selectedCreateEmployee = createEmployeeId ? allEmployees.find((e) => e.id === createEmployeeId) || null : null;
   const drawerEmployee = drawerMode === "create" ? selectedCreateEmployee : selectedEmployee;
 
   // Comentário: no modo criação, seguimos o contexto atual (empresa/competência) e evitamos funcionário já lançado.
   const availableCreateEmployees: Employee[] = useMemo(() => {
     if (!selectedCompany) return [];
     const existingEmployeeIds = new Set(payrollEntries.map((entry) => entry.employeeId));
-    return allEmployees.filter((employee) =>
-      employee.companyId === selectedCompany.id &&
-      employee.isActive &&
-      !existingEmployeeIds.has(employee.id)
+    return allEmployees.filter(
+      (employee) => employee.companyId === selectedCompany.id && employee.isActive && !existingEmployeeIds.has(employee.id)
     );
   }, [allEmployees, payrollEntries, selectedCompany]);
-
-  const deptName = drawerEmployee?.departmentId
-    ? allDepartments.find((d) => d.id === drawerEmployee.departmentId)?.name
-    : drawerEmployee?.department || undefined;
-
-  const roleName = drawerEmployee?.jobRoleId
-    ? allJobRoles.find((j) => j.id === drawerEmployee.jobRoleId)?.name
-    : drawerEmployee?.role || undefined;
 
   return (
     <div>
       <div className="mb-4">
         <h2 className="text-2xl font-bold tracking-tight">Central de Folha</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Selecione empresa e competência, clique em um funcionário para editar valores.
-        </p>
+        <p className="text-sm text-muted-foreground mt-1">Selecione empresa e competência, clique em um funcionário para editar valores.</p>
       </div>
 
       <PayrollHeader onNewEntry={handleOpenNewEntry} />
@@ -194,8 +185,9 @@ const Index = () => {
         employees={availableCreateEmployees}
         selectedEmployeeId={createEmployeeId}
         onSelectedEmployeeIdChange={setCreateEmployeeId}
-        departmentName={deptName}
-        jobRoleName={roleName}
+        rubrics={rubrics}
+        companyName={selectedCompany?.name}
+        competenceLabel={competenceLabel}
         onSave={handleSave}
       />
       <Dialog open={newEntryOpen} onOpenChange={setNewEntryOpen}>
@@ -218,9 +210,7 @@ const Index = () => {
               </SelectContent>
             </Select>
             {availableEmployeesForEntry.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                Todos os funcionários ativos já possuem lançamento para esta competência.
-              </p>
+              <p className="text-xs text-muted-foreground">Todos os funcionários ativos já possuem lançamento para esta competência.</p>
             )}
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setNewEntryOpen(false)} disabled={isSavingNewEntry}>
