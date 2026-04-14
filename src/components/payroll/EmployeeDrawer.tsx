@@ -1,19 +1,23 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
+import React, { useEffect, useMemo, useState } from "react";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PayrollEntry, Employee, Rubric } from "@/types/payroll";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
-const fmt = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 const parseCurrency = (v: string): number => {
-  const cleaned = v.replace(/[^\d,.-]/g, "").replace(",", ".");
-  return Math.max(0, Number(cleaned) || 0);
+  const cleaned = v.replace(/[^\d,.-]/g, "").replace(".", "").replace(",", ".");
+  return Number.isFinite(Number(cleaned)) ? Math.max(0, Number(cleaned)) : 0;
+};
+
+type RubricValueInput = {
+  rubricId: string;
+  value: number;
 };
 
 interface EmployeeDrawerProps {
@@ -25,18 +29,18 @@ interface EmployeeDrawerProps {
   employees?: Employee[];
   selectedEmployeeId?: string;
   onSelectedEmployeeIdChange?: (id: string) => void;
-  defaultRubrics?: Rubric[];
-  departmentName?: string;
-  jobRoleName?: string;
+  rubrics?: Rubric[];
+  companyName?: string;
+  competenceLabel?: string;
   onSave: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
 }
 
-const CurrencyInput: React.FC<{
-  label: string;
+const NumericRubricInput: React.FC<{
+  rubric: Rubric;
   value: number;
-  onChange: (v: number) => void;
   disabled?: boolean;
-}> = ({ label, value, onChange, disabled }) => {
+  onChange: (next: RubricValueInput) => void;
+}> = ({ rubric, value, disabled, onChange }) => {
   const [text, setText] = useState(value.toFixed(2));
 
   useEffect(() => {
@@ -45,15 +49,17 @@ const CurrencyInput: React.FC<{
 
   return (
     <div className="space-y-1">
-      <Label className="text-xs">{label}</Label>
+      <Label className="text-[11px] leading-tight text-muted-foreground" title={`${rubric.code} — ${rubric.name}`}>
+        {rubric.code} · {rubric.name}
+      </Label>
       <Input
         className="h-8 text-right tabular-nums text-sm"
         value={text}
         disabled={disabled}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(event) => setText(event.target.value)}
         onBlur={() => {
           const parsed = parseCurrency(text);
-          onChange(parsed);
+          onChange({ rubricId: rubric.id, value: parsed });
           setText(parsed.toFixed(2));
         }}
       />
@@ -61,52 +67,152 @@ const CurrencyInput: React.FC<{
   );
 };
 
+const isBaseRubric = (rubric: Rubric) => {
+  const normalized = `${rubric.code} ${rubric.name} ${rubric.category}`.toLowerCase();
+  // Compatibilidade transitória: ainda não existe metadado dedicado de "rubrica-base" no schema.
+  // Usamos heurística por nomenclatura (salário/base/ctps/fiscal/g2) para separar o primeiro card operacional.
+  return ["salario", "salário", "base", "ctps", "fiscal", "g2"].some((token) => normalized.includes(token));
+};
+
+const getLegacyValue = (rubric: Rubric, payload: Record<string, number>) => {
+  const directById = payload[rubric.id];
+  if (typeof directById === "number") return directById;
+
+  const byCode = payload[rubric.code];
+  if (typeof byCode === "number") return byCode;
+
+  const byName = payload[rubric.name];
+  if (typeof byName === "number") return byName;
+
+  const codeInsensitive = Object.entries(payload).find(([key]) => key.toLowerCase() === rubric.code.toLowerCase());
+  if (codeInsensitive && typeof codeInsensitive[1] === "number") return codeInsensitive[1];
+
+  const nameInsensitive = Object.entries(payload).find(([key]) => key.toLowerCase() === rubric.name.toLowerCase());
+  if (nameInsensitive && typeof nameInsensitive[1] === "number") return nameInsensitive[1];
+
+  return 0;
+};
+
 const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
-  open, onOpenChange, mode = "edit", entry, employee, employees = [], selectedEmployeeId = "", onSelectedEmployeeIdChange, defaultRubrics = [], departmentName, jobRoleName, onSave, onCreate,
+  open,
+  onOpenChange,
+  mode = "edit",
+  entry,
+  employee,
+  employees = [],
+  selectedEmployeeId = "",
+  onSelectedEmployeeIdChange,
+  rubrics = [],
+  companyName,
+  competenceLabel,
+  onSave,
 }) => {
   const isCreateMode = mode === "create";
-  const [baseSalary, setBaseSalary] = useState(0);
-  const [earnings, setEarnings] = useState<Record<string, number>>({});
-  const [deductions, setDeductions] = useState<Record<string, number>>({});
+  const [rubricValues, setRubricValues] = useState<Record<string, number>>({});
+  const [notes, setNotes] = useState("");
+
+  const activeRubricsOrdered = useMemo(
+    () => [...rubrics].filter((rubric) => rubric.isActive).sort((a, b) => a.order - b.order),
+    [rubrics]
+  );
+
+  const groupedRubrics = useMemo(() => {
+    const base = activeRubricsOrdered.filter(isBaseRubric);
+    const nonBase = activeRubricsOrdered.filter((rubric) => !isBaseRubric(rubric));
+
+    return {
+      base,
+      proventos: nonBase.filter((rubric) => rubric.type === "provento"),
+      descontos: nonBase.filter((rubric) => rubric.type === "desconto"),
+    };
+  }, [activeRubricsOrdered]);
 
   useEffect(() => {
+    if (!open) return;
+
+    const emptyValues = activeRubricsOrdered.reduce<Record<string, number>>((acc, rubric) => {
+      acc[rubric.id] = 0;
+      return acc;
+    }, {});
+
     if (isCreateMode) {
-      // Comentário: no modo criação, inicializa valores a partir do funcionário selecionado e das rubricas ativas.
-      setBaseSalary(employee?.baseSalary || 0);
-      const nextEarnings = defaultRubrics
-        .filter((rubric) => rubric.isActive && rubric.type === "provento")
-        .reduce<Record<string, number>>((acc, rubric) => {
-          acc[rubric.name] = 0;
-          return acc;
-        }, {});
-      const nextDeductions = defaultRubrics
-        .filter((rubric) => rubric.isActive && rubric.type === "desconto")
-        .reduce<Record<string, number>>((acc, rubric) => {
-          acc[rubric.name] = 0;
-          return acc;
-        }, {});
-      setEarnings(nextEarnings);
-      setDeductions(nextDeductions);
+      setRubricValues(emptyValues);
+      setNotes("");
       return;
     }
-    if (entry) {
-      setBaseSalary(entry.baseSalary);
-      setEarnings({ ...entry.earnings });
-      setDeductions({ ...entry.deductions });
+
+    if (!entry) {
+      setRubricValues(emptyValues);
+      setNotes("");
+      return;
     }
-  }, [defaultRubrics, employee?.baseSalary, entry, isCreateMode]);
+
+    // Compatibilidade transitória: leitura aceita chaves legadas por nome/código
+    // e prioriza chave estável por rubric.id quando disponível.
+    const nextValues = activeRubricsOrdered.reduce<Record<string, number>>((acc, rubric) => {
+      const source = rubric.type === "desconto" ? entry.deductions : entry.earnings;
+      acc[rubric.id] = getLegacyValue(rubric, source);
+      return acc;
+    }, emptyValues);
+
+    // Compatibilidade adicional: se houver rubrica-base sem valor legado, usa base_salary atual apenas no primeiro item.
+    const firstBaseRubric = groupedRubrics.base[0];
+    if (firstBaseRubric && !nextValues[firstBaseRubric.id] && entry.baseSalary > 0) {
+      nextValues[firstBaseRubric.id] = entry.baseSalary;
+    }
+
+    setRubricValues(nextValues);
+    setNotes(entry.notes || "");
+  }, [activeRubricsOrdered, entry, groupedRubrics.base, isCreateMode, open]);
 
   const totals = useMemo(() => {
-    const totalEarnings = Object.values(earnings).reduce((a, b) => a + b, 0);
-    const totalDeductions = Object.values(deductions).reduce((a, b) => a + b, 0);
-    const gross = baseSalary + totalEarnings;
-    return { gross, totalDeductions, net: gross - totalDeductions };
-  }, [baseSalary, earnings, deductions]);
+    const baseTotal = groupedRubrics.base.reduce((sum, rubric) => sum + (rubricValues[rubric.id] || 0), 0);
+    const earningsTotal = groupedRubrics.proventos.reduce((sum, rubric) => sum + (rubricValues[rubric.id] || 0), 0);
+    const deductionTotal = groupedRubrics.descontos.reduce((sum, rubric) => sum + (rubricValues[rubric.id] || 0), 0);
+    const gross = baseTotal + earningsTotal;
+    return {
+      baseTotal,
+      earningsTotal,
+      deductionTotal,
+      gross,
+      net: gross - deductionTotal,
+    };
+  }, [groupedRubrics.base, groupedRubrics.descontos, groupedRubrics.proventos, rubricValues]);
+
+  const updateRubricValue = ({ rubricId, value }: RubricValueInput) => {
+    setRubricValues((prev) => ({ ...prev, [rubricId]: value }));
+  };
+
+  const canEditValues = isCreateMode ? !!selectedEmployeeId : true;
 
   const handleSave = async () => {
-    if (!entry) return;
+    if (!entry) {
+      toast.error("Lançamento não encontrado para salvar.");
+      return;
+    }
+
+    const earningsPayload: Record<string, number> = {};
+    const deductionsPayload: Record<string, number> = {};
+
+    // Persistência transicional: grava por rubric.id (chave estável), mantendo compatibilidade de leitura legado.
+    activeRubricsOrdered.forEach((rubric) => {
+      const value = rubricValues[rubric.id] || 0;
+      if (rubric.type === "desconto") {
+        deductionsPayload[rubric.id] = value;
+        return;
+      }
+      if (!isBaseRubric(rubric)) {
+        earningsPayload[rubric.id] = value;
+      }
+    });
+
     try {
-      await onSave(entry.id, { baseSalary, earnings, deductions });
+      await onSave(entry.id, {
+        baseSalary: totals.baseTotal,
+        earnings: earningsPayload,
+        deductions: deductionsPayload,
+        notes,
+      });
       toast.success("Valores salvos com sucesso.");
       onOpenChange(false);
     } catch {
@@ -114,32 +220,23 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     }
   };
 
-  const updateEarning = (key: string, val: number) => {
-    setEarnings((prev) => ({ ...prev, [key]: val }));
-  };
-
-  const updateDeduction = (key: string, val: number) => {
-    setDeductions((prev) => ({ ...prev, [key]: val }));
-  };
-
   if (!isCreateMode && (!entry || !employee)) return null;
-  const canEditValues = isCreateMode ? !!selectedEmployeeId : true;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-        <SheetHeader className="pb-4">
+      <SheetContent className="w-full sm:max-w-xl overflow-hidden px-0">
+        <SheetHeader className="px-5 pb-3 border-b">
           <SheetTitle className="text-lg">{isCreateMode ? "Novo lançamento" : employee?.name}</SheetTitle>
-          <SheetDescription className="text-xs">
-            {isCreateMode
-              ? "Selecione o funcionário e informe os valores do lançamento."
-              : `CPF: ${employee?.cpf || "—"} · ${departmentName || "—"} · ${jobRoleName || "—"}`}
+          <SheetDescription className="text-xs space-y-0.5">
+            <div>CPF: {employee?.cpf || "—"}</div>
+            <div>Empresa: {companyName || "—"}</div>
+            <div>Competência: {competenceLabel || "—"}</div>
           </SheetDescription>
         </SheetHeader>
 
-        <div className="space-y-5 px-1">
+        <div className="h-[calc(100vh-170px)] overflow-y-auto px-5 py-4 space-y-4">
           {isCreateMode && (
-            <div className="space-y-1">
+            <div className="space-y-1 border rounded-lg p-3 bg-card">
               <Label className="text-xs">Funcionário</Label>
               <Select value={selectedEmployeeId} onValueChange={(value) => onSelectedEmployeeIdChange?.(value)}>
                 <SelectTrigger className="h-8">
@@ -156,50 +253,96 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             </div>
           )}
 
-          {/* Proventos */}
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Proventos</h4>
-            <div className="space-y-2">
-              <CurrencyInput label="Salário Base" value={baseSalary} onChange={setBaseSalary} disabled={!canEditValues} />
-              {Object.entries(earnings).map(([key, val]) => (
-                <CurrencyInput key={key} label={key} value={val} onChange={(v) => updateEarning(key, v)} disabled={!canEditValues} />
-              ))}
+          <section className="border rounded-lg bg-card p-3 space-y-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rubricas-base</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {groupedRubrics.base.length > 0 ? (
+                groupedRubrics.base.map((rubric) => (
+                  <NumericRubricInput
+                    key={rubric.id}
+                    rubric={rubric}
+                    value={rubricValues[rubric.id] || 0}
+                    disabled={!canEditValues}
+                    onChange={updateRubricValue}
+                  />
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground col-span-full">Nenhuma rubrica-base identificada para a empresa/competência atual.</p>
+              )}
             </div>
-          </div>
+          </section>
 
-          <Separator />
-
-          {/* Descontos */}
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Descontos</h4>
-            <div className="space-y-2">
-              {Object.entries(deductions).map(([key, val]) => (
-                <CurrencyInput key={key} label={key} value={val} onChange={(v) => updateDeduction(key, v)} disabled={!canEditValues} />
-              ))}
+          <section className="border rounded-lg bg-card p-3 space-y-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proventos</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {groupedRubrics.proventos.length > 0 ? (
+                groupedRubrics.proventos.map((rubric) => (
+                  <NumericRubricInput
+                    key={rubric.id}
+                    rubric={rubric}
+                    value={rubricValues[rubric.id] || 0}
+                    disabled={!canEditValues}
+                    onChange={updateRubricValue}
+                  />
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground col-span-full">Nenhuma rubrica de provento ativa.</p>
+              )}
             </div>
-          </div>
+          </section>
 
-          <Separator />
+          <section className="border rounded-lg bg-card p-3 space-y-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Descontos</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {groupedRubrics.descontos.length > 0 ? (
+                groupedRubrics.descontos.map((rubric) => (
+                  <NumericRubricInput
+                    key={rubric.id}
+                    rubric={rubric}
+                    value={rubricValues[rubric.id] || 0}
+                    disabled={!canEditValues}
+                    onChange={updateRubricValue}
+                  />
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground col-span-full">Nenhuma rubrica de desconto ativa.</p>
+              )}
+            </div>
+          </section>
 
-          {/* Totais */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Total Bruto</span>
+          <section className="border rounded-lg bg-card p-3 space-y-1">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resumo</h4>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Total Proventos</span>
               <span className="font-semibold tabular-nums">{fmt(totals.gross)}</span>
             </div>
-            <div className="flex justify-between text-sm">
+            <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Total Descontos</span>
-              <span className="font-semibold tabular-nums text-destructive">{fmt(totals.totalDeductions)}</span>
+              <span className="font-semibold tabular-nums text-destructive">{fmt(totals.deductionTotal)}</span>
             </div>
-            <div className="flex justify-between text-sm font-bold">
+            <div className="flex items-center justify-between text-sm font-bold">
               <span>Líquido</span>
               <span className="tabular-nums text-success">{fmt(totals.net)}</span>
             </div>
-          </div>
+          </section>
+
+          <section className="border rounded-lg bg-card p-3 space-y-2">
+            <Label htmlFor="payroll-notes" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Observação</Label>
+            <Textarea
+              id="payroll-notes"
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder="Adicionar observação da folha para este funcionário/competência"
+              className="text-sm min-h-24"
+              disabled={!canEditValues}
+            />
+          </section>
         </div>
 
-        <SheetFooter className="pt-4 flex gap-2">
-          <Button onClick={handleSave} className="flex-1" disabled={!canEditValues}>{isCreateMode ? "Criar" : "Salvar"}</Button>
+        <SheetFooter className="border-t px-5 py-3 flex-row gap-2">
+          <Button onClick={handleSave} className="flex-1" disabled={!canEditValues}>
+            {isCreateMode ? "Criar" : "Salvar"}
+          </Button>
           <Button variant="outline" disabled className="flex-1">Gerar recibo</Button>
         </SheetFooter>
       </SheetContent>
