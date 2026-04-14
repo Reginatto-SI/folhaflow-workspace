@@ -22,6 +22,8 @@ const Index = () => {
   const [filterDept, setFilterDept] = useState("");
   const [filterRole, setFilterRole] = useState("");
   const [selectedEntry, setSelectedEntry] = useState<PayrollEntry | null>(null);
+  const [drawerMode, setDrawerMode] = useState<"edit" | "create">("edit");
+  const [createEmployeeId, setCreateEmployeeId] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [newEntryOpen, setNewEntryOpen] = useState(false);
   const [newEmployeeId, setNewEmployeeId] = useState("");
@@ -47,9 +49,22 @@ const Index = () => {
   }, [payrollEntries, allEmployees, search, filterDept, filterRole]);
 
   const handleRowClick = useCallback((entry: PayrollEntry) => {
+    setDrawerMode("edit");
+    setCreateEmployeeId("");
     setSelectedEntry(entry);
     setDrawerOpen(true);
   }, []);
+
+  const handleNewEntry = useCallback(() => {
+    if (!selectedCompany) {
+      toast.error("Selecione uma empresa antes de criar um lançamento.");
+      return;
+    }
+    setDrawerMode("create");
+    setSelectedEntry(null);
+    setCreateEmployeeId("");
+    setDrawerOpen(true);
+  }, [selectedCompany]);
 
   const handleSave = useCallback((id: string, updates: Partial<PayrollEntry>) => {
     return updatePayrollEntry(id, updates);
@@ -117,14 +132,29 @@ const Index = () => {
   const selectedEmployee = selectedEntry
     ? allEmployees.find((e) => e.id === selectedEntry.employeeId) || null
     : null;
+  const selectedCreateEmployee = createEmployeeId
+    ? allEmployees.find((e) => e.id === createEmployeeId) || null
+    : null;
+  const drawerEmployee = drawerMode === "create" ? selectedCreateEmployee : selectedEmployee;
 
-  const deptName = selectedEmployee?.departmentId
-    ? allDepartments.find((d) => d.id === selectedEmployee.departmentId)?.name
-    : selectedEmployee?.department || undefined;
+  // Comentário: no modo criação, seguimos o contexto atual (empresa/competência) e evitamos funcionário já lançado.
+  const availableCreateEmployees: Employee[] = useMemo(() => {
+    if (!selectedCompany) return [];
+    const existingEmployeeIds = new Set(payrollEntries.map((entry) => entry.employeeId));
+    return allEmployees.filter((employee) =>
+      employee.companyId === selectedCompany.id &&
+      employee.isActive &&
+      !existingEmployeeIds.has(employee.id)
+    );
+  }, [allEmployees, payrollEntries, selectedCompany]);
 
-  const roleName = selectedEmployee?.jobRoleId
-    ? allJobRoles.find((j) => j.id === selectedEmployee.jobRoleId)?.name
-    : selectedEmployee?.role || undefined;
+  const deptName = drawerEmployee?.departmentId
+    ? allDepartments.find((d) => d.id === drawerEmployee.departmentId)?.name
+    : drawerEmployee?.department || undefined;
+
+  const roleName = drawerEmployee?.jobRoleId
+    ? allJobRoles.find((j) => j.id === drawerEmployee.jobRoleId)?.name
+    : drawerEmployee?.role || undefined;
 
   return (
     <div>
@@ -158,11 +188,17 @@ const Index = () => {
       <EmployeeDrawer
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+        mode={drawerMode}
         entry={selectedEntry}
-        employee={selectedEmployee}
+        employee={drawerEmployee}
+        employees={availableCreateEmployees}
+        selectedEmployeeId={createEmployeeId}
+        onSelectedEmployeeIdChange={setCreateEmployeeId}
+        defaultRubrics={rubrics}
         departmentName={deptName}
         jobRoleName={roleName}
         onSave={handleSave}
+        onCreate={handleCreate}
       />
       <Dialog open={newEntryOpen} onOpenChange={setNewEntryOpen}>
         <DialogContent className="sm:max-w-md">
