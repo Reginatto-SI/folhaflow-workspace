@@ -50,7 +50,7 @@ const MONTHS = [
 ];
 
 const mainNavItems = [
-  { to: "/", label: "Central de Folha", icon: FileSpreadsheet },
+  { to: "/central-de-folha", label: "Central de Folha", icon: FileSpreadsheet },
 ];
 
 const cadastrosNavItems = [
@@ -67,7 +67,7 @@ const secondaryNavItems = [
 ];
 
 const routeLabels: Record<string, string> = {
-  "/": "Central de Folha",
+  "/central-de-folha": "Central de Folha",
   "/empresas": "Empresas",
   "/funcionarios": "Funcionários",
   "/setores": "Setores",
@@ -118,7 +118,7 @@ function AppSidebar() {
                   <SidebarMenuButton asChild tooltip={item.label}>
                     <NavLink
                       to={item.to}
-                      end={item.to === "/"}
+                      end
                       className="flex items-center gap-3 text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                       activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                     >
