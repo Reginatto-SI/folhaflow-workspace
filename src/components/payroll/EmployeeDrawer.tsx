@@ -22,7 +22,7 @@ interface EmployeeDrawerProps {
   employee: Employee | null;
   departmentName?: string;
   jobRoleName?: string;
-  onSave: (id: string, updates: Partial<PayrollEntry>) => void;
+  onSave: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
 }
 
 const CurrencyInput: React.FC<{
@@ -75,11 +75,15 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     return { gross, totalDeductions, net: gross - totalDeductions };
   }, [baseSalary, earnings, deductions]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!entry) return;
-    onSave(entry.id, { baseSalary, earnings, deductions });
-    toast.success("Valores salvos com sucesso.");
-    onOpenChange(false);
+    try {
+      await onSave(entry.id, { baseSalary, earnings, deductions });
+      toast.success("Valores salvos com sucesso.");
+      onOpenChange(false);
+    } catch {
+      toast.error("Não foi possível salvar os valores do lançamento.");
+    }
   };
 
   const updateEarning = (key: string, val: number) => {
