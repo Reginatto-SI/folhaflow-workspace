@@ -430,7 +430,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .single();
       if (error || !data) throw error;
 
-      const mapped = mapPayrollEntryRowToModel(data);
+      const mapped = mapPayrollEntryRowToModel(data as any);
       setAllPayrollEntries((prev) => prev.map((entry) => (entry.id === id ? mapped : entry)));
     },
     []
@@ -445,7 +445,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .single();
       if (error || !data) throw error;
 
-      setAllPayrollEntries((prev) => [mapPayrollEntryRowToModel(data), ...prev]);
+      setAllPayrollEntries((prev) => [mapPayrollEntryRowToModel(data as any), ...prev]);
     },
     []
   );
