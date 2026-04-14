@@ -77,6 +77,8 @@ const routeLabels: Record<string, string> = {
   "/configuracoes": "Configurações",
 };
 
+const BUILD_DATETIME = "13/04/2026 20:05";
+
 function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
@@ -183,8 +185,11 @@ function AppSidebar() {
 
       <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
         {!collapsed && (
-          // Mantém apenas a versão sem exibir o nome da marca em texto.
-          <p className="text-xs text-sidebar-foreground/50">v1.0</p>
+          <>
+            {/* Exibe versão do sistema + data/hora da última atualização */}
+            {/* Usado para validar rapidamente se o deploy já refletiu no frontend */}
+            <p className="text-xs text-sidebar-foreground/50">v1.0 • {BUILD_DATETIME}</p>
+          </>
         )}
       </SidebarFooter>
     </Sidebar>
