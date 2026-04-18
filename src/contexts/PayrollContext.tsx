@@ -379,10 +379,24 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const validateRubricPayload = useCallback((rubric: Omit<Rubric, "id"> | Partial<Rubric>) => {
     if (rubric.name !== undefined && !normalizeRequiredText(rubric.name)) throw new Error("Nome da rubrica é obrigatório.");
     if (rubric.code !== undefined && !normalizeRequiredText(rubric.code)) throw new Error("Código da rubrica é obrigatório.");
-    if (rubric.category !== undefined && !normalizeRequiredText(rubric.category)) throw new Error("Categoria da rubrica é obrigatória.");
     if (rubric.order !== undefined && (!Number.isFinite(rubric.order) || rubric.order < 0)) throw new Error("Ordem deve ser numérica válida.");
-    if (rubric.mode === "formula" && (!rubric.formulaItems || rubric.formulaItems.length === 0)) {
+    // PRD-02 — classificação é obrigatória; nunca dependa do nome.
+    if (rubric.classification !== undefined && !rubric.classification) {
+      throw new Error("Classificação é obrigatória (PRD-02).");
+    }
+    if (rubric.calculationMethod === "formula" && (!rubric.formulaItems || rubric.formulaItems.length === 0)) {
       throw new Error("Rubrica de fórmula precisa de ao menos um item.");
+    }
+    if (rubric.calculationMethod === "valor_fixo" && (rubric.fixedValue === undefined || rubric.fixedValue === null || Number(rubric.fixedValue) < 0)) {
+      throw new Error("Valor fixo deve ser numérico e não-negativo.");
+    }
+    if (rubric.calculationMethod === "percentual") {
+      if (rubric.percentageValue === undefined || rubric.percentageValue === null || Number(rubric.percentageValue) <= 0) {
+        throw new Error("Percentual deve ser maior que zero.");
+      }
+      if (!rubric.percentageBaseRubricId) {
+        throw new Error("Selecione a rubrica de referência para o percentual.");
+      }
     }
   }, []);
 
