@@ -361,44 +361,82 @@ export type Database = {
       rubricas: {
         Row: {
           allow_manual_override: boolean
+          calculation_method:
+            | Database["public"]["Enums"]["rubric_method"]
+            | null
           category: string
+          classification:
+            | Database["public"]["Enums"]["rubric_classification"]
+            | null
           code: string
           created_at: string
           display_order: number
           entry_mode: string
+          fixed_value: number | null
           id: string
           is_active: boolean
           name: string
+          nature: Database["public"]["Enums"]["rubric_nature"] | null
+          percentage_base_rubrica_id: string | null
+          percentage_value: number | null
           type: string
           updated_at: string
         }
         Insert: {
           allow_manual_override?: boolean
+          calculation_method?:
+            | Database["public"]["Enums"]["rubric_method"]
+            | null
           category: string
+          classification?:
+            | Database["public"]["Enums"]["rubric_classification"]
+            | null
           code: string
           created_at?: string
           display_order?: number
           entry_mode: string
+          fixed_value?: number | null
           id?: string
           is_active?: boolean
           name: string
+          nature?: Database["public"]["Enums"]["rubric_nature"] | null
+          percentage_base_rubrica_id?: string | null
+          percentage_value?: number | null
           type: string
           updated_at?: string
         }
         Update: {
           allow_manual_override?: boolean
+          calculation_method?:
+            | Database["public"]["Enums"]["rubric_method"]
+            | null
           category?: string
+          classification?:
+            | Database["public"]["Enums"]["rubric_classification"]
+            | null
           code?: string
           created_at?: string
           display_order?: number
           entry_mode?: string
+          fixed_value?: number | null
           id?: string
           is_active?: boolean
           name?: string
+          nature?: Database["public"]["Enums"]["rubric_nature"] | null
+          percentage_base_rubrica_id?: string | null
+          percentage_value?: number | null
           type?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "rubricas_percentage_base_rubrica_id_fkey"
+            columns: ["percentage_base_rubrica_id"]
+            isOneToOne: false
+            referencedRelation: "rubricas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -453,6 +491,21 @@ export type Database = {
         | "usuarios.manage"
         | "configuracoes.manage"
       app_role: "admin" | "operacional" | "consulta"
+      rubric_classification:
+        | "salario_ctps"
+        | "salario_g"
+        | "outros_rendimentos"
+        | "horas_extras"
+        | "salario_familia"
+        | "ferias_terco"
+        | "insalubridade"
+        | "inss"
+        | "emprestimos"
+        | "adiantamentos"
+        | "vales"
+        | "faltas"
+      rubric_method: "manual" | "valor_fixo" | "percentual" | "formula"
+      rubric_nature: "base" | "calculada"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -591,6 +644,22 @@ export const Constants = {
         "configuracoes.manage",
       ],
       app_role: ["admin", "operacional", "consulta"],
+      rubric_classification: [
+        "salario_ctps",
+        "salario_g",
+        "outros_rendimentos",
+        "horas_extras",
+        "salario_familia",
+        "ferias_terco",
+        "insalubridade",
+        "inss",
+        "emprestimos",
+        "adiantamentos",
+        "vales",
+        "faltas",
+      ],
+      rubric_method: ["manual", "valor_fixo", "percentual", "formula"],
+      rubric_nature: ["base", "calculada"],
     },
   },
 } as const
