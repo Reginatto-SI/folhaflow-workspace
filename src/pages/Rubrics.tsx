@@ -734,14 +734,15 @@ const Rubrics: React.FC = () => {
       </div>
 
       {kpis.semClassificacao > 0 && (
-        <div className="mb-4 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3">
           <ListChecks className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" />
           <div className="text-sm">
             <p className="font-medium text-foreground">
-              {kpis.semClassificacao} {kpis.semClassificacao === 1 ? "rubrica sem" : "rubricas sem"} classificação técnica
+              {kpis.semClassificacao} {kpis.semClassificacao === 1 ? "rubrica ativa sem" : "rubricas ativas sem"} classificação canônica
             </p>
             <p className="text-xs text-muted-foreground">
-              Edite cada rubrica e defina a classificação canônica do PRD-02 antes da geração de recibos e relatórios.
+              Bloqueia evolução de Recibos e Relatórios (PRD-02). Edite cada rubrica marcada como{" "}
+              <span className="font-medium text-destructive">Pendente</span> e defina a classificação técnica.
             </p>
           </div>
         </div>
@@ -918,8 +919,9 @@ const Rubrics: React.FC = () => {
                             {CLASSIFICATION_LABELS[rubric.classification]}
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive">
-                            Sem classificação
+                          // PRD-02: rubrica sem classificação canônica — bloqueia evolução para Recibos/Relatórios.
+                          <Badge variant="outline" className="border-destructive/40 bg-destructive/15 font-semibold text-destructive">
+                            Pendente
                           </Badge>
                         )}
                       </td>
