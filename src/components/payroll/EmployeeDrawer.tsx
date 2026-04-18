@@ -69,9 +69,12 @@ const NumericRubricInput: React.FC<{
 };
 
 const isBaseRubric = (rubric: Rubric) => {
-  const normalized = `${rubric.code} ${rubric.name} ${rubric.category}`.toLowerCase();
-  // Compatibilidade transitória: ainda não existe metadado dedicado de "rubrica-base" no schema.
-  // Usamos heurística por nomenclatura (salário/base/ctps/fiscal/g2) para separar o primeiro card operacional.
+  // PRD-02: a verdade canônica é `rubric.nature`. Quando presente, decide-se por ela.
+  if (rubric.nature === "base") return true;
+  if (rubric.nature === "calculada") return false;
+  // Compatibilidade transitória: para rubricas legadas sem `nature` definida,
+  // usamos heurística por nomenclatura. NÃO usar em código novo.
+  const normalized = `${rubric.code} ${rubric.name} ${rubric.category ?? ""}`.toLowerCase();
   return ["salario", "salário", "base", "ctps", "fiscal", "g2"].some((token) => normalized.includes(token));
 };
 
