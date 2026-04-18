@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface PayrollContextType {
   companies: Company[];
+  activeCompanies: Company[];
   selectedCompany: Company | null;
   setSelectedCompany: (company: Company) => void;
   selectedMonth: PayrollMonth;
@@ -18,11 +19,13 @@ interface PayrollContextType {
   payrollEntries: PayrollEntry[];
   payrollCatalogErrors: { departments?: string; jobRoles?: string; payrollEntries?: string };
   isLoading: boolean;
+  loadError: string | null;
+  reloadData: () => Promise<void>;
   updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
   addPayrollEntry: (entry: Omit<PayrollEntry, "id">) => Promise<void>;
   addCompany: (company: Omit<Company, "id">) => Promise<void>;
   updateCompany: (id: string, updates: Partial<Company>) => Promise<void>;
-  deleteCompany: (id: string) => Promise<void>;
+  setCompanyActive: (id: string, isActive: boolean) => Promise<void>;
   addEmployee: (employee: Omit<Employee, "id">) => Promise<void>;
   updateEmployee: (id: string, updates: Partial<Employee>) => Promise<void>;
   deleteEmployee: (id: string) => Promise<void>;
