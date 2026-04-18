@@ -305,6 +305,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<PayrollMonth>({ month: 3, year: 2026 });
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const validateRubricPayload = useCallback((rubric: Omit<Rubric, "id"> | Partial<Rubric>) => {
     if (rubric.name !== undefined && !normalizeRequiredText(rubric.name)) throw new Error("Nome da rubrica é obrigatório.");
