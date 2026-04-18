@@ -28,15 +28,20 @@ import { Label } from "@/components/ui/label";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   Calculator,
   Check,
   Download,
+  Eye,
   FileText,
+  Info,
   ListChecks,
+  Lock,
   MoreHorizontal,
   NotebookText,
   Pencil,
