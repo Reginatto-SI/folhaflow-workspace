@@ -15,7 +15,7 @@ interface PayrollHeaderProps {
 }
 
 const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
-  const { companies, selectedCompany, setSelectedCompany, selectedMonth, setSelectedMonth } = usePayroll();
+  const { activeCompanies, selectedCompany, setSelectedCompany, selectedMonth, setSelectedMonth } = usePayroll();
 
   // Range mais amplo (-12 / +12 meses): com busca por digitação, escala sem fricção.
   const monthOptions = React.useMemo(() => {
@@ -33,9 +33,10 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
     return options;
   }, []);
 
+  // Comentário: PRD-05 §5.4 — apenas empresas ATIVAS aparecem no seletor da Central de Folha.
   const companyItems = React.useMemo(
-    () => companies.map((c) => ({ value: c.id, label: c.name })),
-    [companies],
+    () => activeCompanies.map((c) => ({ value: c.id, label: c.name })),
+    [activeCompanies],
   );
 
   const monthItems = React.useMemo(
@@ -56,7 +57,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
         emptyMessage="Nenhuma empresa encontrada."
         className="w-[240px]"
         onValueChange={(id) => {
-          const c = companies.find((c) => c.id === id);
+          const c = activeCompanies.find((c) => c.id === id);
           if (c) setSelectedCompany(c);
         }}
       />

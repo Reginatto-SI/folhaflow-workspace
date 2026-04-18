@@ -16,26 +16,29 @@ export type Database = {
     Tables: {
       companies: {
         Row: {
-          address: string | null
+          address: string
           cnpj: string
           created_at: string
           id: string
+          is_active: boolean
           name: string
           updated_at: string
         }
         Insert: {
-          address?: string | null
+          address: string
           cnpj: string
           created_at?: string
           id?: string
+          is_active?: boolean
           name: string
           updated_at?: string
         }
         Update: {
-          address?: string | null
+          address?: string
           cnpj?: string
           created_at?: string
           id?: string
+          is_active?: boolean
           name?: string
           updated_at?: string
         }

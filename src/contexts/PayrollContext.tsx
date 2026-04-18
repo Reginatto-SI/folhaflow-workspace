@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface PayrollContextType {
   companies: Company[];
+  activeCompanies: Company[];
   selectedCompany: Company | null;
   setSelectedCompany: (company: Company) => void;
   selectedMonth: PayrollMonth;
@@ -18,11 +19,13 @@ interface PayrollContextType {
   payrollEntries: PayrollEntry[];
   payrollCatalogErrors: { departments?: string; jobRoles?: string; payrollEntries?: string };
   isLoading: boolean;
+  loadError: string | null;
+  reloadData: () => Promise<void>;
   updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
   addPayrollEntry: (entry: Omit<PayrollEntry, "id">) => Promise<void>;
   addCompany: (company: Omit<Company, "id">) => Promise<void>;
   updateCompany: (id: string, updates: Partial<Company>) => Promise<void>;
-  deleteCompany: (id: string) => Promise<void>;
+  setCompanyActive: (id: string, isActive: boolean) => Promise<void>;
   addEmployee: (employee: Omit<Employee, "id">) => Promise<void>;
   updateEmployee: (id: string, updates: Partial<Employee>) => Promise<void>;
   deleteEmployee: (id: string) => Promise<void>;
@@ -48,12 +51,37 @@ const normalizeRequiredText = (value: string) => value.trim().replace(/\s+/g, " 
 // Comentário: defesa adicional no contexto para manter CPF limpo mesmo se houver outro ponto de escrita no futuro.
 const normalizeCpf = (value: string) => value.replace(/\D/g, "");
 
-const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; address: string | null }): Company => ({
+const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; address: string | null; is_active: boolean }): Company => ({
   id: row.id,
   name: row.name,
   cnpj: row.cnpj,
   address: row.address || "",
+  isActive: row.is_active,
 });
+
+// Comentário: máscara visual padrão BR para CNPJ usada na exibição.
+export const formatCnpj = (digits: string) => {
+  const d = (digits || "").replace(/\D/g, "").slice(0, 14);
+  if (d.length !== 14) return d;
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12, 14)}`;
+};
+
+// Comentário: validação de dígitos verificadores do CNPJ (algoritmo oficial).
+export const isValidCnpj = (value: string): boolean => {
+  const cnpj = (value || "").replace(/\D/g, "");
+  if (cnpj.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(cnpj)) return false;
+  const calc = (slice: string, weights: number[]) => {
+    const sum = slice.split("").reduce((acc, n, i) => acc + Number(n) * weights[i], 0);
+    const mod = sum % 11;
+    return mod < 2 ? 0 : 11 - mod;
+  };
+  const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const d1 = calc(cnpj.slice(0, 12), w1);
+  const d2 = calc(cnpj.slice(0, 12) + d1, w2);
+  return d1 === Number(cnpj[12]) && d2 === Number(cnpj[13]);
+};
 
 const mapDepartmentRowToModel = (row: { id: string; company_id: string; name: string; is_active: boolean }): Department => ({
   id: row.id,
@@ -277,6 +305,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<PayrollMonth>({ month: 3, year: 2026 });
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const validateRubricPayload = useCallback((rubric: Omit<Rubric, "id"> | Partial<Rubric>) => {
     if (rubric.name !== undefined && !normalizeRequiredText(rubric.name)) throw new Error("Nome da rubrica é obrigatório.");
@@ -336,10 +365,11 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(null);
 
     // Comentário: carregamos cadastros administrativos da mesma origem para manter o padrão piloto consistente e reaproveitável.
     const [companiesRes, employeesRes, departmentsRes, rolesRes, rubricsRes, payrollEntriesRes] = await Promise.all([
-      supabase.from("companies").select("id, name, cnpj, address").order("name", { ascending: true }),
+      supabase.from("companies").select("id, name, cnpj, address, is_active").order("name", { ascending: true }),
       supabase.from("employees").select("*").order("name", { ascending: true }),
       supabase.from("departments").select("id, company_id, name, is_active").order("name", { ascending: true }),
       supabase.from("job_roles").select("id, company_id, name, is_active").order("name", { ascending: true }),
@@ -357,10 +387,13 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!companiesRes.error && companiesRes.data) {
       const loadedCompanies = companiesRes.data.map(mapCompanyRowToModel);
       setCompanies(loadedCompanies);
+      // Comentário: default selecionada deve ser uma empresa ATIVA (PRD-05 §5.4).
       setSelectedCompany((prev) => {
-        if (prev && loadedCompanies.some((company) => company.id === prev.id)) return prev;
-        return loadedCompanies[0] ?? null;
+        if (prev && loadedCompanies.some((company) => company.id === prev.id && company.isActive)) return prev;
+        return loadedCompanies.find((c) => c.isActive) ?? null;
       });
+    } else if (companiesRes.error) {
+      setLoadError(`Falha ao carregar empresas: ${companiesRes.error.message}`);
     }
 
     if (!employeesRes.error && employeesRes.data) {
@@ -452,53 +485,85 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
 
   const addCompany = useCallback(async (company: Omit<Company, "id">) => {
+    const cnpjDigits = (company.cnpj || "").replace(/\D/g, "");
+    const address = (company.address || "").trim();
+    if (!address) throw new Error("Endereço é obrigatório.");
+    if (cnpjDigits.length !== 14) throw new Error("CNPJ inválido.");
+
     const { data, error } = await supabase
       .from("companies")
-      .insert({ name: company.name, cnpj: company.cnpj, address: company.address || null })
-      .select("id, name, cnpj, address")
+      .insert({
+        name: normalizeRequiredText(company.name),
+        cnpj: cnpjDigits,
+        address,
+        is_active: company.isActive ?? true,
+      })
+      .select("id, name, cnpj, address, is_active")
       .single();
-    if (error || !data) throw error;
+    if (error || !data) {
+      // Comentário: 23505 = unique_violation (CNPJ duplicado).
+      if ((error as { code?: string } | null)?.code === "23505") {
+        throw new Error("CNPJ já cadastrado.");
+      }
+      throw error;
+    }
     const mapped = mapCompanyRowToModel(data);
     setCompanies((prev) => [...prev, mapped]);
-    setSelectedCompany((prev) => prev ?? mapped);
+    setSelectedCompany((prev) => prev ?? (mapped.isActive ? mapped : prev));
   }, []);
 
   const updateCompany = useCallback(async (id: string, updates: Partial<Company>) => {
-    const payload = {
-      ...(updates.name !== undefined ? { name: updates.name } : {}),
-      ...(updates.cnpj !== undefined ? { cnpj: updates.cnpj } : {}),
-      ...(updates.address !== undefined ? { address: updates.address || null } : {}),
-    };
+    const payload: Record<string, unknown> = {};
+    if (updates.name !== undefined) payload.name = normalizeRequiredText(updates.name);
+    if (updates.cnpj !== undefined) {
+      const cnpjDigits = updates.cnpj.replace(/\D/g, "");
+      if (cnpjDigits.length !== 14) throw new Error("CNPJ inválido.");
+      payload.cnpj = cnpjDigits;
+    }
+    if (updates.address !== undefined) {
+      const address = updates.address.trim();
+      if (!address) throw new Error("Endereço é obrigatório.");
+      payload.address = address;
+    }
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
 
     const { data, error } = await supabase
       .from("companies")
       .update(payload)
       .eq("id", id)
-      .select("id, name, cnpj, address")
+      .select("id, name, cnpj, address, is_active")
       .single();
-    if (error || !data) throw error;
+    if (error || !data) {
+      if ((error as { code?: string } | null)?.code === "23505") {
+        throw new Error("CNPJ já cadastrado.");
+      }
+      throw error;
+    }
 
     const mapped = mapCompanyRowToModel(data);
     setCompanies((prev) => prev.map((company) => (company.id === id ? mapped : company)));
     setSelectedCompany((prev) => (prev?.id === id ? mapped : prev));
   }, []);
 
-  const deleteCompany = useCallback(async (id: string) => {
-    const { error } = await supabase.from("companies").delete().eq("id", id);
-    if (error) throw error;
+  // Comentário: substitui a antiga deleteCompany — PRD-05 §5.5 proíbe exclusão física.
+  const setCompanyActive = useCallback(async (id: string, isActive: boolean) => {
+    const { data, error } = await supabase
+      .from("companies")
+      .update({ is_active: isActive })
+      .eq("id", id)
+      .select("id, name, cnpj, address, is_active")
+      .single();
+    if (error || !data) throw error;
 
-    setCompanies((prev) => {
-      const next = prev.filter((company) => company.id !== id);
-      setSelectedCompany((selected) => {
-        if (selected?.id !== id) return selected;
-        return next[0] ?? null;
-      });
-      return next;
+    const mapped = mapCompanyRowToModel(data);
+    setCompanies((prev) => prev.map((company) => (company.id === id ? mapped : company)));
+    setSelectedCompany((selected) => {
+      // Se a empresa selecionada foi inativada, troca para a próxima ativa.
+      if (selected?.id === id && !isActive) {
+        return null;
+      }
+      return selected?.id === id ? mapped : selected;
     });
-    setAllEmployees((prev) => prev.filter((employee) => employee.companyId !== id));
-    setAllDepartments((prev) => prev.filter((department) => department.companyId !== id));
-    setAllJobRoles((prev) => prev.filter((jobRole) => jobRole.companyId !== id));
-    setAllPayrollEntries((prev) => prev.filter((entry) => entry.companyId !== id));
   }, []);
 
   const addEmployee = useCallback(async (employee: Omit<Employee, "id">) => {
@@ -667,10 +732,14 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setRubrics((prev) => prev.map((item) => (item.id === id ? mapRubricRowToModel(data) : item)));
   }, [rubrics]);
 
+  // Comentário: empresas ativas para uso em filtros operacionais (Funcionários, Central de Folha) — PRD-05 §5.4.
+  const activeCompanies = React.useMemo(() => companies.filter((c) => c.isActive), [companies]);
+
   return (
     <PayrollContext.Provider
       value={{
         companies,
+        activeCompanies,
         selectedCompany,
         setSelectedCompany,
         selectedMonth,
@@ -685,11 +754,13 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         payrollEntries,
         payrollCatalogErrors,
         isLoading,
+        loadError,
+        reloadData: loadData,
         addPayrollEntry,
         updatePayrollEntry,
         addCompany,
         updateCompany,
-        deleteCompany,
+        setCompanyActive,
         addEmployee,
         updateEmployee,
         deleteEmployee,

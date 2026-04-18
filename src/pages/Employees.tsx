@@ -84,6 +84,7 @@ const normalizeBankField = (value?: string) => {
 const Employees: React.FC = () => {
   const {
     companies,
+    activeCompanies,
     employees,
     allDepartments,
     allJobRoles,
@@ -528,7 +529,8 @@ const Employees: React.FC = () => {
                           <SelectValue placeholder="Selecione a empresa formal de registro" />
                         </SelectTrigger>
                         <SelectContent>
-                          {companies.map((company) => (
+                          {/* PRD-05 §5.4: novos vínculos só com empresas ativas. */}
+                          {activeCompanies.map((company) => (
                             <SelectItem key={company.id} value={company.id}>
                               {company.name}
                             </SelectItem>
