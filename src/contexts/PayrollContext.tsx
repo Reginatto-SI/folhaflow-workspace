@@ -795,15 +795,16 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const addRubric = useCallback(async (rubric: Omit<Rubric, "id">) => {
     validateRubricPayload(rubric);
+    const isFormula = rubric.calculationMethod === "formula";
     const { data, error } = await supabase
       .from("rubricas")
       .insert(mapRubricInsertToRow(rubric))
-      .select("id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override")
+      .select("id")
       .single();
     if (error || !data) throw error;
 
-    await validateCircularRubricDependency(data.id, rubric.mode, rubric.formulaItems);
-    if (rubric.mode === "formula") {
+    await validateCircularRubricDependency(data.id, isFormula ? "formula" : "manual", rubric.formulaItems);
+    if (isFormula) {
       // Comentário: persistimos os itens da fórmula em tabela dedicada para garantir estrutura por linha e ordem.
       const { error: formulaError } = await supabase
         .from("rubrica_formula_items")
@@ -821,28 +822,29 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .single();
     if (fullRubricError || !fullRubric) throw fullRubricError;
 
-    setRubrics((prev) => [...prev, mapRubricRowToModel(fullRubric)]);
+    setRubrics((prev) => [...prev, mapRubricRowToModel(fullRubric as Parameters<typeof mapRubricRowToModel>[0])]);
   }, [validateCircularRubricDependency, validateRubricPayload]);
 
   const updateRubric = useCallback(async (id: string, updates: Partial<Rubric>) => {
     validateRubricPayload(updates);
-    const modeToValidate = updates.mode ?? rubrics.find((rubric) => rubric.id === id)?.mode ?? "manual";
-    const itemsToValidate = updates.formulaItems ?? rubrics.find((rubric) => rubric.id === id)?.formulaItems ?? [];
-    await validateCircularRubricDependency(id, modeToValidate, itemsToValidate);
+    const current = rubrics.find((rubric) => rubric.id === id);
+    const methodToValidate = updates.calculationMethod ?? current?.calculationMethod ?? "manual";
+    const itemsToValidate = updates.formulaItems ?? current?.formulaItems ?? [];
+    await validateCircularRubricDependency(id, methodToValidate === "formula" ? "formula" : "manual", itemsToValidate);
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("rubricas")
       .update(mapRubricUpdateToRow(updates))
       .eq("id", id)
-      .select("id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override")
+      .select("id")
       .single();
-    if (error || !data) throw error;
+    if (error) throw error;
 
-    if (updates.formulaItems !== undefined || updates.mode === "manual") {
+    if (updates.formulaItems !== undefined || (updates.calculationMethod !== undefined && updates.calculationMethod !== "formula")) {
       const { error: deleteItemsError } = await supabase.from("rubrica_formula_items").delete().eq("rubrica_id", id);
       if (deleteItemsError) throw deleteItemsError;
     }
-    if (modeToValidate === "formula" && itemsToValidate.length > 0) {
+    if (methodToValidate === "formula" && itemsToValidate.length > 0 && updates.formulaItems !== undefined) {
       const { error: insertItemsError } = await supabase
         .from("rubrica_formula_items")
         .insert(itemsToValidate.map((item) => mapFormulaItemInsertToRow(id, item)));
@@ -856,7 +858,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .single();
     if (fullRubricError || !fullRubric) throw fullRubricError;
 
-    setRubrics((prev) => prev.map((rubric) => (rubric.id === id ? mapRubricRowToModel(fullRubric) : rubric)));
+    setRubrics((prev) => prev.map((rubric) => (rubric.id === id ? mapRubricRowToModel(fullRubric as Parameters<typeof mapRubricRowToModel>[0]) : rubric)));
   }, [rubrics, validateCircularRubricDependency, validateRubricPayload]);
 
   const deleteRubric = useCallback(async (id: string) => {
