@@ -448,11 +448,32 @@ const Rubrics: React.FC = () => {
 
             <DialogContent className="flex h-[90vh] max-h-[90vh] max-w-4xl flex-col overflow-hidden">
               <DialogHeader className="border-b pb-3">
-                <DialogTitle className="text-xl">{editing ? "Editar rubrica" : "Nova rubrica"}</DialogTitle>
+                <DialogTitle className="text-xl">
+                  {editing
+                    ? editing.nature === "calculada"
+                      ? "Visualizar rubrica derivada"
+                      : "Editar rubrica"
+                    : "Nova rubrica"}
+                </DialogTitle>
                 <p className="text-sm text-muted-foreground">
                   Cadastro estruturado conforme PRD-02 — dados, método de cálculo e classificação técnica.
                 </p>
               </DialogHeader>
+
+              {/* PRD-02: aviso visual sempre que estamos lidando com rubrica derivada (criação ou edição). */}
+              {form.nature === "calculada" && (
+                <div className="mt-3 flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-warning" />
+                  <div>
+                    <p className="font-medium text-foreground">Rubrica derivada (saída do sistema)</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Esta rubrica é gerada pelo sistema (saída do motor de cálculo, PRD-01) e{" "}
+                      <strong>não deve ser usada como entrada manual</strong>. Não recebe classificação técnica nem aparece
+                      como input na Central de Folha.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <Tabs
                 value={activeTab}
