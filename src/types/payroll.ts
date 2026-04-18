@@ -48,8 +48,6 @@ export interface Employee {
   bankBranch?: string;
   bankAccount?: string;
   bankPixKey?: string;
-  // Comentário: baseSalary foi preservado por compatibilidade com a Central de Folha.
-  baseSalary: number;
 }
 
 export interface PayrollEntry {

@@ -48,7 +48,8 @@ const normalizeText = (value?: string) => {
 };
 const normalizeRequiredText = (value: string) => value.trim().replace(/\s+/g, " ");
 
-// Comentário: defesa adicional no contexto para manter CPF limpo mesmo se houver outro ponto de escrita no futuro.
+// Comentário: CPF é identidade global do colaborador no grupo.
+// Mantemos somente dígitos para alinhar validação/consulta e regra de unicidade global no banco.
 const normalizeCpf = (value: string) => value.replace(/\D/g, "");
 
 const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; address: string | null; is_active: boolean }): Company => ({
@@ -117,7 +118,6 @@ const mapEmployeeRowToModel = (row: {
   bank_branch: string | null;
   bank_account: string | null;
   bank_pix_key: string | null;
-  base_salary: number;
 }): Employee => ({
   id: row.id,
   companyId: row.company_id,
@@ -138,10 +138,11 @@ const mapEmployeeRowToModel = (row: {
   bankBranch: row.bank_branch || "",
   bankAccount: row.bank_account || "",
   bankPixKey: row.bank_pix_key || "",
-  baseSalary: Number(row.base_salary || 0),
 });
 
 const mapEmployeeInsertToRow = (employee: Omit<Employee, "id">) => ({
+  // Comentário: cadastro de funcionário armazena apenas dados cadastrais/operacionais.
+  // Salário e demais valores mensais pertencem exclusivamente aos lançamentos da folha.
   company_id: employee.companyId,
   name: normalizeRequiredText(employee.name),
   cpf: normalizeCpf(employee.cpf),
@@ -160,7 +161,6 @@ const mapEmployeeInsertToRow = (employee: Omit<Employee, "id">) => ({
   bank_branch: normalizeText(employee.bankBranch),
   bank_account: normalizeText(employee.bankAccount),
   bank_pix_key: normalizeText(employee.bankPixKey),
-  base_salary: employee.baseSalary,
 });
 
 const mapEmployeeUpdateToRow = (updates: Partial<Employee>) => ({
@@ -182,7 +182,6 @@ const mapEmployeeUpdateToRow = (updates: Partial<Employee>) => ({
   ...(updates.bankBranch !== undefined ? { bank_branch: normalizeText(updates.bankBranch) } : {}),
   ...(updates.bankAccount !== undefined ? { bank_account: normalizeText(updates.bankAccount) } : {}),
   ...(updates.bankPixKey !== undefined ? { bank_pix_key: normalizeText(updates.bankPixKey) } : {}),
-  ...(updates.baseSalary !== undefined ? { base_salary: updates.baseSalary } : {}),
 });
 
 const mapRubricRowToModel = (row: {
@@ -583,11 +582,12 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const deleteEmployee = useCallback(async (id: string) => {
-    const { error } = await supabase.from("employees").delete().eq("id", id);
-    if (error) throw error;
+    // Comentário: funcionário não pode ser excluído fisicamente para preservar histórico.
+    // A regra operacional é inativação (soft-disable) mantendo vínculos e trilha.
+    const { data, error } = await supabase.from("employees").update({ is_active: false }).eq("id", id).select("*").single();
+    if (error || !data) throw error;
 
-    setAllEmployees((prev) => prev.filter((employee) => employee.id !== id));
-    setAllPayrollEntries((prev) => prev.filter((entry) => entry.employeeId !== id));
+    setAllEmployees((prev) => prev.map((employee) => (employee.id === id ? mapEmployeeRowToModel(data) : employee)));
   }, []);
 
   const addDepartment = useCallback(async (department: Omit<Department, "id">) => {

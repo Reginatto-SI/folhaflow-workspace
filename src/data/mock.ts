@@ -23,16 +23,18 @@ export const generatePayrollEntries = (
     companyId,
     month,
     year,
-    baseSalary: emp.baseSalary,
+    // Comentário: salário não faz parte do cadastro do funcionário;
+    // em geração mock, o lançamento começa em zero e recebe ajustes na folha.
+    baseSalary: 0,
     earnings: {
       "Horas Extras": Math.round(Math.random() * 2000),
       "Bônus": Math.random() > 0.7 ? Math.round(Math.random() * 3000) : 0,
     },
     deductions: {
-      "Vale Transporte": Math.round(emp.baseSalary * 0.06),
+      "Vale Transporte": 0,
       "Vale Refeição": 450,
-      "INSS": Math.round(emp.baseSalary * 0.14),
-      "IRRF": Math.round(emp.baseSalary * 0.275 * 0.5),
+      "INSS": 0,
+      "IRRF": 0,
     },
     notes: "",
   }));
