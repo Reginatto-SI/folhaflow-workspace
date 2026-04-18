@@ -393,8 +393,10 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const validateRubricPayload = useCallback((rubric: Omit<Rubric, "id"> | Partial<Rubric>, options?: { existing?: Rubric }) => {
     const existing = options?.existing;
     // Helpers: valor efetivo após o update (campo do payload OU do registro atual).
-    const effective = <K extends keyof Rubric>(key: K): Rubric[K] | undefined =>
-      (rubric as Partial<Rubric>)[key] !== undefined ? (rubric as Partial<Rubric>)[key] : existing?.[key];
+    const effective = <K extends keyof Rubric>(key: K): Rubric[K] | undefined => {
+      const partial = rubric as Partial<Rubric>;
+      return partial[key] !== undefined ? (partial[key] as Rubric[K]) : existing?.[key];
+    };
     const isInsert = !existing;
 
     if (rubric.name !== undefined && !normalizeRequiredText(rubric.name)) throw new Error("Nome da rubrica é obrigatório.");
@@ -876,8 +878,9 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [validateCircularRubricDependency, validateRubricPayload]);
 
   const updateRubric = useCallback(async (id: string, updates: Partial<Rubric>) => {
-    validateRubricPayload(updates);
     const current = rubrics.find((rubric) => rubric.id === id);
+    // PRD-02: passa o registro atual para validar `isActive` efetivo + coerência tipo×classificação.
+    validateRubricPayload(updates, { existing: current });
     const methodToValidate = updates.calculationMethod ?? current?.calculationMethod ?? "manual";
     const itemsToValidate = updates.formulaItems ?? current?.formulaItems ?? [];
     await validateCircularRubricDependency(id, methodToValidate === "formula" ? "formula" : "manual", itemsToValidate);
