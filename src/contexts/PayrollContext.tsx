@@ -217,54 +217,98 @@ const mapRubricRowToModel = (row: {
   display_order: number;
   is_active: boolean;
   allow_manual_override: boolean;
+  // PRD-02 — campos novos do contrato canônico
+  nature: string | null;
+  calculation_method: string | null;
+  classification: string | null;
+  fixed_value: number | string | null;
+  percentage_value: number | string | null;
+  percentage_base_rubrica_id: string | null;
   rubrica_formula_items?: Array<{
     id: string;
     operation: string;
     source_rubrica_id: string;
     item_order: number;
   }>;
-}): Rubric => ({
-  id: row.id,
-  name: row.name,
-  code: row.code,
-  category: row.category,
-  type: row.type as Rubric["type"],
-  mode: row.entry_mode as Rubric["mode"],
-  order: row.display_order,
-  isActive: row.is_active,
-  // Comentário: a composição de fórmula agora é persistida em linhas estruturadas para evitar texto livre estilo Excel.
-  formulaItems: (row.rubrica_formula_items || [])
-    .map((item) => ({
-      id: item.id,
-      operation: item.operation as "add" | "subtract",
-      sourceRubricId: item.source_rubrica_id,
-      order: item.item_order,
-    }))
-    .sort((a, b) => a.order - b.order),
-  allowManualOverride: row.allow_manual_override,
-});
+}): Rubric => {
+  // Comentário: deriva calculationMethod a partir do entry_mode legado quando ainda não migrado.
+  const calculationMethod = (row.calculation_method as Rubric["calculationMethod"] | null)
+    ?? (row.entry_mode === "formula" ? "formula" : "manual");
+  const nature = (row.nature as Rubric["nature"] | null)
+    ?? (calculationMethod === "formula" ? "calculada" : "base");
+  return {
+    id: row.id,
+    name: row.name,
+    code: row.code,
+    type: row.type as Rubric["type"],
+    nature,
+    calculationMethod,
+    classification: (row.classification as Rubric["classification"]) ?? null,
+    fixedValue: row.fixed_value !== null ? Number(row.fixed_value) : null,
+    percentageValue: row.percentage_value !== null ? Number(row.percentage_value) : null,
+    percentageBaseRubricId: row.percentage_base_rubrica_id ?? null,
+    order: row.display_order,
+    isActive: row.is_active,
+    allowManualOverride: row.allow_manual_override,
+    // Comentário: a composição de fórmula agora é persistida em linhas estruturadas para evitar texto livre estilo Excel.
+    formulaItems: (row.rubrica_formula_items || [])
+      .map((item) => ({
+        id: item.id,
+        operation: item.operation as "add" | "subtract",
+        sourceRubricId: item.source_rubrica_id,
+        order: item.item_order,
+      }))
+      .sort((a, b) => a.order - b.order),
+    // Compat temporária — não usar em lógica nova.
+    category: row.category,
+    mode: calculationMethod === "formula" ? "formula" : "manual",
+  };
+};
+
+// Comentário: deriva o entry_mode legado a partir do calculationMethod canônico
+// para manter compatibilidade enquanto motor/recibos não migram.
+const deriveLegacyEntryMode = (method: Rubric["calculationMethod"]): "manual" | "formula" =>
+  method === "formula" ? "formula" : "manual";
 
 const mapRubricInsertToRow = (rubric: Omit<Rubric, "id">) => ({
   name: normalizeRequiredText(rubric.name),
   code: normalizeRequiredText(rubric.code),
-  category: normalizeRequiredText(rubric.category),
+  // Compat: coluna category mantida até remoção em fase futura.
+  category: normalizeRequiredText(rubric.category || rubric.classification || "geral"),
   type: rubric.type,
-  entry_mode: rubric.mode,
+  entry_mode: deriveLegacyEntryMode(rubric.calculationMethod),
   display_order: rubric.order,
   is_active: rubric.isActive,
   allow_manual_override: rubric.allowManualOverride,
+  // PRD-02
+  nature: rubric.nature,
+  calculation_method: rubric.calculationMethod,
+  classification: rubric.classification,
+  fixed_value: rubric.calculationMethod === "valor_fixo" ? (rubric.fixedValue ?? 0) : null,
+  percentage_value: rubric.calculationMethod === "percentual" ? (rubric.percentageValue ?? 0) : null,
+  percentage_base_rubrica_id: rubric.calculationMethod === "percentual" ? (rubric.percentageBaseRubricId ?? null) : null,
 });
 
-const mapRubricUpdateToRow = (updates: Partial<Rubric>) => ({
-  ...(updates.name !== undefined ? { name: normalizeRequiredText(updates.name) } : {}),
-  ...(updates.code !== undefined ? { code: normalizeRequiredText(updates.code) } : {}),
-  ...(updates.category !== undefined ? { category: normalizeRequiredText(updates.category) } : {}),
-  ...(updates.type !== undefined ? { type: updates.type } : {}),
-  ...(updates.mode !== undefined ? { entry_mode: updates.mode } : {}),
-  ...(updates.order !== undefined ? { display_order: updates.order } : {}),
-  ...(updates.isActive !== undefined ? { is_active: updates.isActive } : {}),
-  ...(updates.allowManualOverride !== undefined ? { allow_manual_override: updates.allowManualOverride } : {}),
-});
+const mapRubricUpdateToRow = (updates: Partial<Rubric>) => {
+  const out: Record<string, unknown> = {};
+  if (updates.name !== undefined) out.name = normalizeRequiredText(updates.name);
+  if (updates.code !== undefined) out.code = normalizeRequiredText(updates.code);
+  if (updates.category !== undefined) out.category = normalizeRequiredText(updates.category);
+  if (updates.type !== undefined) out.type = updates.type;
+  if (updates.calculationMethod !== undefined) {
+    out.calculation_method = updates.calculationMethod;
+    out.entry_mode = deriveLegacyEntryMode(updates.calculationMethod); // compat
+  }
+  if (updates.nature !== undefined) out.nature = updates.nature;
+  if (updates.classification !== undefined) out.classification = updates.classification;
+  if (updates.order !== undefined) out.display_order = updates.order;
+  if (updates.isActive !== undefined) out.is_active = updates.isActive;
+  if (updates.allowManualOverride !== undefined) out.allow_manual_override = updates.allowManualOverride;
+  if (updates.fixedValue !== undefined) out.fixed_value = updates.fixedValue;
+  if (updates.percentageValue !== undefined) out.percentage_value = updates.percentageValue;
+  if (updates.percentageBaseRubricId !== undefined) out.percentage_base_rubrica_id = updates.percentageBaseRubricId;
+  return out;
+};
 
 const mapFormulaItemInsertToRow = (rubricaId: string, item: Rubric["formulaItems"][number]) => ({
   rubrica_id: rubricaId,
@@ -307,8 +351,9 @@ const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
 });
 
 // Comentário: a tabela de itens possui duas FKs para `rubricas`; usamos embed explícito para evitar ambiguidade no PostgREST.
+// Lista todas as colunas necessárias para o contrato canônico (PRD-02), incluindo nature/calculation_method/classification.
 const RUBRICA_SELECT_WITH_ITEMS =
-  "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
+  "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, nature, calculation_method, classification, fixed_value, percentage_value, percentage_base_rubrica_id, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
 
 export const usePayroll = () => {
   const ctx = useContext(PayrollContext);
@@ -334,10 +379,24 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const validateRubricPayload = useCallback((rubric: Omit<Rubric, "id"> | Partial<Rubric>) => {
     if (rubric.name !== undefined && !normalizeRequiredText(rubric.name)) throw new Error("Nome da rubrica é obrigatório.");
     if (rubric.code !== undefined && !normalizeRequiredText(rubric.code)) throw new Error("Código da rubrica é obrigatório.");
-    if (rubric.category !== undefined && !normalizeRequiredText(rubric.category)) throw new Error("Categoria da rubrica é obrigatória.");
     if (rubric.order !== undefined && (!Number.isFinite(rubric.order) || rubric.order < 0)) throw new Error("Ordem deve ser numérica válida.");
-    if (rubric.mode === "formula" && (!rubric.formulaItems || rubric.formulaItems.length === 0)) {
+    // PRD-02 — classificação é obrigatória; nunca dependa do nome.
+    if (rubric.classification !== undefined && !rubric.classification) {
+      throw new Error("Classificação é obrigatória (PRD-02).");
+    }
+    if (rubric.calculationMethod === "formula" && (!rubric.formulaItems || rubric.formulaItems.length === 0)) {
       throw new Error("Rubrica de fórmula precisa de ao menos um item.");
+    }
+    if (rubric.calculationMethod === "valor_fixo" && (rubric.fixedValue === undefined || rubric.fixedValue === null || Number(rubric.fixedValue) < 0)) {
+      throw new Error("Valor fixo deve ser numérico e não-negativo.");
+    }
+    if (rubric.calculationMethod === "percentual") {
+      if (rubric.percentageValue === undefined || rubric.percentageValue === null || Number(rubric.percentageValue) <= 0) {
+        throw new Error("Percentual deve ser maior que zero.");
+      }
+      if (!rubric.percentageBaseRubricId) {
+        throw new Error("Selecione a rubrica de referência para o percentual.");
+      }
     }
   }, []);
 
@@ -447,7 +506,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     if (!rubricsRes.error && rubricsRes.data) {
-      setRubrics(rubricsRes.data.map(mapRubricRowToModel));
+      setRubrics(rubricsRes.data.map((row) => mapRubricRowToModel(row as Parameters<typeof mapRubricRowToModel>[0])));
     }
 
     if (!payrollEntriesRes.error && payrollEntriesRes.data) {
@@ -736,15 +795,16 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const addRubric = useCallback(async (rubric: Omit<Rubric, "id">) => {
     validateRubricPayload(rubric);
+    const isFormula = rubric.calculationMethod === "formula";
     const { data, error } = await supabase
       .from("rubricas")
       .insert(mapRubricInsertToRow(rubric))
-      .select("id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override")
+      .select("id")
       .single();
     if (error || !data) throw error;
 
-    await validateCircularRubricDependency(data.id, rubric.mode, rubric.formulaItems);
-    if (rubric.mode === "formula") {
+    await validateCircularRubricDependency(data.id, isFormula ? "formula" : "manual", rubric.formulaItems);
+    if (isFormula) {
       // Comentário: persistimos os itens da fórmula em tabela dedicada para garantir estrutura por linha e ordem.
       const { error: formulaError } = await supabase
         .from("rubrica_formula_items")
@@ -762,28 +822,29 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .single();
     if (fullRubricError || !fullRubric) throw fullRubricError;
 
-    setRubrics((prev) => [...prev, mapRubricRowToModel(fullRubric)]);
+    setRubrics((prev) => [...prev, mapRubricRowToModel(fullRubric as Parameters<typeof mapRubricRowToModel>[0])]);
   }, [validateCircularRubricDependency, validateRubricPayload]);
 
   const updateRubric = useCallback(async (id: string, updates: Partial<Rubric>) => {
     validateRubricPayload(updates);
-    const modeToValidate = updates.mode ?? rubrics.find((rubric) => rubric.id === id)?.mode ?? "manual";
-    const itemsToValidate = updates.formulaItems ?? rubrics.find((rubric) => rubric.id === id)?.formulaItems ?? [];
-    await validateCircularRubricDependency(id, modeToValidate, itemsToValidate);
+    const current = rubrics.find((rubric) => rubric.id === id);
+    const methodToValidate = updates.calculationMethod ?? current?.calculationMethod ?? "manual";
+    const itemsToValidate = updates.formulaItems ?? current?.formulaItems ?? [];
+    await validateCircularRubricDependency(id, methodToValidate === "formula" ? "formula" : "manual", itemsToValidate);
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("rubricas")
       .update(mapRubricUpdateToRow(updates))
       .eq("id", id)
-      .select("id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override")
+      .select("id")
       .single();
-    if (error || !data) throw error;
+    if (error) throw error;
 
-    if (updates.formulaItems !== undefined || updates.mode === "manual") {
+    if (updates.formulaItems !== undefined || (updates.calculationMethod !== undefined && updates.calculationMethod !== "formula")) {
       const { error: deleteItemsError } = await supabase.from("rubrica_formula_items").delete().eq("rubrica_id", id);
       if (deleteItemsError) throw deleteItemsError;
     }
-    if (modeToValidate === "formula" && itemsToValidate.length > 0) {
+    if (methodToValidate === "formula" && itemsToValidate.length > 0 && updates.formulaItems !== undefined) {
       const { error: insertItemsError } = await supabase
         .from("rubrica_formula_items")
         .insert(itemsToValidate.map((item) => mapFormulaItemInsertToRow(id, item)));
@@ -797,7 +858,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .single();
     if (fullRubricError || !fullRubric) throw fullRubricError;
 
-    setRubrics((prev) => prev.map((rubric) => (rubric.id === id ? mapRubricRowToModel(fullRubric) : rubric)));
+    setRubrics((prev) => prev.map((rubric) => (rubric.id === id ? mapRubricRowToModel(fullRubric as Parameters<typeof mapRubricRowToModel>[0]) : rubric)));
   }, [rubrics, validateCircularRubricDependency, validateRubricPayload]);
 
   const deleteRubric = useCallback(async (id: string) => {
@@ -811,7 +872,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .single();
     if (error) throw error;
 
-    setRubrics((prev) => prev.map((item) => (item.id === id ? mapRubricRowToModel(data) : item)));
+    setRubrics((prev) => prev.map((item) => (item.id === id ? mapRubricRowToModel(data as Parameters<typeof mapRubricRowToModel>[0]) : item)));
   }, [rubrics]);
 
   // Comentário: empresas ativas para uso em filtros operacionais (Funcionários, Central de Folha) — PRD-05 §5.4.

@@ -69,17 +69,51 @@ export interface RubricFormulaItem {
   order: number;
 }
 
+// Comentário: contrato canônico do PRD-02. `nature` separa rubricas-base
+// (entrada operacional na folha) de calculadas (derivadas). `calculationMethod`
+// define como o valor é obtido. `classification` é o eixo técnico de agrupamento
+// para recibos e relatórios — NUNCA usar nome da rubrica para inferir comportamento.
+export type RubricNature = "base" | "calculada";
+export type RubricMethod = "manual" | "valor_fixo" | "percentual" | "formula";
+export type RubricClassification =
+  // Proventos
+  | "salario_ctps"
+  | "salario_g"
+  | "outros_rendimentos"
+  | "horas_extras"
+  | "salario_familia"
+  | "ferias_terco"
+  | "insalubridade"
+  // Descontos
+  | "inss"
+  | "emprestimos"
+  | "adiantamentos"
+  | "vales"
+  | "faltas";
+
 export interface Rubric {
   id: string;
   name: string;
   code: string;
-  category: string;
   type: "provento" | "desconto";
-  mode: "manual" | "formula";
+  // Contrato PRD-02
+  nature: RubricNature;
+  calculationMethod: RubricMethod;
+  // Comentário: nullable apenas durante a transição — UI exige preenchimento ao salvar.
+  classification: RubricClassification | null;
   order: number;
   isActive: boolean;
+  // Campos condicionais (PRD-02)
+  fixedValue?: number | null;
+  percentageValue?: number | null;
+  percentageBaseRubricId?: string | null;
   formulaItems: RubricFormulaItem[];
   allowManualOverride: boolean;
+  // Compatibilidade temporária — não usar em lógica nova.
+  // `category` (texto livre) e `mode` (manual|formula) são derivados/preservados
+  // só enquanto motor/recibos não migram para `classification` + `calculationMethod`.
+  category?: string;
+  mode?: "manual" | "formula";
 }
 
 export type PayrollMonth = {
