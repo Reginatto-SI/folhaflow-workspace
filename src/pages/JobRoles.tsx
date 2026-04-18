@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BriefcaseBusiness, Building2, Check, ChevronDown, ChevronUp, Download, FileSpreadsheet, FileText, MoreHorizontal, Pencil, Plus, Save, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
+import { BriefcaseBusiness, Building2, Check, ChevronDown, ChevronUp, Download, FileSpreadsheet, FileText, MoreHorizontal, Pencil, Plus, Save, Search, SlidersHorizontal, Upload, X } from "lucide-react";
 import { JobRole } from "@/types/payroll";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -29,7 +29,7 @@ const getInitialForm = (companyId = ""): FormState => ({ name: "", companyId, is
 const getInitialFilters = (): FilterState => ({ search: "", status: "", companyId: "" });
 
 const JobRoles: React.FC = () => {
-  const { companies, selectedCompany, allJobRoles: jobRoles, addJobRole, updateJobRole, deleteJobRole, isLoading } = usePayroll();
+  const { companies, selectedCompany, allJobRoles: jobRoles, addJobRole, updateJobRole, setJobRoleActive, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<JobRole | null>(null);
   const [form, setForm] = useState<FormState>(getInitialForm());
@@ -62,7 +62,8 @@ const JobRoles: React.FC = () => {
 
   const openNew = () => {
     setEditing(null);
-    setForm(getInitialForm(selectedCompany?.id || ""));
+    // Comentário: exigimos seleção explícita da empresa no novo cadastro para reduzir criação acidental por contexto herdado.
+    setForm(getInitialForm());
     setOpen(true);
   };
 
@@ -94,17 +95,20 @@ const JobRoles: React.FC = () => {
         toast.success("Função/cargo criada.");
       }
       setOpen(false);
-    } catch {
-      toast.error("Não foi possível salvar a função/cargo.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível salvar a função/cargo.";
+      toast.error(message);
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleStatusToggle = async (jobRole: JobRole) => {
+    const nextStatus = !jobRole.isActive;
     try {
-      await deleteJobRole(id);
-      toast.success("Função/cargo removida.");
-    } catch {
-      toast.error("Não foi possível remover a função/cargo.");
+      await setJobRoleActive(jobRole.id, nextStatus);
+      toast.success(nextStatus ? "Função/cargo reativada." : "Função/cargo inativada.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível atualizar o status da função/cargo.";
+      toast.error(message);
     }
   };
 
@@ -218,6 +222,9 @@ const JobRoles: React.FC = () => {
               <DialogHeader className="border-b pb-3">
                 <DialogTitle className="text-xl">{editing ? "Editar função/cargo" : "Nova função/cargo"}</DialogTitle>
                 <p className="text-sm text-muted-foreground">Cadastro administrativo padronizado conforme a tela piloto de funcionários.</p>
+                <p className="text-xs text-muted-foreground">
+                  Empresa ativa no contexto global: <strong>{selectedCompany?.name || "nenhuma empresa selecionada"}</strong>.
+                </p>
               </DialogHeader>
 
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-3 pr-1">
@@ -398,8 +405,19 @@ const JobRoles: React.FC = () => {
                           <DropdownMenuItem onClick={() => openEdit(jobRole)}>
                             <Pencil className="mr-2 h-4 w-4" /> Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive" onClick={() => void handleDelete(jobRole.id)}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                          <DropdownMenuItem
+                            className={jobRole.isActive ? "text-destructive" : ""}
+                            onClick={() => void handleStatusToggle(jobRole)}
+                          >
+                            {jobRole.isActive ? (
+                              <>
+                                <X className="mr-2 h-4 w-4" /> Inativar
+                              </>
+                            ) : (
+                              <>
+                                <Check className="mr-2 h-4 w-4" /> Reativar
+                              </>
+                            )}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

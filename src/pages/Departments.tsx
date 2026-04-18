@@ -21,7 +21,6 @@ import {
   Save,
   Search,
   SlidersHorizontal,
-  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -56,7 +55,7 @@ const getInitialFilters = (): FilterState => ({
 });
 
 const Departments: React.FC = () => {
-  const { companies, selectedCompany, allDepartments: departments, addDepartment, updateDepartment, deleteDepartment, isLoading } = usePayroll();
+  const { companies, selectedCompany, allDepartments: departments, addDepartment, updateDepartment, setDepartmentActive, isLoading } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
   const [form, setForm] = useState<FormState>(getInitialForm());
@@ -90,7 +89,8 @@ const Departments: React.FC = () => {
 
   const openNew = () => {
     setEditing(null);
-    setForm(getInitialForm(selectedCompany?.id || ""));
+    // Comentário: exigimos seleção explícita da empresa no novo cadastro para reduzir criação acidental por contexto herdado.
+    setForm(getInitialForm());
     setOpen(true);
   };
 
@@ -122,17 +122,20 @@ const Departments: React.FC = () => {
         toast.success("Setor criado.");
       }
       setOpen(false);
-    } catch {
-      toast.error("Não foi possível salvar o setor.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível salvar o setor.";
+      toast.error(message);
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleStatusToggle = async (department: Department) => {
+    const nextStatus = !department.isActive;
     try {
-      await deleteDepartment(id);
-      toast.success("Setor removido.");
-    } catch {
-      toast.error("Não foi possível remover o setor.");
+      await setDepartmentActive(department.id, nextStatus);
+      toast.success(nextStatus ? "Setor reativado." : "Setor inativado.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível atualizar o status do setor.";
+      toast.error(message);
     }
   };
 
@@ -256,6 +259,9 @@ const Departments: React.FC = () => {
               <DialogHeader className="border-b pb-3">
                 <DialogTitle className="text-xl">{editing ? "Editar setor" : "Novo setor"}</DialogTitle>
                 <p className="text-sm text-muted-foreground">Cadastro administrativo padronizado conforme a tela piloto de funcionários.</p>
+                <p className="text-xs text-muted-foreground">
+                  Empresa ativa no contexto global: <strong>{selectedCompany?.name || "nenhuma empresa selecionada"}</strong>.
+                </p>
               </DialogHeader>
 
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-3 pr-1">
@@ -446,8 +452,19 @@ const Departments: React.FC = () => {
                           <DropdownMenuItem onClick={() => openEdit(department)}>
                             <Pencil className="mr-2 h-4 w-4" /> Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive" onClick={() => void handleDelete(department.id)}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                          <DropdownMenuItem
+                            className={department.isActive ? "text-destructive" : ""}
+                            onClick={() => void handleStatusToggle(department)}
+                          >
+                            {department.isActive ? (
+                              <>
+                                <X className="mr-2 h-4 w-4" /> Inativar
+                              </>
+                            ) : (
+                              <>
+                                <Check className="mr-2 h-4 w-4" /> Reativar
+                              </>
+                            )}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

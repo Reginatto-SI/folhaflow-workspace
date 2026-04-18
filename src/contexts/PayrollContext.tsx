@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { Company, Department, Employee, JobRole, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface PayrollContextType {
   companies: Company[];
@@ -31,10 +32,10 @@ interface PayrollContextType {
   deleteEmployee: (id: string) => Promise<void>;
   addDepartment: (department: Omit<Department, "id">) => Promise<void>;
   updateDepartment: (id: string, updates: Partial<Department>) => Promise<void>;
-  deleteDepartment: (id: string) => Promise<void>;
+  setDepartmentActive: (id: string, isActive: boolean) => Promise<void>;
   addJobRole: (jobRole: Omit<JobRole, "id">) => Promise<void>;
   updateJobRole: (id: string, updates: Partial<JobRole>) => Promise<void>;
-  deleteJobRole: (id: string) => Promise<void>;
+  setJobRoleActive: (id: string, isActive: boolean) => Promise<void>;
   addRubric: (rubric: Omit<Rubric, "id">) => Promise<void>;
   updateRubric: (id: string, updates: Partial<Rubric>) => Promise<void>;
   deleteRubric: (id: string) => Promise<void>;
@@ -316,6 +317,8 @@ export const usePayroll = () => {
 };
 
 export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { loading: authLoading, hasPermission } = useAuth();
+  const canViewStructure = hasPermission("estrutura.view");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
@@ -385,15 +388,25 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const loadData = useCallback(async () => {
+    if (authLoading) return;
     setIsLoading(true);
     setLoadError(null);
 
-    // Comentário: carregamos cadastros administrativos da mesma origem para manter o padrão piloto consistente e reaproveitável.
+    // Comentário: carregamos catálogo de estrutura somente quando a permissão existe.
+    // Isso evita requisição desnecessária de /departments e /job_roles para perfis sem acesso.
+    const departmentsRequest = canViewStructure
+      ? supabase.from("departments").select("id, company_id, name, is_active").order("name", { ascending: true })
+      : Promise.resolve({ data: [], error: null });
+    const jobRolesRequest = canViewStructure
+      ? supabase.from("job_roles").select("id, company_id, name, is_active").order("name", { ascending: true })
+      : Promise.resolve({ data: [], error: null });
+
+    // Comentário: mantemos os demais cadastros na mesma origem para preservar o padrão já existente no provider.
     const [companiesRes, employeesRes, departmentsRes, rolesRes, rubricsRes, payrollEntriesRes] = await Promise.all([
       supabase.from("companies").select("id, name, cnpj, address, is_active").order("name", { ascending: true }),
       supabase.from("employees").select("*").order("name", { ascending: true }),
-      supabase.from("departments").select("id, company_id, name, is_active").order("name", { ascending: true }),
-      supabase.from("job_roles").select("id, company_id, name, is_active").order("name", { ascending: true }),
+      departmentsRequest,
+      jobRolesRequest,
       supabase
         .from("rubricas")
         .select(RUBRICA_SELECT_WITH_ITEMS)
@@ -446,11 +459,12 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setPayrollCatalogErrors(nextCatalogErrors);
 
     setIsLoading(false);
-  }, []);
+  }, [authLoading, canViewStructure]);
 
   useEffect(() => {
+    if (authLoading) return;
     void loadData();
-  }, [loadData]);
+  }, [authLoading, loadData]);
 
   // Comentário: nesta fase, a listagem de /funcionarios usa companyId como empresa registrada.
   // A participação em folha por múltiplas empresas do grupo será modelada em camada própria futura.
@@ -626,6 +640,22 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const updateDepartment = useCallback(async (id: string, updates: Partial<Department>) => {
+    if (updates.companyId !== undefined) {
+      const current = allDepartments.find((department) => department.id === id);
+      const isCompanyChanging = !!current && current.companyId !== updates.companyId;
+      if (isCompanyChanging) {
+        // Comentário: evitamos inconsistência cross-company quando já existem funcionários vinculados ao setor.
+        const { count, error: linksError } = await supabase
+          .from("employees")
+          .select("id", { count: "exact", head: true })
+          .eq("department_id", id);
+        if (linksError) throw linksError;
+        if ((count ?? 0) > 0) {
+          throw new Error("Não é permitido alterar a empresa de um setor que possui funcionários vinculados.");
+        }
+      }
+    }
+
     const payload = {
       ...(updates.companyId !== undefined ? { company_id: updates.companyId } : {}),
       ...(updates.name !== undefined ? { name: normalizeRequiredText(updates.name) } : {}),
@@ -636,13 +666,19 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (error || !data) throw error;
 
     setAllDepartments((prev) => prev.map((department) => (department.id === id ? mapDepartmentRowToModel(data) : department)));
-  }, []);
+  }, [allDepartments]);
 
-  const deleteDepartment = useCallback(async (id: string) => {
-    const { error } = await supabase.from("departments").delete().eq("id", id);
-    if (error) throw error;
+  const setDepartmentActive = useCallback(async (id: string, isActive: boolean) => {
+    // Comentário: PRD-06 exige inativação/reativação em vez de exclusão física.
+    const { data, error } = await supabase
+      .from("departments")
+      .update({ is_active: isActive })
+      .eq("id", id)
+      .select("id, company_id, name, is_active")
+      .single();
+    if (error || !data) throw error;
 
-    setAllDepartments((prev) => prev.filter((department) => department.id !== id));
+    setAllDepartments((prev) => prev.map((department) => (department.id === id ? mapDepartmentRowToModel(data) : department)));
   }, []);
 
   const addJobRole = useCallback(async (jobRole: Omit<JobRole, "id">) => {
@@ -657,6 +693,22 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const updateJobRole = useCallback(async (id: string, updates: Partial<JobRole>) => {
+    if (updates.companyId !== undefined) {
+      const current = allJobRoles.find((jobRole) => jobRole.id === id);
+      const isCompanyChanging = !!current && current.companyId !== updates.companyId;
+      if (isCompanyChanging) {
+        // Comentário: evitamos inconsistência cross-company quando já existem funcionários vinculados ao cargo.
+        const { count, error: linksError } = await supabase
+          .from("employees")
+          .select("id", { count: "exact", head: true })
+          .eq("job_role_id", id);
+        if (linksError) throw linksError;
+        if ((count ?? 0) > 0) {
+          throw new Error("Não é permitido alterar a empresa de uma função/cargo que possui funcionários vinculados.");
+        }
+      }
+    }
+
     const payload = {
       ...(updates.companyId !== undefined ? { company_id: updates.companyId } : {}),
       ...(updates.name !== undefined ? { name: normalizeRequiredText(updates.name) } : {}),
@@ -667,13 +719,19 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (error || !data) throw error;
 
     setAllJobRoles((prev) => prev.map((jobRole) => (jobRole.id === id ? mapJobRoleRowToModel(data) : jobRole)));
-  }, []);
+  }, [allJobRoles]);
 
-  const deleteJobRole = useCallback(async (id: string) => {
-    const { error } = await supabase.from("job_roles").delete().eq("id", id);
-    if (error) throw error;
+  const setJobRoleActive = useCallback(async (id: string, isActive: boolean) => {
+    // Comentário: PRD-06 exige inativação/reativação em vez de exclusão física.
+    const { data, error } = await supabase
+      .from("job_roles")
+      .update({ is_active: isActive })
+      .eq("id", id)
+      .select("id, company_id, name, is_active")
+      .single();
+    if (error || !data) throw error;
 
-    setAllJobRoles((prev) => prev.filter((jobRole) => jobRole.id !== id));
+    setAllJobRoles((prev) => prev.map((jobRole) => (jobRole.id === id ? mapJobRoleRowToModel(data) : jobRole)));
   }, []);
 
   const addRubric = useCallback(async (rubric: Omit<Rubric, "id">) => {
@@ -790,10 +848,10 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteEmployee,
         addDepartment,
         updateDepartment,
-        deleteDepartment,
+        setDepartmentActive,
         addJobRole,
         updateJobRole,
-        deleteJobRole,
+        setJobRoleActive,
         addRubric,
         updateRubric,
         deleteRubric,
