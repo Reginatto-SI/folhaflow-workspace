@@ -86,7 +86,6 @@ export type Database = {
           bank_branch: string | null
           bank_name: string | null
           bank_pix_key: string | null
-          base_salary: number
           company_id: string
           cpf: string
           created_at: string
@@ -110,7 +109,6 @@ export type Database = {
           bank_branch?: string | null
           bank_name?: string | null
           bank_pix_key?: string | null
-          base_salary?: number
           company_id: string
           cpf: string
           created_at?: string
@@ -134,7 +132,6 @@ export type Database = {
           bank_branch?: string | null
           bank_name?: string | null
           bank_pix_key?: string | null
-          base_salary?: number
           company_id?: string
           cpf?: string
           created_at?: string
