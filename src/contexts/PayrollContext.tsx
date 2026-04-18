@@ -83,6 +83,28 @@ export const isValidCnpj = (value: string): boolean => {
   return d1 === Number(cnpj[12]) && d2 === Number(cnpj[13]);
 };
 
+const isValidCpf = (value: string) => {
+  const cpf = (value || "").replace(/\D/g, "");
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  const calcDigit = (slice: string, factor: number) => {
+    const total = slice
+      .split("")
+      .reduce((sum, digit) => sum + Number(digit) * factor--, 0);
+    const result = 11 - (total % 11);
+    return result > 9 ? 0 : result;
+  };
+  const firstDigit = calcDigit(cpf.slice(0, 9), 10);
+  const secondDigit = calcDigit(cpf.slice(0, 10), 11);
+  return firstDigit === Number(cpf[9]) && secondDigit === Number(cpf[10]);
+};
+
+const isValidCpfOrCnpj = (value: string) => {
+  const digits = (value || "").replace(/\D/g, "");
+  if (digits.length === 11) return isValidCpf(digits);
+  if (digits.length === 14) return isValidCnpj(digits);
+  return false;
+};
+
 const mapDepartmentRowToModel = (row: { id: string; company_id: string; name: string; is_active: boolean }): Department => ({
   id: row.id,
   companyId: row.company_id,
@@ -485,10 +507,12 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
 
   const addCompany = useCallback(async (company: Omit<Company, "id">) => {
+    // Comentário: o campo "cnpj" mantém compatibilidade histórica, mas agora aceita CPF ou CNPJ no cadastro.
     const cnpjDigits = (company.cnpj || "").replace(/\D/g, "");
     const address = (company.address || "").trim();
     if (!address) throw new Error("Endereço é obrigatório.");
-    if (cnpjDigits.length !== 14) throw new Error("CNPJ inválido.");
+    // Comentário: persistência continua normalizada (somente dígitos), sem pontuação de máscara.
+    if (!isValidCpfOrCnpj(cnpjDigits)) throw new Error("CPF/CNPJ inválido.");
 
     const { data, error } = await supabase
       .from("companies")
@@ -501,9 +525,9 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .select("id, name, cnpj, address, is_active")
       .single();
     if (error || !data) {
-      // Comentário: 23505 = unique_violation (CNPJ duplicado).
+      // Comentário: 23505 = unique_violation (CPF/CNPJ duplicado no campo legado cnpj).
       if ((error as { code?: string } | null)?.code === "23505") {
-        throw new Error("CNPJ já cadastrado.");
+        throw new Error("CPF/CNPJ já cadastrado.");
       }
       throw error;
     }
@@ -517,7 +541,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (updates.name !== undefined) payload.name = normalizeRequiredText(updates.name);
     if (updates.cnpj !== undefined) {
       const cnpjDigits = updates.cnpj.replace(/\D/g, "");
-      if (cnpjDigits.length !== 14) throw new Error("CNPJ inválido.");
+      if (!isValidCpfOrCnpj(cnpjDigits)) throw new Error("CPF/CNPJ inválido.");
       payload.cnpj = cnpjDigits;
     }
     if (updates.address !== undefined) {
@@ -535,7 +559,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .single();
     if (error || !data) {
       if ((error as { code?: string } | null)?.code === "23505") {
-        throw new Error("CNPJ já cadastrado.");
+        throw new Error("CPF/CNPJ já cadastrado.");
       }
       throw error;
     }
