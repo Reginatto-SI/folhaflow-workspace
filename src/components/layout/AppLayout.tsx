@@ -65,21 +65,30 @@ function formatBuildDateTime(iso: string): string {
   }
 }
 
-const mainNavItems = [
-  { to: "/central-de-folha", label: "Central de Folha", icon: FileSpreadsheet },
+import type { AppPermission } from "@/contexts/AuthContext";
+
+type NavItem = {
+  to: string;
+  label: string;
+  icon: typeof Building2;
+  permission: AppPermission;
+};
+
+const mainNavItems: NavItem[] = [
+  { to: "/central-de-folha", label: "Central de Folha", icon: FileSpreadsheet, permission: "folha.operar" },
 ];
 
-const cadastrosNavItems = [
-  { to: "/empresas", label: "Empresas", icon: Building2 },
-  { to: "/funcionarios", label: "Funcionários", icon: Users },
-  { to: "/setores", label: "Setores", icon: FolderTree },
-  { to: "/funcoes-cargos", label: "Funções/Cargos", icon: BriefcaseBusiness },
-  { to: "/rubricas", label: "Rubricas", icon: NotebookText },
-  { to: "/usuarios", label: "Usuários", icon: UserCircle },
+const cadastrosNavItems: NavItem[] = [
+  { to: "/empresas", label: "Empresas", icon: Building2, permission: "empresas.view" },
+  { to: "/funcionarios", label: "Funcionários", icon: Users, permission: "funcionarios.view" },
+  { to: "/setores", label: "Setores", icon: FolderTree, permission: "estrutura.view" },
+  { to: "/funcoes-cargos", label: "Funções/Cargos", icon: BriefcaseBusiness, permission: "estrutura.view" },
+  { to: "/rubricas", label: "Rubricas", icon: NotebookText, permission: "rubricas.manage" },
+  { to: "/usuarios", label: "Usuários", icon: UserCircle, permission: "usuarios.manage" },
 ];
 
-const secondaryNavItems = [
-  { to: "/configuracoes", label: "Configurações", icon: Settings },
+const secondaryNavItems: NavItem[] = [
+  { to: "/configuracoes", label: "Configurações", icon: Settings, permission: "configuracoes.manage" },
 ];
 
 const routeLabels: Record<string, string> = {
@@ -101,12 +110,18 @@ const BUILD_DATETIME = formatBuildDateTime(BUILD_TIME_ISO);
 function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
+  const { hasPermission } = useAuth();
   const collapsed = state === "collapsed";
-  const isCadastrosRoute = cadastrosNavItems.some((item) => location.pathname.startsWith(item.to));
+
+  // Filtra os menus pelo conjunto de permissões do usuário logado.
+  const visibleMain = mainNavItems.filter((i) => hasPermission(i.permission));
+  const visibleCadastros = cadastrosNavItems.filter((i) => hasPermission(i.permission));
+  const visibleSecondary = secondaryNavItems.filter((i) => hasPermission(i.permission));
+
+  const isCadastrosRoute = visibleCadastros.some((item) => location.pathname.startsWith(item.to));
   const [cadastrosOpen, setCadastrosOpen] = React.useState(isCadastrosRoute);
 
   React.useEffect(() => {
-    // Mantém o grupo "Cadastros" aberto automaticamente durante a navegação nas rotas filhas.
     if (isCadastrosRoute) {
       setCadastrosOpen(true);
     }
@@ -132,7 +147,7 @@ function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.map((item) => (
+              {visibleMain.map((item) => (
                 <SidebarMenuItem key={item.to}>
                   <SidebarMenuButton asChild tooltip={item.label}>
                     <NavLink
@@ -148,42 +163,44 @@ function AppSidebar() {
                 </SidebarMenuItem>
               ))}
 
-              {/* Grupo hierárquico de cadastros para reduzir ruído visual no menu principal. */}
-              <Collapsible open={cadastrosOpen} onOpenChange={setCadastrosOpen}>
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      tooltip="Cadastros"
-                      isActive={isCadastrosRoute}
-                      className="text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    >
-                      <Building2 className="h-4 w-4 shrink-0" />
-                      {!collapsed && <span>Cadastros</span>}
-                      {!collapsed && (
-                        <ChevronDown
-                          className={`ml-auto h-4 w-4 transition-transform ${cadastrosOpen ? "rotate-180" : ""}`}
-                        />
-                      )}
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {cadastrosNavItems.map((item) => (
-                        <SidebarMenuSubItem key={item.to}>
-                          <SidebarMenuSubButton asChild isActive={location.pathname.startsWith(item.to)}>
-                            <NavLink to={item.to} className="text-sidebar-foreground/70 hover:text-sidebar-foreground">
-                              <item.icon className="h-4 w-4 shrink-0" />
-                              <span>{item.label}</span>
-                            </NavLink>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+              {/* Grupo "Cadastros" oculto se o usuário não tem nenhum item permitido. */}
+              {visibleCadastros.length > 0 && (
+                <Collapsible open={cadastrosOpen} onOpenChange={setCadastrosOpen}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        tooltip="Cadastros"
+                        isActive={isCadastrosRoute}
+                        className="text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                      >
+                        <Building2 className="h-4 w-4 shrink-0" />
+                        {!collapsed && <span>Cadastros</span>}
+                        {!collapsed && (
+                          <ChevronDown
+                            className={`ml-auto h-4 w-4 transition-transform ${cadastrosOpen ? "rotate-180" : ""}`}
+                          />
+                        )}
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {visibleCadastros.map((item) => (
+                          <SidebarMenuSubItem key={item.to}>
+                            <SidebarMenuSubButton asChild isActive={location.pathname.startsWith(item.to)}>
+                              <NavLink to={item.to} className="text-sidebar-foreground/70 hover:text-sidebar-foreground">
+                                <item.icon className="h-4 w-4 shrink-0" />
+                                <span>{item.label}</span>
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )}
 
-              {secondaryNavItems.map((item) => (
+              {visibleSecondary.map((item) => (
                 <SidebarMenuItem key={item.to}>
                   <SidebarMenuButton asChild tooltip={item.label}>
                     <NavLink

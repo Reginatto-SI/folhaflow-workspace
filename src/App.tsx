@@ -7,6 +7,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { PayrollProvider } from "@/contexts/PayrollContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import PermissionRoute from "@/components/auth/PermissionRoute";
 import AppLayout from "@/components/layout/AppLayout";
 import Index from "./pages/Index";
 import Companies from "./pages/Companies";
@@ -38,14 +39,70 @@ const App = () => (
                       <AppLayout>
                         <Routes>
                           <Route path="/" element={<Navigate to="/central-de-folha" replace />} />
-                          <Route path="/central-de-folha" element={<Index />} />
-                          <Route path="/empresas" element={<Companies />} />
-                          <Route path="/funcionarios" element={<Employees />} />
-                          <Route path="/setores" element={<Departments />} />
-                          <Route path="/funcoes-cargos" element={<JobRoles />} />
-                          <Route path="/rubricas" element={<Rubrics />} />
-                          <Route path="/usuarios" element={<UsersAdmin />} />
-                          <Route path="/configuracoes" element={<SettingsPage />} />
+                          <Route
+                            path="/central-de-folha"
+                            element={
+                              <PermissionRoute permission="folha.operar">
+                                <Index />
+                              </PermissionRoute>
+                            }
+                          />
+                          <Route
+                            path="/empresas"
+                            element={
+                              <PermissionRoute permission="empresas.view">
+                                <Companies />
+                              </PermissionRoute>
+                            }
+                          />
+                          <Route
+                            path="/funcionarios"
+                            element={
+                              <PermissionRoute permission="funcionarios.view">
+                                <Employees />
+                              </PermissionRoute>
+                            }
+                          />
+                          <Route
+                            path="/setores"
+                            element={
+                              <PermissionRoute permission="estrutura.view">
+                                <Departments />
+                              </PermissionRoute>
+                            }
+                          />
+                          <Route
+                            path="/funcoes-cargos"
+                            element={
+                              <PermissionRoute permission="estrutura.view">
+                                <JobRoles />
+                              </PermissionRoute>
+                            }
+                          />
+                          <Route
+                            path="/rubricas"
+                            element={
+                              <PermissionRoute permission="rubricas.manage">
+                                <Rubrics />
+                              </PermissionRoute>
+                            }
+                          />
+                          <Route
+                            path="/usuarios"
+                            element={
+                              <PermissionRoute permission="usuarios.manage">
+                                <UsersAdmin />
+                              </PermissionRoute>
+                            }
+                          />
+                          <Route
+                            path="/configuracoes"
+                            element={
+                              <PermissionRoute permission="configuracoes.manage">
+                                <SettingsPage />
+                              </PermissionRoute>
+                            }
+                          />
                           <Route path="*" element={<NotFound />} />
                         </Routes>
                       </AppLayout>

@@ -6,6 +6,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Check,
   MoreHorizontal,
   Pencil,
@@ -24,6 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAuth, type AppRole } from "@/contexts/AuthContext";
 
 type Profile = {
   id: string;
@@ -31,17 +39,32 @@ type Profile = {
   email: string;
   is_active: boolean;
   created_at: string;
+  role: AppRole | null;
 };
 
 type FormState = {
   name: string;
   email: string;
   password: string;
+  role: AppRole;
 };
 
-const getInitialForm = (): FormState => ({ name: "", email: "", password: "" });
+const ROLE_LABEL: Record<AppRole, string> = {
+  admin: "Administrador",
+  operacional: "Operacional",
+  consulta: "Consulta",
+};
+
+const ROLE_BADGE: Record<AppRole, "default" | "secondary" | "outline"> = {
+  admin: "default",
+  operacional: "secondary",
+  consulta: "outline",
+};
+
+const getInitialForm = (): FormState => ({ name: "", email: "", password: "", role: "operacional" });
 
 const UsersAdmin: React.FC = () => {
+  const { user: currentUser } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -51,16 +74,26 @@ const UsersAdmin: React.FC = () => {
   const [search, setSearch] = useState("");
 
   const fetchProfiles = async () => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("created_at", { ascending: true });
+    // Busca perfis e roles em paralelo, depois faz merge no cliente
+    const [profilesRes, rolesRes] = await Promise.all([
+      supabase.from("profiles").select("*").order("created_at", { ascending: true }),
+      supabase.from("user_roles").select("user_id, role"),
+    ]);
 
-    if (error) {
+    if (profilesRes.error) {
       toast.error("Erro ao carregar usuários.");
       return;
     }
-    setProfiles((data as Profile[]) || []);
+    const roleByUser = new Map<string, AppRole>();
+    (rolesRes.data ?? []).forEach((r) => {
+      roleByUser.set(r.user_id, r.role as AppRole);
+    });
+
+    const merged: Profile[] = (profilesRes.data ?? []).map((p) => ({
+      ...(p as Omit<Profile, "role">),
+      role: roleByUser.get((p as { id: string }).id) ?? null,
+    }));
+    setProfiles(merged);
     setLoading(false);
   };
 
@@ -90,7 +123,12 @@ const UsersAdmin: React.FC = () => {
 
   const openEdit = (profile: Profile) => {
     setEditing(profile);
-    setForm({ name: profile.name, email: profile.email, password: "" });
+    setForm({
+      name: profile.name,
+      email: profile.email,
+      password: "",
+      role: profile.role ?? "operacional",
+    });
     setOpen(true);
   };
 
@@ -100,6 +138,10 @@ const UsersAdmin: React.FC = () => {
 
     if (!name || !email) {
       toast.error("Preencha nome e e-mail.");
+      return;
+    }
+    if (!form.role) {
+      toast.error("Selecione o papel do usuário.");
       return;
     }
 
@@ -113,10 +155,21 @@ const UsersAdmin: React.FC = () => {
       return;
     }
 
+    // Salvaguarda no cliente: admin não pode rebaixar a si mesmo (também é validado no backend)
+    if (editing && currentUser?.id === editing.id && editing.role === "admin" && form.role !== "admin") {
+      toast.error("Você não pode remover seu próprio papel de administrador.");
+      return;
+    }
+
     setSaving(true);
     try {
       if (editing) {
-        const payload: Record<string, unknown> = { userId: editing.id, name, email };
+        const payload: Record<string, unknown> = {
+          userId: editing.id,
+          name,
+          email,
+          role: form.role,
+        };
         if (form.password) payload.password = form.password;
 
         const { data, error } = await supabase.functions.invoke("admin-update-user", {
@@ -126,7 +179,7 @@ const UsersAdmin: React.FC = () => {
         toast.success("Usuário atualizado.");
       } else {
         const { data, error } = await supabase.functions.invoke("admin-create-user", {
-          body: { name, email, password: form.password },
+          body: { name, email, password: form.password, role: form.role },
         });
         if (error || data?.error) throw new Error(data?.error || error?.message);
         toast.success("Usuário criado.");
@@ -142,6 +195,10 @@ const UsersAdmin: React.FC = () => {
   };
 
   const toggleActive = async (profile: Profile) => {
+    if (currentUser?.id === profile.id && profile.is_active) {
+      toast.error("Você não pode inativar a si mesmo.");
+      return;
+    }
     try {
       const { data, error } = await supabase.functions.invoke("admin-update-user", {
         body: { userId: profile.id, isActive: !profile.is_active },
@@ -192,6 +249,27 @@ const UsersAdmin: React.FC = () => {
                   value={form.email}
                   onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Papel *</Label>
+                <Select
+                  value={form.role}
+                  onValueChange={(v) => setForm((p) => ({ ...p, role: v as AppRole }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o papel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Administrador</SelectItem>
+                    <SelectItem value="operacional">Operacional</SelectItem>
+                    <SelectItem value="consulta">Consulta</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  {form.role === "admin" && "Acesso total ao sistema."}
+                  {form.role === "operacional" && "Opera folha, empresas, funcionários e estrutura."}
+                  {form.role === "consulta" && "Acesso somente leitura a empresas, funcionários e relatórios."}
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label>{editing ? "Nova senha (opcional)" : "Senha *"}</Label>
@@ -270,6 +348,7 @@ const UsersAdmin: React.FC = () => {
               <tr className="border-b bg-muted/30 text-left text-xs font-medium text-muted-foreground">
                 <th className="px-4 py-3">Nome</th>
                 <th className="px-4 py-3">E-mail</th>
+                <th className="px-4 py-3">Papel</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Ações</th>
               </tr>
@@ -277,7 +356,7 @@ const UsersAdmin: React.FC = () => {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                     Nenhum usuário encontrado.
                   </td>
                 </tr>
@@ -286,6 +365,15 @@ const UsersAdmin: React.FC = () => {
                   <tr key={p.id} className="border-b last:border-0 hover:bg-muted/20">
                     <td className="px-4 py-3 font-medium">{p.name}</td>
                     <td className="px-4 py-3 text-muted-foreground">{p.email}</td>
+                    <td className="px-4 py-3">
+                      {p.role ? (
+                        <Badge variant={ROLE_BADGE[p.role]}>{ROLE_LABEL[p.role]}</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          Sem papel
+                        </Badge>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <Badge variant={p.is_active ? "default" : "secondary"}>
                         {p.is_active ? "Ativo" : "Inativo"}
