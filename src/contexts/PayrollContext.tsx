@@ -506,7 +506,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     if (!rubricsRes.error && rubricsRes.data) {
-      setRubrics(rubricsRes.data.map(mapRubricRowToModel));
+      setRubrics(rubricsRes.data.map((row) => mapRubricRowToModel(row as Parameters<typeof mapRubricRowToModel>[0])));
     }
 
     if (!payrollEntriesRes.error && payrollEntriesRes.data) {
