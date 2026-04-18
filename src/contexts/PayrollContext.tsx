@@ -365,10 +365,11 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(null);
 
     // Comentário: carregamos cadastros administrativos da mesma origem para manter o padrão piloto consistente e reaproveitável.
     const [companiesRes, employeesRes, departmentsRes, rolesRes, rubricsRes, payrollEntriesRes] = await Promise.all([
-      supabase.from("companies").select("id, name, cnpj, address").order("name", { ascending: true }),
+      supabase.from("companies").select("id, name, cnpj, address, is_active").order("name", { ascending: true }),
       supabase.from("employees").select("*").order("name", { ascending: true }),
       supabase.from("departments").select("id, company_id, name, is_active").order("name", { ascending: true }),
       supabase.from("job_roles").select("id, company_id, name, is_active").order("name", { ascending: true }),
@@ -386,10 +387,13 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!companiesRes.error && companiesRes.data) {
       const loadedCompanies = companiesRes.data.map(mapCompanyRowToModel);
       setCompanies(loadedCompanies);
+      // Comentário: default selecionada deve ser uma empresa ATIVA (PRD-05 §5.4).
       setSelectedCompany((prev) => {
-        if (prev && loadedCompanies.some((company) => company.id === prev.id)) return prev;
-        return loadedCompanies[0] ?? null;
+        if (prev && loadedCompanies.some((company) => company.id === prev.id && company.isActive)) return prev;
+        return loadedCompanies.find((c) => c.isActive) ?? null;
       });
+    } else if (companiesRes.error) {
+      setLoadError(`Falha ao carregar empresas: ${companiesRes.error.message}`);
     }
 
     if (!employeesRes.error && employeesRes.data) {
