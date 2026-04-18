@@ -344,6 +344,16 @@ const Rubrics: React.FC = () => {
         await addRubric(normalizedForm);
         toast.success("Rubrica criada.");
       }
+      // PRD-02: ordem duplicada não bloqueia (tiebreak por id na listagem),
+      // mas avisa o admin para evitar ambiguidade silenciosa em motor futuro.
+      const collides = rubrics.some(
+        (r) => r.isActive && r.id !== editing?.id && r.order === normalizedForm.order
+      );
+      if (collides && normalizedForm.isActive) {
+        toast.warning(
+          `Outra rubrica ativa já usa a ordem ${normalizedForm.order}. Empate resolvido por id — revise se precisar de sequência única.`
+        );
+      }
       setOpen(false);
     } catch (error) {
       console.error("[Rubrics] Falha ao salvar rubrica", { error, payload: normalizedForm, editingId: editing?.id });
