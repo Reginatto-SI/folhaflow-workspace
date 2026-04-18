@@ -65,21 +65,30 @@ function formatBuildDateTime(iso: string): string {
   }
 }
 
-const mainNavItems = [
-  { to: "/central-de-folha", label: "Central de Folha", icon: FileSpreadsheet },
+import type { AppPermission } from "@/contexts/AuthContext";
+
+type NavItem = {
+  to: string;
+  label: string;
+  icon: typeof Building2;
+  permission: AppPermission;
+};
+
+const mainNavItems: NavItem[] = [
+  { to: "/central-de-folha", label: "Central de Folha", icon: FileSpreadsheet, permission: "folha.operar" },
 ];
 
-const cadastrosNavItems = [
-  { to: "/empresas", label: "Empresas", icon: Building2 },
-  { to: "/funcionarios", label: "Funcionários", icon: Users },
-  { to: "/setores", label: "Setores", icon: FolderTree },
-  { to: "/funcoes-cargos", label: "Funções/Cargos", icon: BriefcaseBusiness },
-  { to: "/rubricas", label: "Rubricas", icon: NotebookText },
-  { to: "/usuarios", label: "Usuários", icon: UserCircle },
+const cadastrosNavItems: NavItem[] = [
+  { to: "/empresas", label: "Empresas", icon: Building2, permission: "empresas.view" },
+  { to: "/funcionarios", label: "Funcionários", icon: Users, permission: "funcionarios.view" },
+  { to: "/setores", label: "Setores", icon: FolderTree, permission: "estrutura.view" },
+  { to: "/funcoes-cargos", label: "Funções/Cargos", icon: BriefcaseBusiness, permission: "estrutura.view" },
+  { to: "/rubricas", label: "Rubricas", icon: NotebookText, permission: "rubricas.manage" },
+  { to: "/usuarios", label: "Usuários", icon: UserCircle, permission: "usuarios.manage" },
 ];
 
-const secondaryNavItems = [
-  { to: "/configuracoes", label: "Configurações", icon: Settings },
+const secondaryNavItems: NavItem[] = [
+  { to: "/configuracoes", label: "Configurações", icon: Settings, permission: "configuracoes.manage" },
 ];
 
 const routeLabels: Record<string, string> = {
