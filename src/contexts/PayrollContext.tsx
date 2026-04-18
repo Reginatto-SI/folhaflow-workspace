@@ -872,7 +872,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .single();
     if (error) throw error;
 
-    setRubrics((prev) => prev.map((item) => (item.id === id ? mapRubricRowToModel(data) : item)));
+    setRubrics((prev) => prev.map((item) => (item.id === id ? mapRubricRowToModel(data as Parameters<typeof mapRubricRowToModel>[0]) : item)));
   }, [rubrics]);
 
   // Comentário: empresas ativas para uso em filtros operacionais (Funcionários, Central de Folha) — PRD-05 §5.4.
