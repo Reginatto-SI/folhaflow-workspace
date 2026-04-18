@@ -33,22 +33,26 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-center gap-2">
-          {/* Logo oficial da tela de login (sem fallback visual). */}
+    // Layout principal ajustado para centralização real e leitura limpa em todas as telas.
+    <div className="flex min-h-screen items-center justify-center bg-primary px-4 py-8 sm:px-6">
+      {/* Fundo institucional vermelho reaproveitando o token existente `primary`. */}
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.22)] sm:p-8">
+        {/* Card branco central refinado sem borda aparente e com destaque suave. */}
+        <div className="flex flex-col items-center gap-2 text-center">
           <img
             src="/logo_Vermelha_Laranja.svg"
             alt="FolhaFlow"
-            className="h-12 w-auto"
+            className="h-14 w-auto"
           />
-
-          <p className="text-sm text-muted-foreground">Acesse sua conta</p>
+          <p className="text-sm text-slate-600">Acesse sua conta do sistema interno</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="email">E-mail</Label>
+        {/* Espaçamentos, inputs e botão refinados mantendo os componentes e tokens já existentes. */}
+        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-sm font-medium text-slate-800">
+              E-mail
+            </Label>
             <Input
               id="email"
               type="email"
@@ -56,10 +60,13 @@ const Login: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="seu@email.com"
+              className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus-visible:ring-primary/80"
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Senha</Label>
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-sm font-medium text-slate-800">
+              Senha
+            </Label>
             <Input
               id="password"
               type="password"
@@ -67,13 +74,16 @@ const Login: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
+              className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus-visible:ring-primary/80"
             />
           </div>
-          <Button type="submit" className="w-full" disabled={submitting}>
+          <Button type="submit" className="mt-2 h-11 w-full" disabled={submitting}>
             <LogIn className="mr-2 h-4 w-4" />
             {submitting ? "Entrando..." : "Entrar"}
           </Button>
         </form>
+
+        <p className="mt-6 text-center text-xs text-slate-500">Uso interno • Grupo Delicious Fish</p>
       </div>
     </div>
   );
