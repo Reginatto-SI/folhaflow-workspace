@@ -731,10 +731,10 @@ const Rubrics: React.FC = () => {
                                   <Label className="text-xs">Rubrica de origem</Label>
                                   <SearchableCombobox
                                     value={item.sourceRubricId}
-                                    items={rubricItems.filter((r) => r.value !== editing?.id)}
+                                    items={referenceableRubricItems}
                                     placeholder="Selecione a rubrica"
                                     searchPlaceholder="Buscar rubrica"
-                                    emptyMessage="Nenhuma rubrica encontrada"
+                                    emptyMessage="Nenhuma rubrica disponível (apenas base ativas — derivadas/inativas não podem compor fórmula)."
                                     onValueChange={(value) => updateFormulaItem(item.id, { sourceRubricId: value })}
                                   />
                                 </div>
