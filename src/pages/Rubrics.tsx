@@ -220,14 +220,28 @@ const Rubrics: React.FC = () => {
     setOpen(true);
   };
 
+  // PRD-02: detecta ciclo tanto em método `formula` (multi-dependência) quanto
+  // `percentual` (dependência única em `percentageBaseRubricId`).
   const getCircularError = (draft: RubricFormState, rubricId?: string): string | null => {
-    if (draft.calculationMethod !== "formula") return null;
+    if (draft.calculationMethod !== "formula" && draft.calculationMethod !== "percentual") return null;
     const currentId = rubricId || "__draft__";
     const adjacency = new Map<string, string[]>();
     rubrics.forEach((rubric) => {
-      adjacency.set(rubric.id, rubric.formulaItems.map((item) => item.sourceRubricId));
+      if (rubric.calculationMethod === "formula") {
+        adjacency.set(rubric.id, rubric.formulaItems.map((item) => item.sourceRubricId));
+      } else if (rubric.calculationMethod === "percentual" && rubric.percentageBaseRubricId) {
+        adjacency.set(rubric.id, [rubric.percentageBaseRubricId]);
+      } else {
+        adjacency.set(rubric.id, []);
+      }
     });
-    adjacency.set(currentId, draft.formulaItems.map((item) => item.sourceRubricId));
+    const draftDeps =
+      draft.calculationMethod === "formula"
+        ? draft.formulaItems.map((item) => item.sourceRubricId)
+        : draft.percentageBaseRubricId
+          ? [draft.percentageBaseRubricId]
+          : [];
+    adjacency.set(currentId, draftDeps);
 
     const visiting = new Set<string>();
     const visited = new Set<string>();
@@ -244,7 +258,11 @@ const Rubrics: React.FC = () => {
       visited.add(node);
       return false;
     };
-    return walk(currentId) ? "Referência circular detectada na fórmula." : null;
+    return walk(currentId)
+      ? draft.calculationMethod === "percentual"
+        ? "Referência circular detectada no percentual."
+        : "Referência circular detectada na fórmula."
+      : null;
   };
 
   const validateForm = (draft: RubricFormState): string | null => {
@@ -274,6 +292,11 @@ const Rubrics: React.FC = () => {
       if (!draft.percentageValue || Number(draft.percentageValue) <= 0)
         return "Percentual deve ser maior que zero.";
       if (!draft.percentageBaseRubricId) return "Selecione a rubrica de referência para o percentual.";
+      // Defesa explícita (além do filtro de UI): rubrica não pode referenciar a si mesma.
+      if (editing && draft.percentageBaseRubricId === editing.id)
+        return "Rubrica não pode referenciar ela mesma no percentual.";
+      const circular = getCircularError(draft, editing?.id);
+      if (circular) return circular;
     }
     if (draft.calculationMethod === "formula") {
       if (draft.formulaItems.length === 0) return "Rubrica de fórmula precisa de ao menos um item.";
