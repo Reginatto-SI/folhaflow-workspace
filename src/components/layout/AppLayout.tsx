@@ -110,12 +110,18 @@ const BUILD_DATETIME = formatBuildDateTime(BUILD_TIME_ISO);
 function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
+  const { hasPermission } = useAuth();
   const collapsed = state === "collapsed";
-  const isCadastrosRoute = cadastrosNavItems.some((item) => location.pathname.startsWith(item.to));
+
+  // Filtra os menus pelo conjunto de permissões do usuário logado.
+  const visibleMain = mainNavItems.filter((i) => hasPermission(i.permission));
+  const visibleCadastros = cadastrosNavItems.filter((i) => hasPermission(i.permission));
+  const visibleSecondary = secondaryNavItems.filter((i) => hasPermission(i.permission));
+
+  const isCadastrosRoute = visibleCadastros.some((item) => location.pathname.startsWith(item.to));
   const [cadastrosOpen, setCadastrosOpen] = React.useState(isCadastrosRoute);
 
   React.useEffect(() => {
-    // Mantém o grupo "Cadastros" aberto automaticamente durante a navegação nas rotas filhas.
     if (isCadastrosRoute) {
       setCadastrosOpen(true);
     }
