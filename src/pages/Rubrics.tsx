@@ -1030,8 +1030,9 @@ const Rubrics: React.FC = () => {
               </tr>
             </thead>
             <tbody>
+              {/* PRD-02: tiebreak por id garante ordem determinística quando admin usa o mesmo `order` em rubricas distintas. */}
               {[...filteredRubrics]
-                .sort((a, b) => a.order - b.order)
+                .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
                 .map((rubric) => {
                   const typeBadge = getTypeBadgeProps(rubric.type);
                   const methodBadge = getMethodBadgeProps(rubric.calculationMethod);
