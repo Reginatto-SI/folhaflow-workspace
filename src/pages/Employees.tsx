@@ -42,8 +42,6 @@ const getInitialForm = (companyId = ""): EmployeeFormState => ({
   bankBranch: "",
   bankAccount: "",
   bankPixKey: "",
-  // Comentário: mantemos esse campo por compatibilidade com a Central de Folha nesta fase.
-  baseSalary: 0,
 });
 
 // Comentário: CPF sempre é persistido sem máscara para manter consistência e facilitar validação futura no banco.
@@ -290,9 +288,9 @@ const Employees: React.FC = () => {
   const handleDelete = async (id: string) => {
     try {
       await deleteEmployee(id);
-      toast.success("Funcionário removido.");
+      toast.success("Funcionário inativado.");
     } catch {
-      toast.error("Não foi possível remover o funcionário.");
+      toast.error("Não foi possível inativar o funcionário.");
     }
   };
 
@@ -619,7 +617,7 @@ const Employees: React.FC = () => {
                       {errors.jobRoleId && <p className="text-xs text-destructive">{errors.jobRoleId}</p>}
                     </div>
                   </div>
-                  {/* Comentário: o salário base permanece no modelo por compatibilidade de folha, mas foi removido desta UI de cadastro-base. */}
+                  {/* Comentário: salário não pertence ao cadastro de funcionário; remuneração é tratada apenas na Central de Folha. */}
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
                     <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
                       <Checkbox checked={form.isActive} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked === true }))} />

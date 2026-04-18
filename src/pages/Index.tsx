@@ -15,7 +15,6 @@ import { toast } from "sonner";
 const Index = () => {
   const {
     payrollEntries,
-    employees,
     allEmployees,
     allDepartments,
     allJobRoles,
@@ -79,8 +78,10 @@ const Index = () => {
 
   const availableEmployeesForEntry = useMemo(() => {
     const alreadyInPayroll = new Set(payrollEntries.map((entry) => entry.employeeId));
-    return employees.filter((employee) => employee.isActive && !alreadyInPayroll.has(employee.id));
-  }, [employees, payrollEntries]);
+    // Comentário: empresa registrante é referência cadastral.
+    // Na operação de folha, o funcionário pode participar de qualquer empresa do grupo.
+    return allEmployees.filter((employee) => employee.isActive && !alreadyInPayroll.has(employee.id));
+  }, [allEmployees, payrollEntries]);
 
   const handleOpenNewEntry = useCallback(() => {
     setNewEmployeeId("");
@@ -97,7 +98,7 @@ const Index = () => {
       return;
     }
 
-    const employee = employees.find((item) => item.id === newEmployeeId);
+    const employee = allEmployees.find((item) => item.id === newEmployeeId);
     if (!employee) {
       toast.error("Funcionário não encontrado para lançamento.");
       return;
@@ -110,7 +111,9 @@ const Index = () => {
         companyId: selectedCompany.id,
         month: selectedMonth.month,
         year: selectedMonth.year,
-        baseSalary: employee.baseSalary,
+        // Comentário: salário não vem do cadastro de funcionário.
+        // O valor inicial da folha nasce no lançamento e pode ser ajustado na Central.
+        baseSalary: 0,
         earnings: {},
         deductions: {},
         notes: "",
@@ -128,7 +131,7 @@ const Index = () => {
     } finally {
       setIsSavingNewEntry(false);
     }
-  }, [addPayrollEntry, employees, newEmployeeId, selectedCompany, selectedMonth.month, selectedMonth.year]);
+  }, [addPayrollEntry, allEmployees, newEmployeeId, selectedCompany, selectedMonth.month, selectedMonth.year]);
 
   const clearFilters = () => {
     setSearch("");
@@ -140,12 +143,13 @@ const Index = () => {
   const selectedCreateEmployee = createEmployeeId ? allEmployees.find((e) => e.id === createEmployeeId) || null : null;
   const drawerEmployee = drawerMode === "create" ? selectedCreateEmployee : selectedEmployee;
 
-  // Comentário: no modo criação, seguimos o contexto atual (empresa/competência) e evitamos funcionário já lançado.
+  // Comentário: no modo criação, evitamos funcionário já lançado na competência,
+  // sem restringir pela empresa registrante do cadastro.
   const availableCreateEmployees: Employee[] = useMemo(() => {
     if (!selectedCompany) return [];
     const existingEmployeeIds = new Set(payrollEntries.map((entry) => entry.employeeId));
     return allEmployees.filter(
-      (employee) => employee.companyId === selectedCompany.id && employee.isActive && !existingEmployeeIds.has(employee.id)
+      (employee) => employee.isActive && !existingEmployeeIds.has(employee.id)
     );
   }, [allEmployees, payrollEntries, selectedCompany]);
 
