@@ -60,6 +60,42 @@ import {
 } from "@/components/ui/select";
 
 const normalizeText = (value: string) => value.trim().replace(/\s+/g, " ");
+const sanitizeDigits = (value: string) => value.replace(/\D/g, "");
+
+const formatCpf = (digits: string) => {
+  const d = sanitizeDigits(digits).slice(0, 11);
+  if (d.length !== 11) return d;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9, 11)}`;
+};
+
+const isValidCpf = (value: string) => {
+  const cpf = sanitizeDigits(value);
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  const calcDigit = (slice: string, factor: number) => {
+    const total = slice
+      .split("")
+      .reduce((sum, digit) => sum + Number(digit) * factor--, 0);
+    const result = 11 - (total % 11);
+    return result > 9 ? 0 : result;
+  };
+  const firstDigit = calcDigit(cpf.slice(0, 9), 10);
+  const secondDigit = calcDigit(cpf.slice(0, 10), 11);
+  return firstDigit === Number(cpf[9]) && secondDigit === Number(cpf[10]);
+};
+
+// Comentário: o campo de identificação da empresa agora aceita CPF ou CNPJ no mesmo input.
+const formatCpfOrCnpj = (value: string) => {
+  const digits = sanitizeDigits(value).slice(0, 14);
+  if (digits.length <= 11) return formatCpf(digits);
+  return formatCnpj(digits);
+};
+
+const isValidCpfOrCnpj = (value: string) => {
+  const digits = sanitizeDigits(value);
+  if (digits.length === 11) return isValidCpf(digits);
+  if (digits.length === 14) return isValidCnpj(digits);
+  return false;
+};
 
 type FormState = {
   name: string;
@@ -110,9 +146,9 @@ const Companies: React.FC = () => {
       if (filters.status === "inactive" && company.isActive) return false;
       if (filters.search) {
         const q = filters.search.toLowerCase();
-        const cnpjDigits = company.cnpj.replace(/\D/g, "");
+        const cnpjDigits = sanitizeDigits(company.cnpj);
         const matchesName = company.name.toLowerCase().includes(q);
-        const matchesCnpj = cnpjDigits.includes(q.replace(/\D/g, "")) || formatCnpj(cnpjDigits).toLowerCase().includes(q);
+        const matchesCnpj = cnpjDigits.includes(q.replace(/\D/g, "")) || formatCpfOrCnpj(cnpjDigits).toLowerCase().includes(q);
         if (!matchesName && !matchesCnpj) return false;
       }
       if (filters.address && !(company.address || "").toLowerCase().includes(filters.address.toLowerCase())) return false;
@@ -132,7 +168,7 @@ const Companies: React.FC = () => {
     setEditing(company);
     setForm({
       name: company.name,
-      cnpj: formatCnpj(company.cnpj),
+      cnpj: formatCpfOrCnpj(company.cnpj),
       address: company.address || "",
       isActive: company.isActive,
     });
@@ -140,7 +176,7 @@ const Companies: React.FC = () => {
   };
 
   const handleSave = async () => {
-    const cnpjDigits = form.cnpj.replace(/\D/g, "");
+    const cnpjDigits = sanitizeDigits(form.cnpj);
     const name = normalizeText(form.name);
     const address = normalizeText(form.address);
 
@@ -149,11 +185,11 @@ const Companies: React.FC = () => {
       return;
     }
     if (!cnpjDigits) {
-      toast.error("Informe o CNPJ.");
+      toast.error("Informe o CPF ou CNPJ.");
       return;
     }
-    if (!isValidCnpj(cnpjDigits)) {
-      toast.error("CNPJ inválido. Verifique os dígitos.");
+    if (!isValidCpfOrCnpj(cnpjDigits)) {
+      toast.error("CPF/CNPJ inválido. Verifique os dígitos.");
       return;
     }
     if (!address) {
@@ -329,17 +365,16 @@ const Companies: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>CNPJ *</Label>
+                    <Label>CPF/CNPJ *</Label>
                     <Input
                       value={form.cnpj}
-                      placeholder="00.000.000/0000-00"
+                      placeholder="000.000.000-00 ou 00.000.000/0000-00"
                       onChange={(event) => {
-                        const digits = event.target.value.replace(/\D/g, "").slice(0, 14);
-                        setForm((prev) => ({ ...prev, cnpj: digits.length === 14 ? formatCnpj(digits) : digits }));
+                        // Comentário: a máscara é apenas visual para ajudar a digitação; no save persistimos somente os dígitos.
+                        setForm((prev) => ({ ...prev, cnpj: formatCpfOrCnpj(event.target.value) }));
                       }}
                       onBlur={() => {
-                        const digits = form.cnpj.replace(/\D/g, "");
-                        if (digits.length === 14) setForm((prev) => ({ ...prev, cnpj: formatCnpj(digits) }));
+                        setForm((prev) => ({ ...prev, cnpj: formatCpfOrCnpj(prev.cnpj) }));
                       }}
                       inputMode="numeric"
                     />
@@ -428,9 +463,9 @@ const Companies: React.FC = () => {
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Search className="h-3.5 w-3.5" /> Nome ou CNPJ
+              <Search className="h-3.5 w-3.5" /> Nome ou CPF/CNPJ
             </Label>
-            <Input placeholder="Buscar por nome ou CNPJ" value={filters.search} onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))} />
+            <Input placeholder="Buscar por nome ou CPF/CNPJ" value={filters.search} onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))} />
           </div>
 
           <div className="space-y-1.5">
@@ -485,7 +520,7 @@ const Companies: React.FC = () => {
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Empresa</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">CNPJ</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">CPF/CNPJ</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Endereço</th>
                 <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Status</th>
                 <th className="w-20" />
@@ -495,7 +530,7 @@ const Companies: React.FC = () => {
               {filteredCompanies.map((company) => (
                 <tr key={company.id} className="border-b transition-colors hover:bg-muted/30">
                   <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">{company.name}</td>
-                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground tabular-nums">{formatCnpj(company.cnpj)}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground tabular-nums">{formatCpfOrCnpj(company.cnpj)}</td>
                   <td className="px-4 py-2 leading-tight text-muted-foreground">{company.address || "-"}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-center">
                     {company.isActive ? (
