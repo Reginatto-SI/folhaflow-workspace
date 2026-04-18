@@ -68,10 +68,15 @@ const NumericRubricInput: React.FC<{
   );
 };
 
-// PRD-02: nome da rubrica NUNCA define comportamento. A única verdade é `rubric.nature`.
-// Heurística antiga por nome/código foi removida — todas as rubricas ativas têm `nature` no banco.
-// Caso `nature` esteja ausente (dado legado raro), assume-se `false` (não-base) por segurança.
+// PRD-02 + PRD-01: a única verdade de comportamento é `rubric.nature`.
+// • `nature = base` → input operacional (rubrica-base ou provento/desconto manual);
+// • `nature = calculada` → DERIVADA (output do motor de cálculo). Não é editável manualmente,
+//   não aparece como campo de entrada no drawer. O cálculo real será implementado quando o
+//   motor (PRD-01) for ativado em sprint futura — até lá, derivadas existem apenas como cadastro.
+// Heurística por nome/código foi removida. `getLegacyValue` permanece SOMENTE para leitura
+// de payloads antigos persistidos por chave-nome (compat transitória).
 const isBaseRubric = (rubric: Rubric) => rubric.nature === "base";
+const isDerivedRubric = (rubric: Rubric) => rubric.nature === "calculada";
 
 const getLegacyValue = (rubric: Rubric, payload: Record<string, number>) => {
   const directById = payload[rubric.id];
@@ -117,12 +122,14 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
   const groupedRubrics = useMemo(() => {
     const base = activeRubricsOrdered.filter(isBaseRubric);
-    const nonBase = activeRubricsOrdered.filter((rubric) => !isBaseRubric(rubric));
+    // PRD-02/PRD-01: derivadas (nature=calculada) NÃO entram como input no drawer —
+    // são saídas do motor de cálculo. Filtradas defensivamente das seções operacionais.
+    const operational = activeRubricsOrdered.filter((rubric) => !isBaseRubric(rubric) && !isDerivedRubric(rubric));
 
     return {
       base,
-      proventos: nonBase.filter((rubric) => rubric.type === "provento"),
-      descontos: nonBase.filter((rubric) => rubric.type === "desconto"),
+      proventos: operational.filter((rubric) => rubric.type === "provento"),
+      descontos: operational.filter((rubric) => rubric.type === "desconto"),
     };
   }, [activeRubricsOrdered]);
 
