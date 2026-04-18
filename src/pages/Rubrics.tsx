@@ -538,27 +538,44 @@ const Rubrics: React.FC = () => {
                       </div>
                       <div className="space-y-1.5">
                         <Label>Natureza *</Label>
-                        <Select
-                          value={form.nature}
-                          onValueChange={(value) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              nature: value as RubricNature,
-                              // PRD-02: ao virar calculada (derivada), classification e override
-                              // devem ser limpos — derivadas não têm classificação nem edição manual.
-                              classification: value === "calculada" ? null : prev.classification,
-                              allowManualOverride: value === "calculada" ? false : prev.allowManualOverride,
-                            }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="base">Base (entrada na folha)</SelectItem>
-                            <SelectItem value="calculada">Calculada (derivada)</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div>
+                                <Select
+                                  value={form.nature}
+                                  disabled={editing !== null}
+                                  onValueChange={(value) =>
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      nature: value as RubricNature,
+                                      // PRD-02: ao virar calculada (derivada), classification e override
+                                      // devem ser limpos — derivadas não têm classificação nem edição manual.
+                                      classification: value === "calculada" ? null : prev.classification,
+                                      allowManualOverride: value === "calculada" ? false : prev.allowManualOverride,
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="base">Base (entrada na folha)</SelectItem>
+                                    <SelectItem value="calculada">Calculada (derivada)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </TooltipTrigger>
+                            {editing && (
+                              <TooltipContent side="top" className="max-w-xs">
+                                <p className="text-xs">
+                                  A natureza não pode ser alterada após a criação — mudaria o contrato técnico da rubrica
+                                  (input vs. saída). Crie uma nova rubrica se precisar mudar.
+                                </p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                       <div className="space-y-1.5">
                         <Label>Ordem de cálculo *</Label>
