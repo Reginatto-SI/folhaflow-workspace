@@ -485,53 +485,85 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
 
   const addCompany = useCallback(async (company: Omit<Company, "id">) => {
+    const cnpjDigits = (company.cnpj || "").replace(/\D/g, "");
+    const address = (company.address || "").trim();
+    if (!address) throw new Error("Endereço é obrigatório.");
+    if (cnpjDigits.length !== 14) throw new Error("CNPJ inválido.");
+
     const { data, error } = await supabase
       .from("companies")
-      .insert({ name: company.name, cnpj: company.cnpj, address: company.address || null })
-      .select("id, name, cnpj, address")
+      .insert({
+        name: normalizeRequiredText(company.name),
+        cnpj: cnpjDigits,
+        address,
+        is_active: company.isActive ?? true,
+      })
+      .select("id, name, cnpj, address, is_active")
       .single();
-    if (error || !data) throw error;
+    if (error || !data) {
+      // Comentário: 23505 = unique_violation (CNPJ duplicado).
+      if ((error as { code?: string } | null)?.code === "23505") {
+        throw new Error("CNPJ já cadastrado.");
+      }
+      throw error;
+    }
     const mapped = mapCompanyRowToModel(data);
     setCompanies((prev) => [...prev, mapped]);
-    setSelectedCompany((prev) => prev ?? mapped);
+    setSelectedCompany((prev) => prev ?? (mapped.isActive ? mapped : prev));
   }, []);
 
   const updateCompany = useCallback(async (id: string, updates: Partial<Company>) => {
-    const payload = {
-      ...(updates.name !== undefined ? { name: updates.name } : {}),
-      ...(updates.cnpj !== undefined ? { cnpj: updates.cnpj } : {}),
-      ...(updates.address !== undefined ? { address: updates.address || null } : {}),
-    };
+    const payload: Record<string, unknown> = {};
+    if (updates.name !== undefined) payload.name = normalizeRequiredText(updates.name);
+    if (updates.cnpj !== undefined) {
+      const cnpjDigits = updates.cnpj.replace(/\D/g, "");
+      if (cnpjDigits.length !== 14) throw new Error("CNPJ inválido.");
+      payload.cnpj = cnpjDigits;
+    }
+    if (updates.address !== undefined) {
+      const address = updates.address.trim();
+      if (!address) throw new Error("Endereço é obrigatório.");
+      payload.address = address;
+    }
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
 
     const { data, error } = await supabase
       .from("companies")
       .update(payload)
       .eq("id", id)
-      .select("id, name, cnpj, address")
+      .select("id, name, cnpj, address, is_active")
       .single();
-    if (error || !data) throw error;
+    if (error || !data) {
+      if ((error as { code?: string } | null)?.code === "23505") {
+        throw new Error("CNPJ já cadastrado.");
+      }
+      throw error;
+    }
 
     const mapped = mapCompanyRowToModel(data);
     setCompanies((prev) => prev.map((company) => (company.id === id ? mapped : company)));
     setSelectedCompany((prev) => (prev?.id === id ? mapped : prev));
   }, []);
 
-  const deleteCompany = useCallback(async (id: string) => {
-    const { error } = await supabase.from("companies").delete().eq("id", id);
-    if (error) throw error;
+  // Comentário: substitui a antiga deleteCompany — PRD-05 §5.5 proíbe exclusão física.
+  const setCompanyActive = useCallback(async (id: string, isActive: boolean) => {
+    const { data, error } = await supabase
+      .from("companies")
+      .update({ is_active: isActive })
+      .eq("id", id)
+      .select("id, name, cnpj, address, is_active")
+      .single();
+    if (error || !data) throw error;
 
-    setCompanies((prev) => {
-      const next = prev.filter((company) => company.id !== id);
-      setSelectedCompany((selected) => {
-        if (selected?.id !== id) return selected;
-        return next[0] ?? null;
-      });
-      return next;
+    const mapped = mapCompanyRowToModel(data);
+    setCompanies((prev) => prev.map((company) => (company.id === id ? mapped : company)));
+    setSelectedCompany((selected) => {
+      // Se a empresa selecionada foi inativada, troca para a próxima ativa.
+      if (selected?.id === id && !isActive) {
+        return null;
+      }
+      return selected?.id === id ? mapped : selected;
     });
-    setAllEmployees((prev) => prev.filter((employee) => employee.companyId !== id));
-    setAllDepartments((prev) => prev.filter((department) => department.companyId !== id));
-    setAllJobRoles((prev) => prev.filter((jobRole) => jobRole.companyId !== id));
-    setAllPayrollEntries((prev) => prev.filter((entry) => entry.companyId !== id));
   }, []);
 
   const addEmployee = useCallback(async (employee: Omit<Employee, "id">) => {
