@@ -306,3 +306,9 @@ Ela é definida no:
 - Sistema não depende de heurística
 - Classificação funciona como única fonte de agregação
 - Usuário confia no resultado sem validação manual
+
+## Regra adicional
+
+- Campos como salário_fiscal, salário_real, salário_g2 e salário_liquido são derivados
+- NÃO devem ser agrupados por classificação
+- Devem ser exibidos separadamente como totais calculados
