@@ -1,0 +1,178 @@
+# PRD-07 — Recibos de Pagamento
+
+---
+
+## 1. Objetivo
+
+Gerar recibos de pagamento baseados na folha, seguindo fielmente o modelo da empresa, utilizando as rubricas como fonte de dados através da classificação.
+
+---
+
+## 2. Princípios obrigatórios
+
+- Layout fixo
+- Não alterar estrutura do recibo
+- Dados vindos da folha
+- Separação entre cálculo e exibição
+- Não calcular valores no recibo
+- Utilizar classificação como fonte de dados
+- Suporte a múltiplas rubricas por linha
+
+---
+
+## 3. Estrutura do recibo
+
+---
+
+### 3.1 Cabeçalho
+
+- Nome do funcionário
+- Empresa
+- Setor
+- Função
+- Mês/Ano
+
+---
+
+### 3.2 Valores principais
+
+- Valor total (líquido)
+- Valor por extenso
+
+---
+
+### 3.3 Observação
+
+- Texto livre (opcional)
+
+---
+
+## 4. Linhas do recibo (fixas)
+
+Cada linha é alimentada por uma ou mais classificações.
+
+---
+
+### Estrutura padrão
+
+| Linha do recibo | Classificação utilizada |
+|------|------------------------|
+| Salário Bruto | salario_ctps + salario_g |
+| Diárias/Gratificações | outros_rendimentos |
+| 1/3 de férias | ferias_terco |
+| Hora Extras | horas_extras |
+| Salário Família | salario_familia |
+| INSS | inss |
+| Empréstimo Consignado | emprestimos |
+| Adiantamento Gerencial | adiantamentos |
+| Vale/Descontos | vales |
+| Descontos/Faltas | faltas |
+
+---
+
+## 5. Regra de preenchimento
+
+- O sistema NÃO usa rubricas diretamente
+- O sistema soma todas as rubricas de cada classificação
+- O valor exibido é o total agregado da classificação
+
+---
+
+### Exemplo
+
+- 2 rubricas com classificação `horas_extras`
+- Valor exibido = soma das duas
+
+---
+
+## 6. Linhas sem valor
+
+- Se não houver rubrica para a classificação:
+  - exibir 0,00
+
+---
+
+## 7. Recibo individual
+
+- gerado no drawer do funcionário
+- 1 funcionário = 1 PDF
+
+---
+
+## 8. Recibos em lote
+
+- gerado na Central de Folha
+- 1 folha = 1 PDF
+- cada funcionário = 1 página
+
+---
+
+## 9. Ordem
+
+- mesma ordem da tabela da Central de Folha
+
+---
+
+## 10. Consistência
+
+- valores devem refletir exatamente a folha
+- líquido deve ser igual ao calculado no motor
+- não recalcular nada no recibo
+
+---
+
+## 11. Formato
+
+- PDF
+- layout fixo
+- pronto para impressão
+
+---
+
+## 12. Regras críticas
+
+- não editar recibo
+- não alterar layout
+- não depender de nome de rubrica
+- não calcular valores no recibo
+- não permitir divergência com a folha
+
+---
+
+## 13. Comentários obrigatórios
+
+Este módulo deve deixar claro que:
+
+- o layout é fixo da empresa
+- o recibo é gerencial
+- rubricas alimentam o recibo via classificação
+- não existem campos fixos internos no sistema
+- classificação é a única fonte de agregação
+
+---
+
+## 14. Estratégia de transição
+
+- mapear rubricas existentes para classificações
+- validar valores com o modelo atual da empresa
+- garantir fidelidade ao Excel atual
+
+---
+
+## 15. Fora do escopo
+
+- múltiplos layouts
+- assinatura digital
+- histórico de recibos
+- envio automático
+
+---
+
+## 16. Critérios de sucesso
+
+- recibo idêntico ao modelo atual
+- valores corretos
+- suporte a múltiplas rubricas
+- geração individual funcionando
+- geração em lote funcionando
+- consistência total com relatórios

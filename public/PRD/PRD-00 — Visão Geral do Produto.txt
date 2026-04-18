@@ -1,0 +1,254 @@
+# PRD-00 — Visão Geral do Produto
+# Projeto: Folha App
+
+---
+
+## 1. Objetivo do Produto
+
+O Folha App é um sistema interno de gestão de folha de pagamento voltado para operação recorrente de múltiplas empresas dentro de um mesmo grupo empresarial.
+
+Seu objetivo principal é:
+
+> Permitir o processamento rápido, consistente, auditável e repetível de folhas mensais, reduzindo esforço operacional e eliminando erros manuais.
+
+O sistema deve funcionar como uma evolução de planilhas operacionais, porém com regras estruturadas, persistência segura e comportamento previsível.
+
+---
+
+## 2. Problema que o sistema resolve
+
+Atualmente, o processo de folha:
+
+- é manual ou semi-manual
+- depende fortemente de planilhas
+- é sujeito a erro humano
+- não possui rastreabilidade clara
+- exige retrabalho constante
+- não possui padronização entre empresas
+
+O sistema surge para:
+
+- centralizar a operação
+- padronizar cálculos
+- garantir repetibilidade mensal
+- permitir rastreabilidade e auditoria
+- reduzir dependência de conhecimento manual
+
+---
+
+## 3. Estado atual do sistema (diagnóstico real)
+
+O sistema já possui:
+
+- Estrutura de múltiplas telas (funcionários, central de folha, etc.)
+- Interface funcional baseada em tabela editável (estilo planilha)
+- Persistência parcial de dados
+- Fluxos básicos de operação implementados
+
+Porém, apresenta limitações estruturais relevantes:
+
+### 3.1 Core de cálculo inconsistente
+- Regras baseadas em heurística (ex: nome de rubrica)
+- Ausência de motor de cálculo centralizado
+- Dependência da interface para execução de lógica
+
+### 3.2 Mistura de responsabilidades
+- Interface executando regras de negócio
+- Falta de separação entre cálculo, dados e exibição
+
+### 3.3 Persistência não padronizada
+- Uso misto de dados mockados e dados reais
+- Inconsistência entre telas
+
+### 3.4 Funcionalidades incompletas ou simuladas
+- Exportação/importação não funcionais
+- Ações visuais sem efeito real
+- Fluxos parcialmente implementados
+
+### 3.5 Ausência de modelo determinístico
+- Resultados podem variar conforme interação
+- Não há garantia de reprocessamento consistente
+
+---
+
+## 4. Direção do produto (estado desejado)
+
+O sistema deve evoluir para:
+
+> Um motor de processamento de folha determinístico, desacoplado da interface, com uma experiência operacional rápida e confiável.
+
+A interface deve atuar apenas como camada de operação, nunca como responsável pelas regras de cálculo.
+
+---
+
+## 5. Princípios do sistema
+
+- Determinismo (mesma entrada → mesmo resultado)
+- Auditabilidade total dos cálculos
+- Separação entre lógica, dados e interface
+- Simplicidade operacional (baixo esforço do usuário)
+- Performance para uso intensivo
+- Evolução controlada (sem reescritas bruscas)
+
+---
+
+## 6. Arquitetura funcional (alto nível)
+
+O sistema será estruturado em três camadas bem definidas:
+
+### 6.1 Camada de Dados
+Responsável por armazenar:
+
+- Empresas
+- Funcionários
+- Rubricas
+- Folhas
+- Valores calculados
+
+---
+
+### 6.2 Camada de Processamento (CORE)
+Responsável por:
+
+- Motor de cálculo da folha
+- Execução determinística das rubricas
+- Controle de ordem de cálculo
+- Resolução de dependências
+- Reprocessamento completo
+
+---
+
+### 6.3 Camada de Interface (UI)
+Responsável por:
+
+- Exibição de dados
+- Edição de valores
+- Interação do usuário
+- Disparo de ações (salvar, recalcular, gerar)
+
+A interface não deve conter regras de negócio.
+
+---
+
+## 7. Principais módulos do sistema
+
+### 7.1 Motor de Cálculo (CORE)
+- Execução das regras de folha
+- Cálculo determinístico
+- Base para toda a lógica do sistema
+
+---
+
+### 7.2 Central de Folha
+- Interface principal de operação
+- Visualização por funcionário
+- Edição inline
+- Disparo de cálculos
+
+---
+
+### 7.3 Cadastro de Rubricas
+- Definição estruturada de regras
+- Configuração de comportamento de cálculo
+- Base do motor de processamento
+
+---
+
+### 7.4 Cadastro de Funcionários
+- Dados operacionais
+- Vínculo com empresa
+- Base da folha
+
+---
+
+### 7.5 Empresas
+- Controle multiempresa interno
+- Isolamento lógico de dados
+
+---
+
+### 7.6 Relatórios / Recibos
+- Geração de saída operacional
+- Visualização de resultados
+
+---
+
+## 8. Usuários do sistema
+
+### Operacional (principal)
+- RH / Financeiro
+- uso diário e intensivo
+- foco em velocidade e praticidade
+
+---
+
+### Contábil
+- gestão de múltiplas empresas
+- foco em padronização e controle
+
+---
+
+### Gestão
+- consulta de dados
+- visão consolidada
+
+---
+
+## 9. Fluxo principal do sistema
+
+1. Selecionar empresa
+2. Selecionar competência (mês/ano)
+3. Criar ou carregar folha existente
+4. Visualizar funcionários
+5. Revisar valores
+6. Ajustar manualmente quando necessário
+7. Recalcular folha
+8. Salvar
+9. Gerar recibos
+
+---
+
+## 10. Requisitos não funcionais
+
+- Alta performance em tabelas com muitos registros
+- Baixa latência em edição
+- Cálculo consistente e reproduzível
+- Segurança de dados
+- Estabilidade operacional
+- Facilidade de manutenção e evolução
+
+---
+
+## 11. Principais riscos do projeto
+
+- Complexidade crescente das regras de cálculo
+- Uso incorreto de rubricas
+- Performance com alto volume de dados
+- Erros silenciosos de cálculo
+- Crescimento desordenado da lógica
+- Mistura entre modelo antigo (heurístico) e novo (determinístico)
+
+---
+
+## 12. Estratégia de evolução
+
+A evolução do sistema deve seguir de forma controlada:
+
+1. Implementar motor de cálculo determinístico (sem quebrar sistema atual)
+2. Adaptar a Central de Folha para consumir o motor
+3. Padronizar o cadastro de rubricas
+4. Eliminar lógica heurística existente
+5. Consolidar persistência de dados
+6. Expandir funcionalidades (relatórios, automações)
+
+Mudanças devem ser incrementais, evitando reescrita total do sistema.
+
+---
+
+## 13. Definição do produto
+
+O Folha App não é apenas uma interface de folha.
+
+Ele é:
+
+> Um sistema interno de processamento financeiro recorrente, baseado em regras estruturadas, com foco em eficiência operacional, previsibilidade e consistência de dados.

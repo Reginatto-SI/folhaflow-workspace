@@ -1,0 +1,382 @@
+# PRD-10 — Usuários e Controle de Acesso
+
+---
+
+## 1. Objetivo
+
+Permitir o cadastro e gestão de usuários do sistema, garantindo controle de acesso seguro, simples e previsível, com base em permissões por tela.
+
+O módulo deve proteger áreas sensíveis do sistema (como rubricas e configurações), sem comprometer a operação diária dos usuários.
+
+---
+
+## 2. Princípios obrigatórios
+
+- Controle de acesso por permissão (não apenas por role)
+- Interface simples para gestão de usuários
+- Permissões devem ser aplicadas no backend (não apenas na UI)
+- Roles são apenas agrupadores de permissões
+- Sistema deve ser previsível e auditável
+- Segurança sem complexidade desnecessária
+- Não permitir acesso indevido por erro de interface
+
+---
+
+## 3. Papel do módulo no sistema
+
+O módulo de usuários é responsável por:
+
+- controlar quem pode acessar o sistema
+- definir o nível de acesso de cada usuário
+- proteger áreas críticas do sistema
+- permitir operação segura da folha
+
+O módulo NÃO é responsável por:
+
+- autenticação avançada (SSO, OAuth, etc.)
+- auditoria detalhada de ações (futuro)
+- controle de permissões por campo
+- regras de negócio da folha
+
+---
+
+## 4. Entidades principais
+
+---
+
+### 4.1 Usuário
+
+Campos obrigatórios:
+
+- id
+- nome
+- email (único)
+- status:
+  - `ativo`
+  - `inativo`
+- role_id
+- criado_em
+- atualizado_em
+
+---
+
+### 4.2 Role (Perfil de acesso)
+
+Campos obrigatórios:
+
+- id
+- nome
+- descricao
+
+Exemplos:
+
+- `admin`
+- `operacional`
+- `consulta`
+
+---
+
+### 4.3 Permissão
+
+Campos obrigatórios:
+
+- id
+- codigo
+- descricao
+
+---
+
+### 4.4 Role_Permissao
+
+Relacionamento:
+
+- role_id
+- permissao_id
+
+---
+
+## 5. Modelo de permissões (CORE DO MÓDULO)
+
+---
+
+### 5.1 Conceito
+
+Permissões definem acesso às telas do sistema.
+
+Cada tela possui uma permissão específica.
+
+---
+
+### 5.2 Permissões padrão do sistema
+
+| Tela / Módulo | Permissão |
+|--------------|----------|
+| Empresas | `empresas.view` |
+| Funcionários | `funcionarios.view` |
+| Setores/Cargos | `estrutura.view` |
+| Rubricas | `rubricas.manage` |
+| Central de Folha | `folha.operar` |
+| Relatórios | `relatorios.view` |
+| Usuários | `usuarios.manage` |
+| Configurações | `configuracoes.manage` |
+
+---
+
+### 5.3 Regras obrigatórias
+
+- Toda tela deve possuir uma permissão
+- Acesso deve ser validado no backend
+- UI não pode ser considerada segurança
+- Usuário sem permissão não pode acessar nem via URL direta
+- Permissões devem ser explícitas (sem inferência)
+
+---
+
+## 6. Roles padrão do sistema
+
+---
+
+### 6.1 Admin
+
+Acesso total ao sistema.
+
+Permissões:
+
+- todas
+
+---
+
+### 6.2 Operacional
+
+Usuário padrão do dia a dia.
+
+Permissões:
+
+- empresas.view
+- funcionarios.view
+- estrutura.view
+- folha.operar
+- relatorios.view
+
+Restrições:
+
+- NÃO pode acessar rubricas
+- NÃO pode acessar usuários
+- NÃO pode acessar configurações
+
+---
+
+### 6.3 Consulta
+
+Usuário de leitura (gestão).
+
+Permissões:
+
+- empresas.view
+- funcionarios.view
+- relatorios.view
+
+Restrições:
+
+- NÃO pode editar dados
+- NÃO pode acessar folha operacional
+- NÃO pode acessar rubricas
+- NÃO pode acessar configurações
+
+---
+
+## 7. Regras de negócio
+
+---
+
+### 7.1 Acesso
+
+- Usuário só pode acessar telas permitidas
+- Tentativa de acesso indevido deve ser bloqueada
+
+---
+
+### 7.2 Criação de usuário
+
+- Nome obrigatório
+- Email obrigatório e único
+- Role obrigatório
+
+---
+
+### 7.3 Status
+
+- `ativo`: acesso liberado
+- `inativo`: acesso bloqueado
+
+---
+
+### 7.4 Exclusão
+
+- Não permitir exclusão física
+- Apenas inativação
+
+---
+
+### 7.5 Segurança crítica
+
+- Rubricas e Configurações devem ser restritas
+- Apenas Admin pode acessar essas áreas
+
+---
+
+## 8. Interface (UX)
+
+---
+
+### 8.1 Estrutura da tela
+
+- listagem de usuários
+- indicadores (total, ativos, inativos)
+- busca por nome/email
+- botão “Novo usuário”
+- ações via botão “…”
+
+---
+
+### 8.2 Tabela
+
+Colunas:
+
+- nome
+- email
+- status
+- ações
+
+---
+
+### 8.3 Ações
+
+- criar
+- editar
+- inativar
+- reativar
+
+---
+
+### 8.4 Cadastro / edição
+
+Campos:
+
+- nome
+- email
+- role (dropdown)
+- status
+
+Interface simples, sem abas
+
+---
+
+## 9. Comportamento do sistema
+
+---
+
+### 9.1 Bloqueio de acesso
+
+Se usuário não tiver permissão:
+
+- bloquear acesso à rota
+- exibir mensagem:
+  - “Você não possui permissão para acessar esta área”
+
+---
+
+### 9.2 Menu lateral
+
+- exibir apenas menus permitidos
+- esconder itens não autorizados
+
+---
+
+### 9.3 Segurança
+
+- validação obrigatória no backend
+- nunca confiar apenas na UI
+
+---
+
+## 10. Regras críticas
+
+- Não permitir acesso a rubricas sem controle
+- Não permitir acesso a configurações por usuários comuns
+- Não usar role diretamente no código (usar permissões)
+- Não confiar em ocultação de botão como segurança
+- Não permitir acesso via URL direta sem validação
+- Não adicionar complexidade desnecessária na v1
+
+---
+
+## 11. Performance
+
+- validação de permissão deve ser leve
+- não impactar carregamento das telas
+- permissões podem ser cacheadas
+
+---
+
+## 12. Estados da tela
+
+---
+
+### Loading
+- indicador visual
+
+### Vazio
+- “Nenhum usuário cadastrado”
+- botão para criar
+
+### Erro
+- mensagem clara
+- opção de retry
+
+---
+
+## 13. Comentários obrigatórios na documentação e no código
+
+Este módulo deve deixar claro que:
+
+- permissões são a base do controle de acesso
+- roles são apenas agrupadores
+- segurança não pode depender da interface
+- backend é responsável pela validação real
+- o objetivo é proteger áreas críticas sem travar a operação
+
+---
+
+## 14. Estratégia de implementação
+
+1. Criar estrutura de usuários
+2. Criar roles padrão
+3. Criar permissões fixas do sistema
+4. Relacionar roles com permissões
+5. Aplicar validação nas rotas
+6. Ajustar menu lateral
+7. Validar bloqueios de acesso
+
+---
+
+## 15. Fora do escopo (por enquanto)
+
+- permissões customizadas por usuário
+- edição manual de permissões
+- auditoria de ações (logs)
+- histórico de login
+- autenticação avançada (SSO)
+- múltiplos níveis hierárquicos
+- permissões por campo
+
+---
+
+## 16. Critérios de sucesso
+
+- usuários acessam apenas o que devem
+- áreas críticas estão protegidas
+- sistema continua simples de usar
+- nenhuma permissão indevida ocorre
+- backend garante segurança real
+- operação diária não é prejudicada

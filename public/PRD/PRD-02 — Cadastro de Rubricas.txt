@@ -1,0 +1,217 @@
+# PRD-02 — Cadastro de Rubricas
+
+---
+
+## 1. Objetivo
+
+Permitir a criação e gestão de rubricas de forma estruturada, garantindo que todas as regras de cálculo sejam explícitas, validadas e compatíveis com o motor de cálculo (PRD-01).
+
+As rubricas representam todos os valores que compõem a folha de pagamento, sendo a base do cálculo e também da exibição no recibo e nos relatórios.
+
+---
+
+## 2. Princípios obrigatórios
+
+- Nenhuma regra implícita
+- Zero heurística baseada em nome
+- Rubricas são a única fonte de valores da folha
+- Separação entre cálculo e exibição
+- Compatibilidade total com o motor
+- Estrutura preparada para relatórios e recibos
+- Toda rubrica deve possuir classificação obrigatória
+
+---
+
+## 3. Estrutura da Rubrica
+
+### 3.1 Campos obrigatórios
+
+- id
+- nome
+- codigo (único)
+- tipo:
+  - `provento`
+  - `desconto`
+- natureza:
+  - `base`
+  - `calculada`
+- metodo_calculo:
+  - `manual`
+  - `valor_fixo`
+  - `percentual`
+  - `formula`
+- ordem_calculo (inteiro obrigatório)
+- classificacao (obrigatório)
+- ativa (boolean)
+
+---
+
+### 3.2 Campos condicionais
+
+#### valor_fixo
+- valor_base
+
+#### percentual
+- percentual
+- referencia_base
+
+#### formula
+- formula
+
+---
+
+## 4. Classificação de Rubricas (CORE DO SISTEMA)
+
+### 4.1 Conceito
+
+A classificação é uma camada obrigatória que organiza as rubricas para:
+
+- recibos
+- relatórios
+- consolidação financeira
+
+A classificação é a única fonte de agrupamento de valores no sistema.
+
+---
+
+### 4.2 Valores possíveis (padrão do sistema)
+
+#### Proventos
+
+- `salario_ctps`
+- `salario_g`
+- `outros_rendimentos`
+- `horas_extras`
+- `salario_familia`
+- `ferias_terco`
+- `insalubridade`
+
+---
+
+#### Descontos
+
+- `inss`
+- `emprestimos`
+- `adiantamentos`
+- `vales`
+- `faltas`
+
+---
+
+### 4.3 Regras obrigatórias
+
+- Toda rubrica deve possuir UMA classificação
+- Uma rubrica NÃO pode possuir múltiplas classificações
+- Sistema deve impedir salvar rubrica sem classificação
+- Classificação NÃO depende do nome da rubrica
+- Classificação define como a rubrica será exibida nos relatórios e recibos
+
+---
+
+### 4.4 Comportamento
+
+- Várias rubricas podem compartilhar a mesma classificação
+- Os valores são somados por classificação
+- A classificação não interfere no cálculo, apenas na organização dos dados
+
+---
+
+## 5. Métodos de cálculo
+
+### Manual
+- valor informado pelo usuário
+
+### Valor fixo
+- valor constante
+
+### Percentual
+- baseado em outra rubrica
+
+### Fórmula
+- expressão com códigos de rubricas
+
+---
+
+## 6. Validações
+
+- código único
+- ordem obrigatória
+- fórmula válida
+- sem dependência circular
+- referência existente
+- classificação obrigatória
+
+---
+
+## 7. Interface (UX)
+
+### Estrutura
+
+Modal com abas:
+
+---
+
+#### Aba 1 — Dados
+- nome
+- código
+- tipo
+- natureza
+
+---
+
+#### Aba 2 — Cálculo
+- método de cálculo
+- campos dinâmicos conforme método
+
+---
+
+#### Aba 3 — Classificação
+- campo obrigatório: classificacao
+- descrição de onde será utilizado (recibo e relatórios)
+
+---
+
+## 8. Regras críticas
+
+- Nome não define comportamento
+- Código é a referência técnica
+- Classificação é a referência de exibição
+- Não permitir rubrica incompleta
+- Não permitir lógica ambígua
+- Não permitir rubrica sem classificação
+
+---
+
+## 9. Integração com motor
+
+- motor consome diretamente rubricas
+- ordem de cálculo deve ser respeitada
+- classificação NÃO interfere no cálculo
+
+---
+
+## 10. Estratégia de transição
+
+- adaptar rubricas existentes
+- definir classificação gradualmente
+- não quebrar sistema atual
+- bloquear geração de relatórios sem classificação completa
+
+---
+
+## 11. Fora do escopo
+
+- regras tributárias automáticas
+- faixas progressivas
+- múltiplos layouts de recibo
+- múltiplos modelos de classificação
+
+---
+
+## 12. Critérios de sucesso
+
+- rubricas executam corretamente no motor
+- sistema não depende de nome
+- recibo é preenchido automaticamente
+- relatórios são gerados corretamente
+- classificação é consistente em todo o sistema

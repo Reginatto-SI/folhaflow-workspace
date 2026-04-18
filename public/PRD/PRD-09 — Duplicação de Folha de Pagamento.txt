@@ -1,0 +1,403 @@
+# PRD-09 — Duplicação de Folha de Pagamento
+
+---
+
+## 1. Objetivo
+
+Permitir a criação de uma nova folha de pagamento a partir de uma folha existente, reduzindo retrabalho operacional e acelerando a preparação da competência seguinte, sem comprometer a consistência dos dados nem a lógica determinística do sistema.
+
+A duplicação deve funcionar como uma base operacional para o novo mês, nunca como simples cópia cega do resultado final da folha anterior.
+
+---
+
+## 2. Princípios obrigatórios
+
+- Duplicação é uma operação assistida e controlada
+- Nova folha sempre nasce em status `rascunho`
+- O sistema deve copiar apenas dados permitidos
+- Valores derivados não devem ser tratados como base definitiva
+- O motor de cálculo continua sendo a única fonte de verdade
+- A duplicação não substitui o recálculo
+- Toda duplicação deve ser rastreável
+- Não deve existir cópia cega de totais finais
+- A operação deve ser rápida e simples para o usuário
+
+---
+
+## 3. Papel da duplicação no sistema
+
+A duplicação é responsável por:
+
+- criar uma nova folha para a competência destino
+- reaproveitar estrutura e dados operacionais da folha base
+- reduzir digitação repetitiva
+- preservar a composição recorrente da folha
+- permitir revisão antes do fechamento
+
+A duplicação NÃO é responsável por:
+
+- fechar automaticamente a nova folha
+- assumir que todos os valores do mês anterior continuam corretos
+- recalcular a folha por conta própria
+- substituir a revisão operacional do usuário
+- copiar indiscriminadamente totais finais e resultados derivados
+
+---
+
+## 4. Conceito central
+
+Duplicar folha não significa copiar o resultado final da folha anterior.
+
+Duplicar folha significa:
+
+> usar a folha base como estrutura inicial da nova competência, permitindo ao usuário reaproveitar funcionários e grupos de valores recorrentes, seguido de revisão e recálculo.
+
+---
+
+## 5. Estrutura da operação
+
+### 5.1 Origem
+
+A duplicação parte de uma folha base já existente, definida por:
+
+- empresa_base_id
+- mes_base
+- ano_base
+- folha_base_id
+
+---
+
+### 5.2 Destino
+
+A nova folha será criada com:
+
+- empresa_destino_id
+- mes_destino
+- ano_destino
+
+---
+
+### 5.3 Regra inicial recomendada
+
+Na primeira versão, a duplicação deve ocorrer preferencialmente:
+
+- da mesma empresa para a mesma empresa
+- de uma competência anterior para uma competência futura
+
+A possibilidade de duplicar entre empresas diferentes pode existir futuramente, mas não deve ser prioridade agora.
+
+---
+
+## 6. Dados de rastreabilidade
+
+Toda folha criada por duplicação deve armazenar, no mínimo:
+
+- folha_origem_id
+- duplicada_em
+- duplicada_por_usuario_id
+- observacao_duplicacao (opcional)
+- configuracao_duplicacao_utilizada (snapshot simples ou estrutura equivalente)
+
+Esses dados são obrigatórios para auditoria e suporte.
+
+---
+
+## 7. Regras de negócio
+
+### 7.1 Criação da folha destino
+
+Ao duplicar:
+
+- o sistema deve criar uma nova folha
+- a nova folha deve nascer com status `rascunho`
+- a folha destino deve ser independente da folha origem após a criação
+- alterações futuras na folha destino não podem alterar a folha origem
+- alterações futuras na folha origem não podem alterar a folha destino
+
+---
+
+### 7.2 Validação de existência prévia
+
+O sistema deve impedir duplicação quando já existir folha para:
+
+- mesma empresa destino
+- mesmo mês destino
+- mesmo ano destino
+
+Nesse caso, deve exibir mensagem clara ao usuário e bloquear a operação.
+
+---
+
+### 7.3 Integridade da origem
+
+Só deve ser possível duplicar uma folha base existente e válida.
+
+Se a folha base não for encontrada ou estiver inconsistente, o sistema deve bloquear a operação.
+
+---
+
+### 7.4 Status da folha base
+
+A folha base pode ser:
+
+- `rascunho`
+- `fechada`
+
+Regra recomendada:
+- permitir duplicação de ambas
+- mas sinalizar ao usuário quando a origem ainda estiver em rascunho
+
+---
+
+## 8. O que pode ser duplicado
+
+A duplicação deve permitir copiar grupos específicos de dados da folha base.
+
+### 8.1 Estrutura mínima obrigatória
+
+Independentemente dos grupos selecionados, a duplicação deve poder trazer:
+
+- os funcionários lançados na folha base
+- a estrutura da folha por funcionário
+- os itens de folha necessários para edição e recálculo posterior
+
+---
+
+### 8.2 Grupos de dados duplicáveis
+
+Os grupos abaixo podem ser apresentados ao usuário como opções selecionáveis:
+
+- salário_ctps
+- salario_g
+- salario_fiscal
+- outros_rendimentos
+- salario_familia
+- ferias_terco
+- insalubridade
+- horas_extras
+- inss
+- adiantamento_fiscal
+- vales_descontos
+- faltas_desconto
+- adiantamento_gerencial
+- salario_real
+- g2_complemento
+- salario_liquido
+
+---
+
+## 9. Regra crítica de duplicação por tipo de valor
+
+Nem todo grupo deve ser tratado da mesma forma.
+
+### 9.1 Dados que podem ser copiados como base operacional
+
+Faz sentido permitir cópia de dados recorrentes e operacionais, como:
+
+- composição de funcionários
+- salários base operacionais
+- rubricas manuais recorrentes
+- complementos recorrentes
+- descontos recorrentes quando o usuário decidir explicitamente
+
+---
+
+### 9.2 Dados que exigem cuidado especial
+
+Os seguintes grupos são potencialmente derivados ou variáveis e não devem ser copiados cegamente:
+
+- horas_extras
+- faltas_desconto
+- inss
+- salario_real
+- salario_fiscal
+- salario_liquido
+
+Esses grupos só devem ser copiados se o usuário marcar explicitamente, e mesmo assim a nova folha deve permitir recálculo completo depois.
+
+---
+
+### 9.3 Regra de segurança
+
+Na primeira versão, o sistema deve trabalhar com uma destas estratégias, preferencialmente a mais segura:
+
+#### Estratégia A — Mais segura
+Copiar apenas:
+- funcionários
+- valores manuais recorrentes
+- estrutura da folha
+
+E obrigar revisão/recálculo posterior.
+
+#### Estratégia B — Controlada
+Permitir seleção dos grupos, mas:
+- não copiar automaticamente grupos derivados por padrão
+- deixar esses itens desmarcados inicialmente
+
+A recomendação do produto é seguir a Estratégia B, com defaults conservadores.
+
+---
+
+## 10. Relação com o motor de cálculo
+
+### 10.1 Regra principal
+
+A duplicação não substitui o motor de cálculo.
+
+O papel da duplicação é preparar a nova folha.
+
+O papel do motor é:
+
+- recalcular
+- validar
+- consolidar valores finais
+
+---
+
+### 10.2 Após duplicar
+
+Depois da duplicação, a folha destino deve poder:
+
+- ser aberta normalmente na Central
+- ser revisada
+- ser editada
+- ser recalculada integralmente
+- ser salva normalmente
+
+---
+
+### 10.3 Proibição
+
+É proibido tratar a duplicação como cálculo definitivo da nova competência.
+
+---
+
+## 11. Relação com overrides manuais
+
+### 11.1 Quando houver valor manual na origem
+
+Se a folha base possuir valores com `origem = manual`, a duplicação deve respeitar a configuração escolhida pelo usuário.
+
+---
+
+### 11.2 Regra recomendada
+
+Para a primeira versão, quando um grupo for duplicado:
+
+- copiar o valor efetivamente persistido daquele grupo
+- preservar a natureza operacional do item
+- permitir que o usuário revise e sobrescreva depois
+
+Se houver diferenciação técnica entre `valor_calculado` e `valor_manual`, isso deve ser respeitado na persistência da nova folha, sem mascarar a origem dos dados.
+
+---
+
+## 12. UX da funcionalidade
+
+### 12.1 Acesso
+
+A duplicação deve ser acessível a partir do fluxo de criação de nova folha.
+
+---
+
+### 12.2 Modal de duplicação
+
+O modal deve conter, no mínimo:
+
+- empresa base
+- mês base
+- ano base
+- competência destino
+- grupos de dados a copiar
+- botão de confirmar criação
+
+---
+
+### 12.3 Comportamento visual esperado
+
+O fluxo deve ser rápido, direto e operacional.
+
+A experiência ideal é:
+
+1. usuário escolhe a folha base
+2. usuário escolhe a competência destino
+3. usuário marca o que deseja copiar
+4. sistema cria a nova folha
+5. usuário vai para a Central revisar
+
+---
+
+### 12.4 Mensagens obrigatórias
+
+O sistema deve exibir mensagens claras para:
+
+- duplicação concluída com sucesso
+- folha destino já existente
+- folha base inválida
+- erro na criação
+- operação cancelada
+
+---
+
+## 13. Regras críticas
+
+- Não duplicar cegamente resultados finais
+- Não fechar a folha automaticamente após duplicar
+- Não recalcular durante a cópia sem controle explícito
+- Não permitir duplicação para competência já existente
+- Não criar vínculo dinâmico entre folha origem e destino
+- Não esconder a origem da duplicação
+- Não tratar líquido e totais como base obrigatória do novo mês
+- Não misturar duplicação com heurística
+
+---
+
+## 14. Comentários obrigatórios na documentação e no código
+
+Este módulo deve deixar claro que:
+
+- duplicação é uma base operacional, não um fechamento automático
+- a nova folha sempre nasce em rascunho
+- o motor continua sendo a única fonte de cálculo confiável
+- grupos derivados exigem cuidado
+- a operação precisa ser auditável e reversível do ponto de vista operacional
+
+Esses comentários são obrigatórios para evitar implementação errada por outros desenvolvedores ou por IA.
+
+---
+
+## 15. Estratégia de implementação
+
+A implementação deve seguir abordagem incremental:
+
+1. permitir duplicação de folha da mesma empresa
+2. criar nova folha em rascunho
+3. copiar funcionários e grupos selecionados
+4. registrar rastreabilidade
+5. abrir a nova folha para revisão
+6. depois evoluir refinamentos, padrões de seleção e possíveis automatizações
+
+---
+
+## 16. Fora do escopo (por enquanto)
+
+- duplicação automática em lote para várias empresas
+- agendamento automático mensal
+- comparação visual entre origem e destino
+- versionamento avançado da duplicação
+- sugestões inteligentes de quais grupos copiar
+- duplicação massiva entre empresas diferentes
+- rollback automático da duplicação após uso operacional
+
+---
+
+## 17. Critérios de sucesso
+
+- usuário consegue criar nova folha a partir de uma anterior
+- nova folha nasce corretamente em rascunho
+- funcionários e grupos selecionados são trazidos corretamente
+- competência destino não permite duplicidade
+- origem da duplicação fica registrada
+- usuário consegue revisar e recalcular a nova folha sem inconsistência
+- duplicação reduz esforço operacional real do mês seguinte
+- funcionalidade fica simples, rápida e confiável para uso recorrente
