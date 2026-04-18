@@ -38,7 +38,6 @@ const App = () => (
                     <SidebarProvider>
                       <AppLayout>
                         <Routes>
-                          {/* PayrollProvider must wrap AppLayout because AppLayout consumes usePayroll */}
                           <Route path="/" element={<Navigate to="/central-de-folha" replace />} />
                           <Route
                             path="/central-de-folha"
