@@ -1,3 +1,14 @@
+// ──────────────────────────────────────────────────────────────────────────────
+// /rubricas — Cadastro de Rubricas (PRD-02)
+//
+// Regras críticas (não violar):
+//  • Classificação técnica é OBRIGATÓRIA ao salvar (catálogo canônico do PRD-02).
+//  • Nome/código/categoria NUNCA definem comportamento — use `nature`/`classification`.
+//  • Backend reforça permissão via RLS `has_permission('rubricas.manage')`.
+//    A rota também é protegida no `App.tsx`. Não confiar só em ocultação de UI.
+//  • Campos `category` e `entry_mode` continuam gravados só para compat de coluna
+//    legada — serão removidos em sprint futura. Não consumir em lógica nova.
+// ──────────────────────────────────────────────────────────────────────────────
 import React, { useMemo, useState } from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Rubric, RubricClassification, RubricFormulaItem, RubricMethod, RubricNature } from "@/types/payroll";
