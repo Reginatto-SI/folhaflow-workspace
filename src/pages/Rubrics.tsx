@@ -167,6 +167,17 @@ const Rubrics: React.FC = () => {
     [rubrics]
   );
 
+  // PRD-02: rubricas seguras para serem referenciadas em fórmula/percentual.
+  // Exclui: a própria em edição (auto-referência), inativas (ambiguidade operacional)
+  // e derivadas/calculadas (saídas do motor — não devem alimentar inputs até motor existir).
+  const referenceableRubricItems = useMemo(
+    () =>
+      rubrics
+        .filter((r) => r.id !== editing?.id && r.isActive && r.nature !== "calculada")
+        .map((rubric) => ({ value: rubric.id, label: `${rubric.code} — ${rubric.name}` })),
+    [rubrics, editing?.id]
+  );
+
   const classificationItems = useMemo(() => {
     const allowed = form.type === "provento" ? PROVENTO_CLASSIFICATIONS : DESCONTO_CLASSIFICATIONS;
     return allowed.map((value) => ({ value, label: CLASSIFICATION_LABELS[value] }));
