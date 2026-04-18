@@ -2,7 +2,10 @@ export interface Company {
   id: string;
   name: string;
   cnpj: string;
-  address?: string;
+  // Comentário: endereço passou a ser obrigatório por exigência do PRD-05.
+  address: string;
+  // Comentário: status lógico para inativação sem exclusão física (PRD-05 §5.5).
+  isActive: boolean;
 }
 
 export interface Department {
