@@ -217,54 +217,98 @@ const mapRubricRowToModel = (row: {
   display_order: number;
   is_active: boolean;
   allow_manual_override: boolean;
+  // PRD-02 — campos novos do contrato canônico
+  nature: string | null;
+  calculation_method: string | null;
+  classification: string | null;
+  fixed_value: number | string | null;
+  percentage_value: number | string | null;
+  percentage_base_rubrica_id: string | null;
   rubrica_formula_items?: Array<{
     id: string;
     operation: string;
     source_rubrica_id: string;
     item_order: number;
   }>;
-}): Rubric => ({
-  id: row.id,
-  name: row.name,
-  code: row.code,
-  category: row.category,
-  type: row.type as Rubric["type"],
-  mode: row.entry_mode as Rubric["mode"],
-  order: row.display_order,
-  isActive: row.is_active,
-  // Comentário: a composição de fórmula agora é persistida em linhas estruturadas para evitar texto livre estilo Excel.
-  formulaItems: (row.rubrica_formula_items || [])
-    .map((item) => ({
-      id: item.id,
-      operation: item.operation as "add" | "subtract",
-      sourceRubricId: item.source_rubrica_id,
-      order: item.item_order,
-    }))
-    .sort((a, b) => a.order - b.order),
-  allowManualOverride: row.allow_manual_override,
-});
+}): Rubric => {
+  // Comentário: deriva calculationMethod a partir do entry_mode legado quando ainda não migrado.
+  const calculationMethod = (row.calculation_method as Rubric["calculationMethod"] | null)
+    ?? (row.entry_mode === "formula" ? "formula" : "manual");
+  const nature = (row.nature as Rubric["nature"] | null)
+    ?? (calculationMethod === "formula" ? "calculada" : "base");
+  return {
+    id: row.id,
+    name: row.name,
+    code: row.code,
+    type: row.type as Rubric["type"],
+    nature,
+    calculationMethod,
+    classification: (row.classification as Rubric["classification"]) ?? null,
+    fixedValue: row.fixed_value !== null ? Number(row.fixed_value) : null,
+    percentageValue: row.percentage_value !== null ? Number(row.percentage_value) : null,
+    percentageBaseRubricId: row.percentage_base_rubrica_id ?? null,
+    order: row.display_order,
+    isActive: row.is_active,
+    allowManualOverride: row.allow_manual_override,
+    // Comentário: a composição de fórmula agora é persistida em linhas estruturadas para evitar texto livre estilo Excel.
+    formulaItems: (row.rubrica_formula_items || [])
+      .map((item) => ({
+        id: item.id,
+        operation: item.operation as "add" | "subtract",
+        sourceRubricId: item.source_rubrica_id,
+        order: item.item_order,
+      }))
+      .sort((a, b) => a.order - b.order),
+    // Compat temporária — não usar em lógica nova.
+    category: row.category,
+    mode: calculationMethod === "formula" ? "formula" : "manual",
+  };
+};
+
+// Comentário: deriva o entry_mode legado a partir do calculationMethod canônico
+// para manter compatibilidade enquanto motor/recibos não migram.
+const deriveLegacyEntryMode = (method: Rubric["calculationMethod"]): "manual" | "formula" =>
+  method === "formula" ? "formula" : "manual";
 
 const mapRubricInsertToRow = (rubric: Omit<Rubric, "id">) => ({
   name: normalizeRequiredText(rubric.name),
   code: normalizeRequiredText(rubric.code),
-  category: normalizeRequiredText(rubric.category),
+  // Compat: coluna category mantida até remoção em fase futura.
+  category: normalizeRequiredText(rubric.category || rubric.classification || "geral"),
   type: rubric.type,
-  entry_mode: rubric.mode,
+  entry_mode: deriveLegacyEntryMode(rubric.calculationMethod),
   display_order: rubric.order,
   is_active: rubric.isActive,
   allow_manual_override: rubric.allowManualOverride,
+  // PRD-02
+  nature: rubric.nature,
+  calculation_method: rubric.calculationMethod,
+  classification: rubric.classification,
+  fixed_value: rubric.calculationMethod === "valor_fixo" ? (rubric.fixedValue ?? 0) : null,
+  percentage_value: rubric.calculationMethod === "percentual" ? (rubric.percentageValue ?? 0) : null,
+  percentage_base_rubrica_id: rubric.calculationMethod === "percentual" ? (rubric.percentageBaseRubricId ?? null) : null,
 });
 
-const mapRubricUpdateToRow = (updates: Partial<Rubric>) => ({
-  ...(updates.name !== undefined ? { name: normalizeRequiredText(updates.name) } : {}),
-  ...(updates.code !== undefined ? { code: normalizeRequiredText(updates.code) } : {}),
-  ...(updates.category !== undefined ? { category: normalizeRequiredText(updates.category) } : {}),
-  ...(updates.type !== undefined ? { type: updates.type } : {}),
-  ...(updates.mode !== undefined ? { entry_mode: updates.mode } : {}),
-  ...(updates.order !== undefined ? { display_order: updates.order } : {}),
-  ...(updates.isActive !== undefined ? { is_active: updates.isActive } : {}),
-  ...(updates.allowManualOverride !== undefined ? { allow_manual_override: updates.allowManualOverride } : {}),
-});
+const mapRubricUpdateToRow = (updates: Partial<Rubric>) => {
+  const out: Record<string, unknown> = {};
+  if (updates.name !== undefined) out.name = normalizeRequiredText(updates.name);
+  if (updates.code !== undefined) out.code = normalizeRequiredText(updates.code);
+  if (updates.category !== undefined) out.category = normalizeRequiredText(updates.category);
+  if (updates.type !== undefined) out.type = updates.type;
+  if (updates.calculationMethod !== undefined) {
+    out.calculation_method = updates.calculationMethod;
+    out.entry_mode = deriveLegacyEntryMode(updates.calculationMethod); // compat
+  }
+  if (updates.nature !== undefined) out.nature = updates.nature;
+  if (updates.classification !== undefined) out.classification = updates.classification;
+  if (updates.order !== undefined) out.display_order = updates.order;
+  if (updates.isActive !== undefined) out.is_active = updates.isActive;
+  if (updates.allowManualOverride !== undefined) out.allow_manual_override = updates.allowManualOverride;
+  if (updates.fixedValue !== undefined) out.fixed_value = updates.fixedValue;
+  if (updates.percentageValue !== undefined) out.percentage_value = updates.percentageValue;
+  if (updates.percentageBaseRubricId !== undefined) out.percentage_base_rubrica_id = updates.percentageBaseRubricId;
+  return out;
+};
 
 const mapFormulaItemInsertToRow = (rubricaId: string, item: Rubric["formulaItems"][number]) => ({
   rubrica_id: rubricaId,
