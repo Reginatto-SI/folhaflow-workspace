@@ -84,6 +84,7 @@ const normalizeBankField = (value?: string) => {
 const Employees: React.FC = () => {
   const {
     companies,
+    activeCompanies,
     employees,
     allDepartments,
     allJobRoles,
