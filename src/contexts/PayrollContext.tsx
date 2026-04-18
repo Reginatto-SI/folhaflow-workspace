@@ -732,10 +732,14 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setRubrics((prev) => prev.map((item) => (item.id === id ? mapRubricRowToModel(data) : item)));
   }, [rubrics]);
 
+  // Comentário: empresas ativas para uso em filtros operacionais (Funcionários, Central de Folha) — PRD-05 §5.4.
+  const activeCompanies = React.useMemo(() => companies.filter((c) => c.isActive), [companies]);
+
   return (
     <PayrollContext.Provider
       value={{
         companies,
+        activeCompanies,
         selectedCompany,
         setSelectedCompany,
         selectedMonth,
@@ -750,11 +754,13 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         payrollEntries,
         payrollCatalogErrors,
         isLoading,
+        loadError,
+        reloadData: loadData,
         addPayrollEntry,
         updatePayrollEntry,
         addCompany,
         updateCompany,
-        deleteCompany,
+        setCompanyActive,
         addEmployee,
         updateEmployee,
         deleteEmployee,
