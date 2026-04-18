@@ -57,7 +57,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
         emptyMessage="Nenhuma empresa encontrada."
         className="w-[240px]"
         onValueChange={(id) => {
-          const c = companies.find((c) => c.id === id);
+          const c = activeCompanies.find((c) => c.id === id);
           if (c) setSelectedCompany(c);
         }}
       />
