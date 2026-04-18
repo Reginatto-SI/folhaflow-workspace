@@ -1,81 +1,92 @@
 
 
-## Sprint de saneamento final — `/rubricas`
+## Diagnóstico da análise
 
-### Estado real (lido no banco agora)
+A análise está **direcionalmente correta** mas mistura saneamento de cadastro com **motor de cálculo** — que esta sprint explicitamente **não deve tocar** (definido nas sprints anteriores).
 
-- **16 rubricas**, **0 com `classification`** preenchida. Todas têm `nature` + `calculation_method`.
-- Nenhuma usa `valor_fixo` ou `percentual` hoje (só `manual` e `formula`).
-- Validação no `PayrollContext` checa `classification !== undefined` mas **não bloqueia `null`** — gap real de persistência.
-- RLS já restringe por `rubricas.manage`. UI já tem banner de pendência.
+### O que faz sentido (e está alinhado a sprints anteriores):
+- Reconhecer formalmente que **Salário Real, G2, Salário Líquido, Salário Fiscal** são **derivadas** (output), não inputs operacionais.
+- Bloquear edição manual delas na Central de Folha.
+- Não exigir `classification` para `nature = calculada` (já é o caso na prática — pendentes são todas calculadas exceto Salário Fiscal).
+- Reforçar regra: **nome nunca define comportamento**.
 
-### Mapping proposto (revisão humana antes de aplicar)
+### O que NÃO devo fazer agora (e por quê):
+- **Implementar fórmulas de salario_real / salario_liquido**: o motor de cálculo (PRD-01) está fora de escopo declarado de todas as sprints anteriores. Hoje a Central de Folha agrupa por nome via `EmployeeDrawer.groupedRubrics` (legado) — mexer em fórmula sem migrar a Central primeiro produz inconsistência.
+- **Criar fórmula automaticamente** para as 3 rubricas calculadas: já existem com `calculation_method=formula` mas com `formulaItems` vazio. Preencher fórmula é decisão funcional, não estrutural — admin deve montar pela UI quando o motor estiver pronto.
+- **"salario_fiscal" como derivada**: hoje está cadastrada como `nature=base` (input manual). Mudar para `calculada` sem regra de cálculo a quebra como input. Análise diz "não recalcular agora, manter como placeholder" — então **deixar exatamente como está** (base, manual, classificação pendente). Vou apenas documentar.
 
-Mapeamento por **evidência forte e direta**, ato único de saneamento (não vira código heurístico):
+---
 
-| Cód | Nome | Classificação proposta | Confiança |
-|---|---|---|---|
-| 1 | Salário CTPS | `salario_ctps` | alta |
-| 2 | Salário G | `salario_g` | alta |
-| 3 | Salário Fiscal | **pendente** | ambíguo (não está no catálogo) |
-| 4 | (+) Outros Rendim. | `outros_rendimentos` | alta |
-| 5 | (+) Horas Extras | `horas_extras` | alta |
-| 6 | (+) 1/3 de férias | `ferias_terco` | alta |
-| 7 | (+) Insalub. 20% | `insalubridade` | alta |
-| 8 | (+) Salário Familia | `salario_familia` | alta |
-| 9 | (-) INSS | `inss` | alta |
-| 10 | (-) Emprést. Consig. | `emprestimos` | alta |
-| 11 | (-) Adiant Geren. | `adiantamentos` | alta (mas **type=provento** — incoerente, ver §3) |
-| 12 | (-) Vales/Descontos | `vales` | alta |
-| 13 | (-) Faltas/Descontos | `faltas` | alta |
-| 14 | Salário Real (fórmula) | **pendente** | derivada — sem slot canônico claro |
-| 15 | Salário G2 complem. (fórmula) | **pendente** | derivada |
-| 16 | Salário Líquido (fórmula) | **pendente** | derivada |
+## Plano: ajuste estrutural mínimo (sem motor)
 
-**Pendências reais (4):** 3, 14, 15, 16 — admin precisa decidir.
+### 1. Schema — relaxar regra de classificação para rubricas calculadas
 
-### Mudanças (mínimas, em 4 frentes)
+Hoje o CHECK constraint `rubricas_active_requires_classification` exige classificação em qualquer rubrica ativa. PRD-02 + análise dizem: **calculadas (derivadas) não devem ter classificação**.
 
-#### 1. Migration de saneamento (data fix, sem schema)
-- `UPDATE rubricas` setando `classification` para os 12 itens de mapping evidente acima.
-- Os 4 ambíguos permanecem `NULL` → aparecem no banner como pendência real.
-- **Correção de incoerência**: rubrica #11 "(-) Adiant Geren." está marcada como `type=provento` mas é claramente desconto. Trocar para `type='desconto'` no mesmo update.
+Migration:
+- Atualizar CHECK: `is_active = false OR nature = 'calculada' OR classification IS NOT NULL`.
+- Adicionar CHECK novo: `nature <> 'calculada' OR classification IS NULL` (proíbe classificação em derivada).
 
-#### 2. `PayrollContext.validateRubricPayload` — fechar o gap
-- Trocar `if (rubric.classification !== undefined && !rubric.classification)` por checagem que bloqueia `null`/`undefined` em **insert** (`Omit<Rubric,"id">`) e em update quando `classification === null`.
-- Adicionar bloqueio: se `isActive === true` (ou rubrica nova), `classification` é obrigatória. Se `isActive === false`, permite salvar sem classificação (rubrica inativa não entra em folha).
-- Adicionar validação coerência tipo×classificação: `inss/emprestimos/adiantamentos/vales/faltas` só para `type=desconto`; demais só para `type=provento`. Erro claro se incoerente.
-- Bloquear `nature`/`calculation_method` ausentes em insert (hoje aceita).
+### 2. `validateRubricPayload` (PayrollContext) — espelhar regras
 
-#### 3. Schema constraint de defesa em profundidade (opcional, baixo risco)
-- Adicionar `CHECK` no banco: `is_active = false OR classification IS NOT NULL`. Garante que persistência rejeita rubrica ativa sem classificação mesmo via API direta.
-- Adicionar `CHECK` de coerência tipo×classificação espelhando a validação do app.
+- Se `nature = calculada` → `classification` deve ser `null` (rejeita se preenchido).
+- Se `nature = base` e `isActive` → `classification` continua obrigatória (já é).
+- Se `nature = calculada` → forçar `allowManualOverride = false` (derivada não é editável manual; é output).
 
-#### 4. UI `Rubrics.tsx` — transparência reforçada
-- Banner atual: melhorar texto para "X rubricas ativas sem classificação canônica. **Bloqueia evolução de Recibos e Relatórios.** Edite cada uma."
-- Tabela: badge vermelha "Pendente" na coluna Classificação quando `null`.
-- Manter aviso de "em desenvolvimento" em importar/exportar.
+### 3. UI `/rubricas` — refletir natureza derivada
 
-### O que NÃO será feito (e por quê)
-- Migrar Central de Folha → fora de escopo, depende desta sprint primeiro.
-- Recibos / Relatórios → não iniciar.
-- Remover `category`/`entry_mode` → ainda referenciados por entries antigos via `getLegacyValue`.
-- Mapeamento automático dos 4 ambíguos → admin precisa decidir, não inventar.
+- Aba **Classificação**: quando `nature = calculada`, esconder seletor e mostrar texto: "Rubricas calculadas são saídas do sistema — não recebem classificação técnica."
+- Aba **Dados**: ao alternar `nature` para `calculada`, limpar `classification` no form e desabilitar checkbox "Permitir edição manual".
+- Tabela: badge **"Derivada"** (cor neutra) na coluna Classificação para `nature = calculada`, em vez de "Pendente" vermelho.
+- Banner de pendência: contar apenas rubricas **`nature = base` ativas sem classificação** (hoje conta as 4; passa a contar só Salário Fiscal = 1, que é pendente real).
 
-### Arquivos alterados
+### 4. `EmployeeDrawer` (Central de Folha) — bloqueio defensivo de edição
+
+Mudança mínima e cirúrgica (não toca agrupamento):
+- Já filtra `isBaseRubric` para "Rubricas-base"; mas nas seções "Proventos" e "Descontos" entram derivadas (`nature=calculada`).
+- Filtrar derivadas dessas seções: derivada **não é input**, então não aparece como campo editável.
+- Não criar seção "Saídas calculadas" agora (depende do motor) — derivadas simplesmente somem do drawer até o motor existir. Funcionalmente: hoje elas já estão sempre em zero, então remover não muda nada operacional.
+
+### 5. Documentação no código
+
+Comentário de bloco no topo de `Rubrics.tsx` e `EmployeeDrawer.tsx`:
+- "Rubricas com `nature=calculada` são DERIVADAS (output do motor de cálculo, PRD-01). Não recebem classificação, não são editáveis manualmente, não aparecem como input na Central de Folha. O cálculo real será implementado quando o motor for ativado em sprint futura."
+
+---
+
+## O que **NÃO** será feito (com justificativa)
+
+| Item da análise | Por que não agora |
+|---|---|
+| Implementar fórmula `salario_real = soma(7 classificações)` | Motor de cálculo (PRD-01) fora de escopo. Central de Folha ainda agrupa por nome legado — implementar fórmula sem migrar agrupamento gera divergência. |
+| Implementar `salario_liquido = salario_real - descontos + g2` | Idem. |
+| Mudar `Salário Fiscal` (#3) de base → calculada | Análise mesma diz "não recalcular agora, manter placeholder". Hoje é base manual; permanece como pendência de classificação real (admin decide depois). |
+| Criar `formulaItems` automaticamente para Salário Real/G2/Líquido | Decisão funcional do admin via UI quando motor existir. Não inventar. |
+| Migrar Central de Folha para agrupar por `classification` | Sprint futura — depende de o admin classificar Salário Fiscal e do motor. |
+
+---
+
+## Arquivos alterados
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/migrations/<nova>.sql` | UPDATE de 12 classifications + correção type da #11 + 2 CHECK constraints |
-| `src/contexts/PayrollContext.tsx` | `validateRubricPayload` mais estrito (insert/update, coerência tipo×classificação, ativa exige classificação) |
-| `src/pages/Rubrics.tsx` | banner reforçado + badge "Pendente" na coluna |
+| `supabase/migrations/<nova>.sql` | Relaxa CHECK para permitir calculada sem classificação; novo CHECK proíbe classificação em calculada |
+| `src/contexts/PayrollContext.tsx` | `validateRubricPayload`: regras para `nature=calculada` (sem classificação, sem manual override) |
+| `src/pages/Rubrics.tsx` | UI: esconde classificação para calculada, badge "Derivada", banner conta só base ativas sem classificação |
+| `src/components/payroll/EmployeeDrawer.tsx` | Filtra `nature=calculada` das seções Proventos/Descontos (não são inputs) |
 
-### Resumo final que será entregue após execução
+---
 
-1. **Saneadas:** 12 rubricas classificadas, 1 corrigida de tipo.
-2. **Pendentes:** 4 rubricas (Salário Fiscal + 3 fórmulas de salário) — visíveis no banner, admin decide.
-3. **Bloqueado a partir de agora:** insert/update de rubrica ativa sem `classification`, sem `nature`, sem `calculation_method`, ou com classificação incoerente com `type`. CHECK no banco como defesa em profundidade.
-4. **Legado mantido (compat):** colunas `category`, `entry_mode`, `getLegacyValue` em `EmployeeDrawer`. Comentados.
-5. **NÃO liberado ainda:** Central de Folha (depende dos 4 pendentes), Recibos, Relatórios.
-6. **Critério final:** base **parcialmente pronta** — só estará 100% pronta quando admin classificar os 4 ambíguos restantes pela UI.
+## Resultado esperado
+
+- **Contrato técnico** alinhado: `nature=calculada` ⇒ output, sem classificação, sem edição manual.
+- **3 rubricas derivadas** (Salário Real, G2, Líquido) saem do banner de pendência (são derivadas, não pendentes).
+- **1 rubrica realmente pendente**: Salário Fiscal (#3) — admin classifica quando decidir o papel dela.
+- **Central de Folha** deixa de mostrar derivadas como campo editável (defesa).
+- **Motor de cálculo continua não implementado** — derivadas existem como cadastro, valor permanece zero até o motor ser ativado em sprint dedicada.
+
+### Critério final
+Base de rubricas **estruturalmente pronta**. Falta apenas:
+1. Admin classificar Salário Fiscal (1 ação manual).
+2. Sprint futura: implementar motor + migrar agrupamento da Central de Folha por `classification`.
 
