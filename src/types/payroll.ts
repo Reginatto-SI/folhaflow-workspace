@@ -109,10 +109,14 @@ export interface Rubric {
   percentageBaseRubricId?: string | null;
   formulaItems: RubricFormulaItem[];
   allowManualOverride: boolean;
-  // Compatibilidade temporária — não usar em lógica nova.
-  // `category` (texto livre) e `mode` (manual|formula) são derivados/preservados
-  // só enquanto motor/recibos não migram para `classification` + `calculationMethod`.
+  /**
+   * @deprecated PRD-02: use `classification`. Mantido apenas para compatibilidade da coluna legada.
+   * Não usar em lógica nova — nome/categoria livre nunca define comportamento.
+   */
   category?: string;
+  /**
+   * @deprecated PRD-02: use `calculationMethod`. Derivado para compatibilidade transitória.
+   */
   mode?: "manual" | "formula";
 }
 

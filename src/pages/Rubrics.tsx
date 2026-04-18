@@ -1,3 +1,14 @@
+// ──────────────────────────────────────────────────────────────────────────────
+// /rubricas — Cadastro de Rubricas (PRD-02)
+//
+// Regras críticas (não violar):
+//  • Classificação técnica é OBRIGATÓRIA ao salvar (catálogo canônico do PRD-02).
+//  • Nome/código/categoria NUNCA definem comportamento — use `nature`/`classification`.
+//  • Backend reforça permissão via RLS `has_permission('rubricas.manage')`.
+//    A rota também é protegida no `App.tsx`. Não confiar só em ocultação de UI.
+//  • Campos `category` e `entry_mode` continuam gravados só para compat de coluna
+//    legada — serão removidos em sprint futura. Não consumir em lógica nova.
+// ──────────────────────────────────────────────────────────────────────────────
 import React, { useMemo, useState } from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Rubric, RubricClassification, RubricFormulaItem, RubricMethod, RubricNature } from "@/types/payroll";
@@ -721,6 +732,20 @@ const Rubrics: React.FC = () => {
           </Dialog>
         </div>
       </div>
+
+      {kpis.semClassificacao > 0 && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+          <ListChecks className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" />
+          <div className="text-sm">
+            <p className="font-medium text-foreground">
+              {kpis.semClassificacao} {kpis.semClassificacao === 1 ? "rubrica sem" : "rubricas sem"} classificação técnica
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Edite cada rubrica e defina a classificação canônica do PRD-02 antes da geração de recibos e relatórios.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-4">
         <div className="flex items-center gap-3 rounded-lg border bg-card p-4">

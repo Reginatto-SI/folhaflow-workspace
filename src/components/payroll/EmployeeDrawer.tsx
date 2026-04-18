@@ -68,15 +68,10 @@ const NumericRubricInput: React.FC<{
   );
 };
 
-const isBaseRubric = (rubric: Rubric) => {
-  // PRD-02: a verdade canônica é `rubric.nature`. Quando presente, decide-se por ela.
-  if (rubric.nature === "base") return true;
-  if (rubric.nature === "calculada") return false;
-  // Compatibilidade transitória: para rubricas legadas sem `nature` definida,
-  // usamos heurística por nomenclatura. NÃO usar em código novo.
-  const normalized = `${rubric.code} ${rubric.name} ${rubric.category ?? ""}`.toLowerCase();
-  return ["salario", "salário", "base", "ctps", "fiscal", "g2"].some((token) => normalized.includes(token));
-};
+// PRD-02: nome da rubrica NUNCA define comportamento. A única verdade é `rubric.nature`.
+// Heurística antiga por nome/código foi removida — todas as rubricas ativas têm `nature` no banco.
+// Caso `nature` esteja ausente (dado legado raro), assume-se `false` (não-base) por segurança.
+const isBaseRubric = (rubric: Rubric) => rubric.nature === "base";
 
 const getLegacyValue = (rubric: Rubric, payload: Record<string, number>) => {
   const directById = payload[rubric.id];
