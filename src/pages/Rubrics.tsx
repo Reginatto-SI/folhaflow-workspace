@@ -2,10 +2,16 @@
 // /rubricas — Cadastro de Rubricas (PRD-02)
 //
 // Regras críticas (não violar):
-//  • Classificação técnica é OBRIGATÓRIA ao salvar (catálogo canônico do PRD-02).
+//  • Rubricas BASE (operacionais): inputs da folha. Classificação técnica
+//    OBRIGATÓRIA ao salvar quando ATIVA (catálogo canônico do PRD-02).
+//  • Rubricas CALCULADAS (derivadas): SAÍDAS do motor de cálculo (PRD-01).
+//    NÃO recebem classificação. NÃO admitem edição manual. NÃO aparecem como
+//    input na Central de Folha. O cálculo real será implementado quando o motor
+//    for ativado em sprint futura — hoje existem apenas como cadastro.
 //  • Nome/código/categoria NUNCA definem comportamento — use `nature`/`classification`.
-//  • Backend reforça permissão via RLS `has_permission('rubricas.manage')`.
-//    A rota também é protegida no `App.tsx`. Não confiar só em ocultação de UI.
+//  • Backend reforça permissão via RLS `has_permission('rubricas.manage')` e
+//    CHECK constraints (`rubricas_active_base_requires_classification`,
+//    `rubricas_calculada_no_classification`). Não confiar só em ocultação de UI.
 //  • Campos `category` e `entry_mode` continuam gravados só para compat de coluna
 //    legada — serão removidos em sprint futura. Não consumir em lógica nova.
 // ──────────────────────────────────────────────────────────────────────────────
@@ -169,7 +175,11 @@ const Rubrics: React.FC = () => {
   const kpis = useMemo(() => {
     const total = rubrics.length;
     const active = rubrics.filter((rubric) => rubric.isActive).length;
-    const semClassificacao = rubrics.filter((rubric) => !rubric.classification).length;
+    // PRD-02: pendência real = rubrica BASE ativa sem classificação. Calculadas (derivadas)
+    // não têm classificação por design — não devem entrar na contagem de pendentes.
+    const semClassificacao = rubrics.filter(
+      (rubric) => rubric.isActive && rubric.nature === "base" && !rubric.classification
+    ).length;
     return { total, active, inactive: total - active, semClassificacao };
   }, [rubrics]);
 
@@ -236,7 +246,15 @@ const Rubrics: React.FC = () => {
     if (!normalizeText(draft.name)) return "Nome da rubrica é obrigatório.";
     if (!normalizeText(draft.code)) return "Código da rubrica é obrigatório.";
     if (!Number.isFinite(draft.order) || draft.order < 0) return "Ordem deve ser numérica válida.";
-    if (!draft.classification) return "Classificação é obrigatória (PRD-02).";
+
+    // PRD-02: classificação só é obrigatória para rubricas BASE ativas.
+    // Calculadas (derivadas) NÃO recebem classificação — bloqueio se vier preenchida.
+    if (draft.nature === "calculada") {
+      if (draft.classification) return "Rubricas calculadas (derivadas) não recebem classificação técnica.";
+      if (draft.allowManualOverride) return "Rubricas calculadas (derivadas) não admitem edição manual.";
+    } else if (draft.isActive && !draft.classification) {
+      return "Classificação é obrigatória para rubricas base ativas (PRD-02).";
+    }
 
     const duplicatedCode = rubrics.some(
       (rubric) => rubric.code.toLowerCase() === draft.code.toLowerCase() && rubric.id !== editing?.id
@@ -452,7 +470,16 @@ const Rubrics: React.FC = () => {
                         <Label>Natureza *</Label>
                         <Select
                           value={form.nature}
-                          onValueChange={(value) => setForm((prev) => ({ ...prev, nature: value as RubricNature }))}
+                          onValueChange={(value) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              nature: value as RubricNature,
+                              // PRD-02: ao virar calculada (derivada), classification e override
+                              // devem ser limpos — derivadas não têm classificação nem edição manual.
+                              classification: value === "calculada" ? null : prev.classification,
+                              allowManualOverride: value === "calculada" ? false : prev.allowManualOverride,
+                            }))
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -681,7 +708,7 @@ const Rubrics: React.FC = () => {
                       </div>
                     )}
 
-                    {form.calculationMethod !== "manual" && (
+                    {form.calculationMethod !== "manual" && form.nature !== "calculada" && (
                       <div className="flex items-center space-x-2">
                         <Checkbox
                           id="allow-manual-override"
@@ -699,23 +726,35 @@ const Rubrics: React.FC = () => {
                 {/* ─── Aba Classificação ─── */}
                 <TabsContent value="classificacao" className="mt-0 min-h-0 flex-1 overflow-y-auto pr-2">
                   <section className="space-y-3 rounded-lg border bg-muted/20 p-4">
-                    <div className="space-y-1.5">
-                      <Label>Classificação técnica *</Label>
-                      <SearchableCombobox
-                        value={form.classification ?? ""}
-                        items={classificationItems}
-                        placeholder="Selecione a classificação"
-                        searchPlaceholder="Buscar classificação"
-                        emptyMessage="Nenhuma classificação disponível para este tipo"
-                        onValueChange={(value) =>
-                          setForm((prev) => ({ ...prev, classification: (value || null) as RubricClassification | null }))
-                        }
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Define agrupamento canônico em recibos e relatórios. <strong>Não depende do nome</strong> da
-                        rubrica — escolha pela função técnica.
-                      </p>
-                    </div>
+                    {form.nature === "calculada" ? (
+                      // PRD-02: derivadas são saídas do motor — sem classificação técnica.
+                      <div className="rounded-md border border-dashed bg-background p-4 text-sm text-muted-foreground">
+                        <p className="font-medium text-foreground">Rubrica derivada</p>
+                        <p className="mt-1">
+                          Rubricas com natureza <strong>Calculada</strong> são saídas do sistema (PRD-01) e
+                          <strong> não recebem classificação técnica</strong>. O agrupamento em recibos e relatórios usa
+                          apenas as rubricas <strong>base</strong> classificadas.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <Label>Classificação técnica *</Label>
+                        <SearchableCombobox
+                          value={form.classification ?? ""}
+                          items={classificationItems}
+                          placeholder="Selecione a classificação"
+                          searchPlaceholder="Buscar classificação"
+                          emptyMessage="Nenhuma classificação disponível para este tipo"
+                          onValueChange={(value) =>
+                            setForm((prev) => ({ ...prev, classification: (value || null) as RubricClassification | null }))
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Define agrupamento canônico em recibos e relatórios. <strong>Não depende do nome</strong> da
+                          rubrica — escolha pela função técnica.
+                        </p>
+                      </div>
+                    )}
                   </section>
                 </TabsContent>
               </Tabs>
@@ -738,11 +777,12 @@ const Rubrics: React.FC = () => {
           <ListChecks className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" />
           <div className="text-sm">
             <p className="font-medium text-foreground">
-              {kpis.semClassificacao} {kpis.semClassificacao === 1 ? "rubrica ativa sem" : "rubricas ativas sem"} classificação canônica
+              {kpis.semClassificacao} {kpis.semClassificacao === 1 ? "rubrica base ativa sem" : "rubricas base ativas sem"} classificação canônica
             </p>
             <p className="text-xs text-muted-foreground">
               Bloqueia evolução de Recibos e Relatórios (PRD-02). Edite cada rubrica marcada como{" "}
               <span className="font-medium text-destructive">Pendente</span> e defina a classificação técnica.
+              Rubricas <strong>derivadas</strong> (calculadas) não entram nesta contagem — são saídas do sistema.
             </p>
           </div>
         </div>
@@ -918,8 +958,13 @@ const Rubrics: React.FC = () => {
                           <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
                             {CLASSIFICATION_LABELS[rubric.classification]}
                           </Badge>
+                        ) : rubric.nature === "calculada" ? (
+                          // PRD-02: derivada não recebe classificação por design — não é pendência.
+                          <Badge variant="outline" className="border-muted-foreground/30 bg-muted text-muted-foreground">
+                            Derivada
+                          </Badge>
                         ) : (
-                          // PRD-02: rubrica sem classificação canônica — bloqueia evolução para Recibos/Relatórios.
+                          // PRD-02: rubrica BASE sem classificação canônica — bloqueia evolução para Recibos/Relatórios.
                           <Badge variant="outline" className="border-destructive/40 bg-destructive/15 font-semibold text-destructive">
                             Pendente
                           </Badge>
