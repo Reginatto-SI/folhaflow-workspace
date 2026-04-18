@@ -1,0 +1,356 @@
+# PRD-02 — Cadastro de Rubricas
+
+---
+
+## 1. Objetivo
+
+Permitir a criação e gestão de rubricas de forma estruturada, garantindo que todas as regras de cálculo sejam explícitas, validadas e compatíveis com o motor de cálculo (PRD-01).
+
+As rubricas representam todos os valores que compõem a folha de pagamento, sendo a base do cálculo e também da exibição no recibo e nos relatórios.
+
+---
+
+## 2. Princípios obrigatórios
+
+- Nenhuma regra implícita
+- Zero heurística baseada em nome
+- Rubricas são a única fonte de valores operacionais da folha
+- Separação entre cálculo e exibição
+- Compatibilidade total com o motor
+- Estrutura preparada para relatórios e recibos
+- Toda rubrica operacional deve possuir classificação obrigatória
+- Rubricas derivadas não devem ser tratadas como rubricas operacionais
+
+---
+
+## 3. Estrutura da Rubrica
+
+### 3.1 Campos obrigatórios
+
+- id
+- nome
+- codigo (único)
+- tipo:
+  - `provento`
+  - `desconto`
+- natureza:
+  - `base`
+  - `calculada`
+- metodo_calculo:
+  - `manual`
+  - `valor_fixo`
+  - `percentual`
+  - `formula`
+- ordem_calculo (inteiro obrigatório)
+- ativa (boolean)
+
+---
+
+### 3.2 Campo condicional (classificação)
+
+- classificacao (obrigatória apenas para rubricas operacionais)
+
+---
+
+### 3.3 Campos condicionais por método
+
+#### valor_fixo
+- valor_base
+
+#### percentual
+- percentual
+- referencia_base
+
+#### formula
+- formula
+
+---
+
+## 4. Classificação de Rubricas (CORE DO SISTEMA)
+
+### 4.1 Conceito
+
+A classificação é uma camada obrigatória que organiza as rubricas operacionais para:
+
+- recibos
+- relatórios
+- consolidação financeira
+
+A classificação é a única fonte de agrupamento de valores.
+
+---
+
+### 4.2 Valores possíveis (padrão do sistema)
+
+#### Proventos
+
+- `salario_ctps`
+- `salario_g`
+- `outros_rendimentos`
+- `horas_extras`
+- `salario_familia`
+- `ferias_terco`
+- `insalubridade`
+
+#### Descontos
+
+- `inss`
+- `emprestimos`
+- `adiantamentos`
+- `vales`
+- `faltas`
+
+---
+
+### 4.3 Regras obrigatórias
+
+- Toda rubrica operacional deve possuir UMA classificação
+- Uma rubrica não pode possuir múltiplas classificações
+- Classificação não depende do nome da rubrica
+- Classificação define apenas organização (não cálculo)
+- Rubricas derivadas NÃO participam da classificação
+
+---
+
+## 5. Tipos de Rubrica (EXTENSÃO CRÍTICA)
+
+---
+
+### 5.1 Rubricas Operacionais (INPUT)
+
+São rubricas utilizadas diretamente na composição da folha.
+
+#### Exemplos:
+
+- salário_ctps
+- horas_extras
+- inss
+- vales
+- faltas
+
+#### Características:
+
+- exigem classificação obrigatória
+- podem ser editadas pelo usuário
+- participam diretamente do cálculo
+- são utilizadas em recibos e relatórios
+- fazem parte do modelo de agregação
+
+---
+
+### 5.2 Rubricas Derivadas (OUTPUT DO SISTEMA)
+
+São valores calculados automaticamente pelo sistema.
+
+#### Exemplos:
+
+- salario_fiscal
+- salario_real
+- salario_g2_complemento
+- salario_liquido
+
+#### Características:
+
+- NÃO exigem classificação
+- NÃO podem ser editadas manualmente
+- são resultado do motor de cálculo
+- são exibidas na folha apenas como saída
+- não participam do modelo de agrupamento por classificação
+
+---
+
+### 5.3 Regra estrutural obrigatória
+
+- Apenas rubricas operacionais exigem classificação
+- Rubricas derivadas não devem possuir classificação
+- O sistema deve impedir edição manual de rubricas derivadas
+- O motor de cálculo é responsável por gerar essas rubricas
+
+## 5.4 Modelo de Bases da Folha (EXTENSÃO ESTRUTURAL)
+
+O sistema trabalha com duas bases distintas de valores, que coexistem na mesma folha:
+
+---
+
+### 5.4.1 Base Fiscal (Oficial)
+
+Representa os valores reconhecidos legalmente.
+
+Exemplos:
+- salario_ctps
+- salario_fiscal
+
+Características:
+
+- utilizada para encargos (INSS, etc.)
+- base para obrigações fiscais
+- deve ser consistente com registros oficiais (CTPS)
+- NÃO deve ser alterada por lógica gerencial
+
+---
+
+### 5.4.2 Base Gerencial (Operacional)
+
+Representa os valores reais pagos ao funcionário.
+
+Exemplos:
+- salario_g
+- outros_rendimentos
+- horas_extras
+
+Características:
+
+- utilizada para controle interno
+- pode divergir da base fiscal
+- inclui ajustes operacionais da empresa
+- não representa necessariamente valor declarado
+
+---
+
+### 5.4.3 Campos Derivados (Resultado)
+
+São valores calculados a partir das duas bases.
+
+Exemplos:
+- salario_real
+- salario_g2_complemento
+- salario_liquido
+
+Características:
+
+- não são input
+- não possuem classificação
+- são resultado do motor de cálculo
+- não devem ser editados manualmente
+
+---
+
+### 5.4.4 Regra estrutural obrigatória
+
+- o sistema NÃO deve misturar base fiscal e gerencial em uma mesma regra de cálculo
+- encargos devem ser calculados exclusivamente sobre base fiscal
+- valores pagos devem ser derivados da base gerencial
+- campos derivados devem ser calculados de forma determinística
+
+---
+
+### 5.4.5 Papel do Salário Fiscal
+
+- é uma rubrica operacional (natureza = base)
+- representa a base oficial da folha
+- deve possuir classificação válida
+- pode ser utilizada como referência para cálculos fiscais
+---
+
+## 6. Métodos de cálculo
+
+### Manual
+- valor informado pelo usuário
+
+### Valor fixo
+- valor constante
+
+### Percentual
+- baseado em outra rubrica
+
+### Fórmula
+- expressão com códigos de rubricas
+
+---
+
+## 7. Validações
+
+### Para rubricas operacionais
+
+- código único
+- ordem obrigatória
+- fórmula válida
+- sem dependência circular
+- classificação obrigatória
+- coerência entre tipo e classificação
+
+---
+
+### Para rubricas derivadas
+
+- não permitir edição manual
+- não exigir classificação
+- não permitir alteração de estrutura
+
+---
+
+## 8. Interface (UX)
+
+### Estrutura
+
+Modal com abas:
+
+---
+
+#### Aba 1 — Dados
+- nome
+- código
+- tipo
+- natureza
+
+---
+
+#### Aba 2 — Cálculo
+- método de cálculo
+- campos dinâmicos conforme método
+
+---
+
+#### Aba 3 — Classificação (apenas operacional)
+- campo obrigatório apenas para rubricas operacionais
+
+---
+
+## 9. Regras críticas
+
+- Nome não define comportamento
+- Código é a referência técnica
+- Classificação é a referência de exibição
+- Não permitir rubrica operacional sem classificação
+- Não permitir lógica ambígua
+- Não usar heurística baseada em nome
+- Não tratar rubricas derivadas como operacionais
+
+---
+
+## 10. Integração com motor
+
+- motor consome rubricas operacionais
+- rubricas derivadas são geradas pelo motor
+- ordem de cálculo deve ser respeitada
+- classificação não interfere no cálculo
+
+---
+
+## 11. Estratégia de transição
+
+- manter compatibilidade com dados antigos
+- classificar rubricas operacionais existentes
+- identificar rubricas derivadas e ajustar natureza
+- não quebrar sistema atual
+- eliminar gradualmente campos legados (`category`, `mode`)
+
+---
+
+## 12. Fora do escopo
+
+- regras tributárias automáticas
+- faixas progressivas
+- múltiplos layouts de classificação
+- múltiplos tipos de agrupamento
+
+---
+
+## 13. Critérios de sucesso
+
+- rubricas operacionais possuem classificação válida
+- rubricas derivadas não são tratadas como operacionais
+- sistema não depende de nome
+- cálculo é consistente e determinístico
+- recibos e relatórios funcionam corretamente
+- separação entre input e output está clara no sistema
