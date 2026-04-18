@@ -270,11 +270,16 @@ const mapRubricRowToModel = (row: {
 const deriveLegacyEntryMode = (method: Rubric["calculationMethod"]): "manual" | "formula" =>
   method === "formula" ? "formula" : "manual";
 
+// PRD-02 — contrato canônico de gravação:
+//   nature + calculation_method + classification (+ campos condicionais).
+// Os campos `category` e `entry_mode` abaixo existem APENAS para satisfazer colunas
+// NOT NULL legadas no banco até serem removidas em sprint futura. Não usar em lógica nova.
+// Segurança: gravação é gateada no backend por RLS `has_permission('rubricas.manage')`.
 const mapRubricInsertToRow = (rubric: Omit<Rubric, "id">) => ({
   name: normalizeRequiredText(rubric.name),
   code: normalizeRequiredText(rubric.code),
-  // Compat: coluna category mantida até remoção em fase futura.
-  category: normalizeRequiredText(rubric.category || rubric.classification || "geral"),
+  // Compat legada: espelha a classification (ou 'indefinido') só para satisfazer NOT NULL.
+  category: normalizeRequiredText(rubric.classification ?? "indefinido"),
   type: rubric.type,
   entry_mode: deriveLegacyEntryMode(rubric.calculationMethod),
   display_order: rubric.order,

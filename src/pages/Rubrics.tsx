@@ -722,6 +722,20 @@ const Rubrics: React.FC = () => {
         </div>
       </div>
 
+      {kpis.semClassificacao > 0 && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+          <ListChecks className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" />
+          <div className="text-sm">
+            <p className="font-medium text-foreground">
+              {kpis.semClassificacao} {kpis.semClassificacao === 1 ? "rubrica sem" : "rubricas sem"} classificação técnica
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Edite cada rubrica e defina a classificação canônica do PRD-02 antes da geração de recibos e relatórios.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-4">
         <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
