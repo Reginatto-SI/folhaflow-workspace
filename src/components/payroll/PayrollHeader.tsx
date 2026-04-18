@@ -1,9 +1,9 @@
 import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Plus, FileText } from "lucide-react";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 const MONTHS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -17,10 +17,11 @@ interface PayrollHeaderProps {
 const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
   const { companies, selectedCompany, setSelectedCompany, selectedMonth, setSelectedMonth } = usePayroll();
 
+  // Range mais amplo (-12 / +12 meses): com busca por digitação, escala sem fricção.
   const monthOptions = React.useMemo(() => {
     const options: { label: string; value: string; month: number; year: number }[] = [];
     const now = new Date();
-    for (let i = -3; i <= 3; i++) {
+    for (let i = -12; i <= 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
       options.push({
         label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
@@ -32,41 +33,48 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
     return options;
   }, []);
 
+  const companyItems = React.useMemo(
+    () => companies.map((c) => ({ value: c.id, label: c.name })),
+    [companies],
+  );
+
+  const monthItems = React.useMemo(
+    () => monthOptions.map((o) => ({ value: o.value, label: o.label })),
+    [monthOptions],
+  );
+
+  const selectedMonthValue = `${selectedMonth.month}-${selectedMonth.year}`;
+
   return (
     <div className="flex flex-wrap items-center gap-3 mb-4">
-      <Select
+      {/* Combobox com busca: o usuário digita parte do nome da empresa para filtrar a lista. */}
+      <SearchableCombobox
         value={selectedCompany?.id || ""}
+        items={companyItems}
+        placeholder="Selecione a empresa"
+        searchPlaceholder="Buscar empresa..."
+        emptyMessage="Nenhuma empresa encontrada."
+        className="w-[240px]"
         onValueChange={(id) => {
           const c = companies.find((c) => c.id === id);
           if (c) setSelectedCompany(c);
         }}
-      >
-        <SelectTrigger className="w-[220px]">
-          <SelectValue placeholder="Selecione a empresa" />
-        </SelectTrigger>
-        <SelectContent>
-          {companies.map((c) => (
-            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      />
 
-      <Select
-        value={`${selectedMonth.month}-${selectedMonth.year}`}
+      {/* Combobox com busca: aceita mês ou ano (ex: "março", "2026"). */}
+      <SearchableCombobox
+        value={selectedMonthValue}
+        items={monthItems}
+        placeholder="Selecione o mês"
+        searchPlaceholder="Buscar competência..."
+        emptyMessage="Nenhuma competência encontrada."
+        className="w-[200px]"
         onValueChange={(v) => {
+          if (!v) return;
           const [m, y] = v.split("-").map(Number);
           setSelectedMonth({ month: m, year: y });
         }}
-      >
-        <SelectTrigger className="w-[200px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {monthOptions.map((o) => (
-            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      />
 
       <Badge variant="outline" className="text-xs font-medium">Em edição</Badge>
 
