@@ -28,13 +28,16 @@ import { Label } from "@/components/ui/label";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   Calculator,
   Check,
   Download,
+  Eye,
   FileText,
   ListChecks,
   MoreHorizontal,
@@ -162,6 +165,17 @@ const Rubrics: React.FC = () => {
     [rubrics]
   );
 
+  // PRD-02: rubricas seguras para serem referenciadas em fórmula/percentual.
+  // Exclui: a própria em edição (auto-referência), inativas (ambiguidade operacional)
+  // e derivadas/calculadas (saídas do motor — não devem alimentar inputs até motor existir).
+  const referenceableRubricItems = useMemo(
+    () =>
+      rubrics
+        .filter((r) => r.id !== editing?.id && r.isActive && r.nature !== "calculada")
+        .map((rubric) => ({ value: rubric.id, label: `${rubric.code} — ${rubric.name}` })),
+    [rubrics, editing?.id]
+  );
+
   const classificationItems = useMemo(() => {
     const allowed = form.type === "provento" ? PROVENTO_CLASSIFICATIONS : DESCONTO_CLASSIFICATIONS;
     return allowed.map((value) => ({ value, label: CLASSIFICATION_LABELS[value] }));
@@ -215,14 +229,28 @@ const Rubrics: React.FC = () => {
     setOpen(true);
   };
 
+  // PRD-02: detecta ciclo tanto em método `formula` (multi-dependência) quanto
+  // `percentual` (dependência única em `percentageBaseRubricId`).
   const getCircularError = (draft: RubricFormState, rubricId?: string): string | null => {
-    if (draft.calculationMethod !== "formula") return null;
+    if (draft.calculationMethod !== "formula" && draft.calculationMethod !== "percentual") return null;
     const currentId = rubricId || "__draft__";
     const adjacency = new Map<string, string[]>();
     rubrics.forEach((rubric) => {
-      adjacency.set(rubric.id, rubric.formulaItems.map((item) => item.sourceRubricId));
+      if (rubric.calculationMethod === "formula") {
+        adjacency.set(rubric.id, rubric.formulaItems.map((item) => item.sourceRubricId));
+      } else if (rubric.calculationMethod === "percentual" && rubric.percentageBaseRubricId) {
+        adjacency.set(rubric.id, [rubric.percentageBaseRubricId]);
+      } else {
+        adjacency.set(rubric.id, []);
+      }
     });
-    adjacency.set(currentId, draft.formulaItems.map((item) => item.sourceRubricId));
+    const draftDeps =
+      draft.calculationMethod === "formula"
+        ? draft.formulaItems.map((item) => item.sourceRubricId)
+        : draft.percentageBaseRubricId
+          ? [draft.percentageBaseRubricId]
+          : [];
+    adjacency.set(currentId, draftDeps);
 
     const visiting = new Set<string>();
     const visited = new Set<string>();
@@ -239,7 +267,11 @@ const Rubrics: React.FC = () => {
       visited.add(node);
       return false;
     };
-    return walk(currentId) ? "Referência circular detectada na fórmula." : null;
+    return walk(currentId)
+      ? draft.calculationMethod === "percentual"
+        ? "Referência circular detectada no percentual."
+        : "Referência circular detectada na fórmula."
+      : null;
   };
 
   const validateForm = (draft: RubricFormState): string | null => {
@@ -269,6 +301,11 @@ const Rubrics: React.FC = () => {
       if (!draft.percentageValue || Number(draft.percentageValue) <= 0)
         return "Percentual deve ser maior que zero.";
       if (!draft.percentageBaseRubricId) return "Selecione a rubrica de referência para o percentual.";
+      // Defesa explícita (além do filtro de UI): rubrica não pode referenciar a si mesma.
+      if (editing && draft.percentageBaseRubricId === editing.id)
+        return "Rubrica não pode referenciar ela mesma no percentual.";
+      const circular = getCircularError(draft, editing?.id);
+      if (circular) return circular;
     }
     if (draft.calculationMethod === "formula") {
       if (draft.formulaItems.length === 0) return "Rubrica de fórmula precisa de ao menos um item.";
@@ -304,6 +341,16 @@ const Rubrics: React.FC = () => {
       } else {
         await addRubric(normalizedForm);
         toast.success("Rubrica criada.");
+      }
+      // PRD-02: ordem duplicada não bloqueia (tiebreak por id na listagem),
+      // mas avisa o admin para evitar ambiguidade silenciosa em motor futuro.
+      const collides = rubrics.some(
+        (r) => r.isActive && r.id !== editing?.id && r.order === normalizedForm.order
+      );
+      if (collides && normalizedForm.isActive) {
+        toast.warning(
+          `Outra rubrica ativa já usa a ordem ${normalizedForm.order}. Empate resolvido por id — revise se precisar de sequência única.`
+        );
       }
       setOpen(false);
     } catch (error) {
@@ -399,11 +446,32 @@ const Rubrics: React.FC = () => {
 
             <DialogContent className="flex h-[90vh] max-h-[90vh] max-w-4xl flex-col overflow-hidden">
               <DialogHeader className="border-b pb-3">
-                <DialogTitle className="text-xl">{editing ? "Editar rubrica" : "Nova rubrica"}</DialogTitle>
+                <DialogTitle className="text-xl">
+                  {editing
+                    ? editing.nature === "calculada"
+                      ? "Visualizar rubrica derivada"
+                      : "Editar rubrica"
+                    : "Nova rubrica"}
+                </DialogTitle>
                 <p className="text-sm text-muted-foreground">
                   Cadastro estruturado conforme PRD-02 — dados, método de cálculo e classificação técnica.
                 </p>
               </DialogHeader>
+
+              {/* PRD-02: aviso visual sempre que estamos lidando com rubrica derivada (criação ou edição). */}
+              {form.nature === "calculada" && (
+                <div className="mt-3 flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-warning" />
+                  <div>
+                    <p className="font-medium text-foreground">Rubrica derivada (saída do sistema)</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Esta rubrica é gerada pelo sistema (saída do motor de cálculo, PRD-01) e{" "}
+                      <strong>não deve ser usada como entrada manual</strong>. Não recebe classificação técnica nem aparece
+                      como input na Central de Folha.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <Tabs
                 value={activeTab}
@@ -468,27 +536,44 @@ const Rubrics: React.FC = () => {
                       </div>
                       <div className="space-y-1.5">
                         <Label>Natureza *</Label>
-                        <Select
-                          value={form.nature}
-                          onValueChange={(value) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              nature: value as RubricNature,
-                              // PRD-02: ao virar calculada (derivada), classification e override
-                              // devem ser limpos — derivadas não têm classificação nem edição manual.
-                              classification: value === "calculada" ? null : prev.classification,
-                              allowManualOverride: value === "calculada" ? false : prev.allowManualOverride,
-                            }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="base">Base (entrada na folha)</SelectItem>
-                            <SelectItem value="calculada">Calculada (derivada)</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div>
+                                <Select
+                                  value={form.nature}
+                                  disabled={editing !== null}
+                                  onValueChange={(value) =>
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      nature: value as RubricNature,
+                                      // PRD-02: ao virar calculada (derivada), classification e override
+                                      // devem ser limpos — derivadas não têm classificação nem edição manual.
+                                      classification: value === "calculada" ? null : prev.classification,
+                                      allowManualOverride: value === "calculada" ? false : prev.allowManualOverride,
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="base">Base (entrada na folha)</SelectItem>
+                                    <SelectItem value="calculada">Calculada (derivada)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </TooltipTrigger>
+                            {editing && (
+                              <TooltipContent side="top" className="max-w-xs">
+                                <p className="text-xs">
+                                  A natureza não pode ser alterada após a criação — mudaria o contrato técnico da rubrica
+                                  (input vs. saída). Crie uma nova rubrica se precisar mudar.
+                                </p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                       <div className="space-y-1.5">
                         <Label>Ordem de cálculo *</Label>
@@ -592,10 +677,10 @@ const Rubrics: React.FC = () => {
                           <Label>Rubrica de referência *</Label>
                           <SearchableCombobox
                             value={form.percentageBaseRubricId ?? ""}
-                            items={rubricItems.filter((item) => item.value !== editing?.id)}
+                            items={referenceableRubricItems}
                             placeholder="Selecione a rubrica base"
                             searchPlaceholder="Buscar rubrica"
-                            emptyMessage="Nenhuma rubrica encontrada"
+                            emptyMessage="Nenhuma rubrica disponível (apenas base ativas — derivadas/inativas não podem ser usadas)."
                             onValueChange={(value) =>
                               setForm((prev) => ({ ...prev, percentageBaseRubricId: value || null }))
                             }
@@ -644,10 +729,10 @@ const Rubrics: React.FC = () => {
                                   <Label className="text-xs">Rubrica de origem</Label>
                                   <SearchableCombobox
                                     value={item.sourceRubricId}
-                                    items={rubricItems.filter((r) => r.value !== editing?.id)}
+                                    items={referenceableRubricItems}
                                     placeholder="Selecione a rubrica"
                                     searchPlaceholder="Buscar rubrica"
-                                    emptyMessage="Nenhuma rubrica encontrada"
+                                    emptyMessage="Nenhuma rubrica disponível (apenas base ativas — derivadas/inativas não podem compor fórmula)."
                                     onValueChange={(value) => updateFormulaItem(item.id, { sourceRubricId: value })}
                                   />
                                 </div>
@@ -943,8 +1028,9 @@ const Rubrics: React.FC = () => {
               </tr>
             </thead>
             <tbody>
+              {/* PRD-02: tiebreak por id garante ordem determinística quando admin usa o mesmo `order` em rubricas distintas. */}
               {[...filteredRubrics]
-                .sort((a, b) => a.order - b.order)
+                .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
                 .map((rubric) => {
                   const typeBadge = getTypeBadgeProps(rubric.type);
                   const methodBadge = getMethodBadgeProps(rubric.calculationMethod);
@@ -996,7 +1082,15 @@ const Rubrics: React.FC = () => {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => openEdit(rubric)}>
-                                <Pencil className="mr-2 h-4 w-4" /> Editar
+                                {rubric.nature === "calculada" ? (
+                                  <>
+                                    <Eye className="mr-2 h-4 w-4" /> Visualizar
+                                  </>
+                                ) : (
+                                  <>
+                                    <Pencil className="mr-2 h-4 w-4" /> Editar
+                                  </>
+                                )}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive"
