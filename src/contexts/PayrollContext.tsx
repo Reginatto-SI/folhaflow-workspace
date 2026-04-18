@@ -51,12 +51,37 @@ const normalizeRequiredText = (value: string) => value.trim().replace(/\s+/g, " 
 // Comentário: defesa adicional no contexto para manter CPF limpo mesmo se houver outro ponto de escrita no futuro.
 const normalizeCpf = (value: string) => value.replace(/\D/g, "");
 
-const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; address: string | null }): Company => ({
+const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; address: string | null; is_active: boolean }): Company => ({
   id: row.id,
   name: row.name,
   cnpj: row.cnpj,
   address: row.address || "",
+  isActive: row.is_active,
 });
+
+// Comentário: máscara visual padrão BR para CNPJ usada na exibição.
+export const formatCnpj = (digits: string) => {
+  const d = (digits || "").replace(/\D/g, "").slice(0, 14);
+  if (d.length !== 14) return d;
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12, 14)}`;
+};
+
+// Comentário: validação de dígitos verificadores do CNPJ (algoritmo oficial).
+export const isValidCnpj = (value: string): boolean => {
+  const cnpj = (value || "").replace(/\D/g, "");
+  if (cnpj.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(cnpj)) return false;
+  const calc = (slice: string, weights: number[]) => {
+    const sum = slice.split("").reduce((acc, n, i) => acc + Number(n) * weights[i], 0);
+    const mod = sum % 11;
+    return mod < 2 ? 0 : 11 - mod;
+  };
+  const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const d1 = calc(cnpj.slice(0, 12), w1);
+  const d2 = calc(cnpj.slice(0, 12) + d1, w2);
+  return d1 === Number(cnpj[12]) && d2 === Number(cnpj[13]);
+};
 
 const mapDepartmentRowToModel = (row: { id: string; company_id: string; name: string; is_active: boolean }): Department => ({
   id: row.id,
