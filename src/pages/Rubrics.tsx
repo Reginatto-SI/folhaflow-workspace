@@ -679,10 +679,10 @@ const Rubrics: React.FC = () => {
                           <Label>Rubrica de referência *</Label>
                           <SearchableCombobox
                             value={form.percentageBaseRubricId ?? ""}
-                            items={rubricItems.filter((item) => item.value !== editing?.id)}
+                            items={referenceableRubricItems}
                             placeholder="Selecione a rubrica base"
                             searchPlaceholder="Buscar rubrica"
-                            emptyMessage="Nenhuma rubrica encontrada"
+                            emptyMessage="Nenhuma rubrica disponível (apenas base ativas — derivadas/inativas não podem ser usadas)."
                             onValueChange={(value) =>
                               setForm((prev) => ({ ...prev, percentageBaseRubricId: value || null }))
                             }
