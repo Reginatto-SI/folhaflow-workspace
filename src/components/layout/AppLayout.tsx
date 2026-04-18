@@ -147,7 +147,7 @@ function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.map((item) => (
+              {visibleMain.map((item) => (
                 <SidebarMenuItem key={item.to}>
                   <SidebarMenuButton asChild tooltip={item.label}>
                     <NavLink
@@ -163,42 +163,44 @@ function AppSidebar() {
                 </SidebarMenuItem>
               ))}
 
-              {/* Grupo hierárquico de cadastros para reduzir ruído visual no menu principal. */}
-              <Collapsible open={cadastrosOpen} onOpenChange={setCadastrosOpen}>
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      tooltip="Cadastros"
-                      isActive={isCadastrosRoute}
-                      className="text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    >
-                      <Building2 className="h-4 w-4 shrink-0" />
-                      {!collapsed && <span>Cadastros</span>}
-                      {!collapsed && (
-                        <ChevronDown
-                          className={`ml-auto h-4 w-4 transition-transform ${cadastrosOpen ? "rotate-180" : ""}`}
-                        />
-                      )}
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {cadastrosNavItems.map((item) => (
-                        <SidebarMenuSubItem key={item.to}>
-                          <SidebarMenuSubButton asChild isActive={location.pathname.startsWith(item.to)}>
-                            <NavLink to={item.to} className="text-sidebar-foreground/70 hover:text-sidebar-foreground">
-                              <item.icon className="h-4 w-4 shrink-0" />
-                              <span>{item.label}</span>
-                            </NavLink>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+              {/* Grupo "Cadastros" oculto se o usuário não tem nenhum item permitido. */}
+              {visibleCadastros.length > 0 && (
+                <Collapsible open={cadastrosOpen} onOpenChange={setCadastrosOpen}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        tooltip="Cadastros"
+                        isActive={isCadastrosRoute}
+                        className="text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                      >
+                        <Building2 className="h-4 w-4 shrink-0" />
+                        {!collapsed && <span>Cadastros</span>}
+                        {!collapsed && (
+                          <ChevronDown
+                            className={`ml-auto h-4 w-4 transition-transform ${cadastrosOpen ? "rotate-180" : ""}`}
+                          />
+                        )}
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {visibleCadastros.map((item) => (
+                          <SidebarMenuSubItem key={item.to}>
+                            <SidebarMenuSubButton asChild isActive={location.pathname.startsWith(item.to)}>
+                              <NavLink to={item.to} className="text-sidebar-foreground/70 hover:text-sidebar-foreground">
+                                <item.icon className="h-4 w-4 shrink-0" />
+                                <span>{item.label}</span>
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )}
 
-              {secondaryNavItems.map((item) => (
+              {visibleSecondary.map((item) => (
                 <SidebarMenuItem key={item.to}>
                   <SidebarMenuButton asChild tooltip={item.label}>
                     <NavLink
