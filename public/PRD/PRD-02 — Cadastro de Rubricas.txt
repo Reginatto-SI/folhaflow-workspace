@@ -14,11 +14,12 @@ As rubricas representam todos os valores que compõem a folha de pagamento, send
 
 - Nenhuma regra implícita
 - Zero heurística baseada em nome
-- Rubricas são a única fonte de valores da folha
+- Rubricas são a única fonte de valores operacionais da folha
 - Separação entre cálculo e exibição
 - Compatibilidade total com o motor
 - Estrutura preparada para relatórios e recibos
-- Toda rubrica deve possuir classificação obrigatória
+- Toda rubrica operacional deve possuir classificação obrigatória
+- Rubricas derivadas não devem ser tratadas como rubricas operacionais
 
 ---
 
@@ -41,12 +42,17 @@ As rubricas representam todos os valores que compõem a folha de pagamento, send
   - `percentual`
   - `formula`
 - ordem_calculo (inteiro obrigatório)
-- classificacao (obrigatório)
 - ativa (boolean)
 
 ---
 
-### 3.2 Campos condicionais
+### 3.2 Campo condicional (classificação)
+
+- classificacao (obrigatória apenas para rubricas operacionais)
+
+---
+
+### 3.3 Campos condicionais por método
 
 #### valor_fixo
 - valor_base
@@ -64,13 +70,13 @@ As rubricas representam todos os valores que compõem a folha de pagamento, send
 
 ### 4.1 Conceito
 
-A classificação é uma camada obrigatória que organiza as rubricas para:
+A classificação é uma camada obrigatória que organiza as rubricas operacionais para:
 
 - recibos
 - relatórios
 - consolidação financeira
 
-A classificação é a única fonte de agrupamento de valores no sistema.
+A classificação é a única fonte de agrupamento de valores.
 
 ---
 
@@ -86,8 +92,6 @@ A classificação é a única fonte de agrupamento de valores no sistema.
 - `ferias_terco`
 - `insalubridade`
 
----
-
 #### Descontos
 
 - `inss`
@@ -100,23 +104,71 @@ A classificação é a única fonte de agrupamento de valores no sistema.
 
 ### 4.3 Regras obrigatórias
 
-- Toda rubrica deve possuir UMA classificação
-- Uma rubrica NÃO pode possuir múltiplas classificações
-- Sistema deve impedir salvar rubrica sem classificação
-- Classificação NÃO depende do nome da rubrica
-- Classificação define como a rubrica será exibida nos relatórios e recibos
+- Toda rubrica operacional deve possuir UMA classificação
+- Uma rubrica não pode possuir múltiplas classificações
+- Classificação não depende do nome da rubrica
+- Classificação define apenas organização (não cálculo)
+- Rubricas derivadas NÃO participam da classificação
 
 ---
 
-### 4.4 Comportamento
-
-- Várias rubricas podem compartilhar a mesma classificação
-- Os valores são somados por classificação
-- A classificação não interfere no cálculo, apenas na organização dos dados
+## 5. Tipos de Rubrica (EXTENSÃO CRÍTICA)
 
 ---
 
-## 5. Métodos de cálculo
+### 5.1 Rubricas Operacionais (INPUT)
+
+São rubricas utilizadas diretamente na composição da folha.
+
+#### Exemplos:
+
+- salário_ctps
+- horas_extras
+- inss
+- vales
+- faltas
+
+#### Características:
+
+- exigem classificação obrigatória
+- podem ser editadas pelo usuário
+- participam diretamente do cálculo
+- são utilizadas em recibos e relatórios
+- fazem parte do modelo de agregação
+
+---
+
+### 5.2 Rubricas Derivadas (OUTPUT DO SISTEMA)
+
+São valores calculados automaticamente pelo sistema.
+
+#### Exemplos:
+
+- salario_fiscal
+- salario_real
+- salario_g2_complemento
+- salario_liquido
+
+#### Características:
+
+- NÃO exigem classificação
+- NÃO podem ser editadas manualmente
+- são resultado do motor de cálculo
+- são exibidas na folha apenas como saída
+- não participam do modelo de agrupamento por classificação
+
+---
+
+### 5.3 Regra estrutural obrigatória
+
+- Apenas rubricas operacionais exigem classificação
+- Rubricas derivadas não devem possuir classificação
+- O sistema deve impedir edição manual de rubricas derivadas
+- O motor de cálculo é responsável por gerar essas rubricas
+
+---
+
+## 6. Métodos de cálculo
 
 ### Manual
 - valor informado pelo usuário
@@ -132,18 +184,28 @@ A classificação é a única fonte de agrupamento de valores no sistema.
 
 ---
 
-## 6. Validações
+## 7. Validações
+
+### Para rubricas operacionais
 
 - código único
 - ordem obrigatória
 - fórmula válida
 - sem dependência circular
-- referência existente
 - classificação obrigatória
+- coerência entre tipo e classificação
 
 ---
 
-## 7. Interface (UX)
+### Para rubricas derivadas
+
+- não permitir edição manual
+- não exigir classificação
+- não permitir alteração de estrutura
+
+---
+
+## 8. Interface (UX)
 
 ### Estrutura
 
@@ -165,53 +227,56 @@ Modal com abas:
 
 ---
 
-#### Aba 3 — Classificação
-- campo obrigatório: classificacao
-- descrição de onde será utilizado (recibo e relatórios)
+#### Aba 3 — Classificação (apenas operacional)
+- campo obrigatório apenas para rubricas operacionais
 
 ---
 
-## 8. Regras críticas
+## 9. Regras críticas
 
 - Nome não define comportamento
 - Código é a referência técnica
 - Classificação é a referência de exibição
-- Não permitir rubrica incompleta
+- Não permitir rubrica operacional sem classificação
 - Não permitir lógica ambígua
-- Não permitir rubrica sem classificação
+- Não usar heurística baseada em nome
+- Não tratar rubricas derivadas como operacionais
 
 ---
 
-## 9. Integração com motor
+## 10. Integração com motor
 
-- motor consome diretamente rubricas
+- motor consome rubricas operacionais
+- rubricas derivadas são geradas pelo motor
 - ordem de cálculo deve ser respeitada
-- classificação NÃO interfere no cálculo
+- classificação não interfere no cálculo
 
 ---
 
-## 10. Estratégia de transição
+## 11. Estratégia de transição
 
-- adaptar rubricas existentes
-- definir classificação gradualmente
+- manter compatibilidade com dados antigos
+- classificar rubricas operacionais existentes
+- identificar rubricas derivadas e ajustar natureza
 - não quebrar sistema atual
-- bloquear geração de relatórios sem classificação completa
+- eliminar gradualmente campos legados (`category`, `mode`)
 
 ---
 
-## 11. Fora do escopo
+## 12. Fora do escopo
 
 - regras tributárias automáticas
 - faixas progressivas
-- múltiplos layouts de recibo
-- múltiplos modelos de classificação
+- múltiplos layouts de classificação
+- múltiplos tipos de agrupamento
 
 ---
 
-## 12. Critérios de sucesso
+## 13. Critérios de sucesso
 
-- rubricas executam corretamente no motor
+- rubricas operacionais possuem classificação válida
+- rubricas derivadas não são tratadas como operacionais
 - sistema não depende de nome
-- recibo é preenchido automaticamente
-- relatórios são gerados corretamente
-- classificação é consistente em todo o sistema
+- cálculo é consistente e determinístico
+- recibos e relatórios funcionam corretamente
+- separação entre input e output está clara no sistema
