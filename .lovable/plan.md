@@ -1,134 +1,116 @@
 
 
-## Plano: Fundação RBAC v1 (PRD-10)
+## Plano: Cadastro de Empresas — aderência ao PRD-05 + PRD-10
 
 ### Diagnóstico
-- `profiles` existe mas não tem role.
-- RLS atual é `true` em todas as tabelas (sem enforcement).
-- `ProtectedRoute` só verifica autenticação.
-- Sidebar exibe todos os itens para todos.
-- Edge Functions `admin-create-user`/`admin-update-user` não validam quem chama.
 
-Vou seguir exatamente a recomendação oficial Lovable (memória `infinite-recursion-in-rls`): **roles em tabela separada** + função `SECURITY DEFINER` (`has_role`, `has_permission`).
+**Banco (`companies`)**
+- Não tem coluna `is_active` → impossível inativar/reativar.
+- RLS **totalmente aberta** (`USING true` em SELECT/INSERT/UPDATE/DELETE para `public`) — qualquer um, autenticado ou não, pode CRUD. Viola PRD-10.
+
+**Frontend (`Companies.tsx`)**
+- `address` não obrigatório.
+- Sem validação real de formato/duplicidade de CNPJ (só checa não-vazio).
+- Botão "Excluir" faz DELETE físico via `deleteCompany`.
+- Filtro de status existe mas é meramente decorativo (KPIs sempre mostram 0 inativas, status sempre "Ativa" hardcoded).
+- Estados de loading/vazio/erro parcialmente implementados (sem retry).
+- Usa importar/exportar (fora do PRD — manter porque já existe, mas não é foco).
+
+**Permissões já aplicadas**
+- Rota `/empresas` já protegida por `empresas.view` em `App.tsx`. ✅
+- Menu lateral já filtra por permissão. ✅
+- Falta enforcement no backend (RLS).
 
 ---
 
-### 1. Migração SQL (banco)
+### Mudanças
 
-**Enums e tabelas:**
+#### 1. Migração SQL
 ```sql
-create type public.app_role as enum ('admin', 'operacional', 'consulta');
-create type public.app_permission as enum (
-  'empresas.view','funcionarios.view','estrutura.view',
-  'rubricas.manage','folha.operar','relatorios.view',
-  'usuarios.manage','configuracoes.manage'
-);
+-- Adicionar status
+alter table public.companies 
+  add column is_active boolean not null default true;
 
-create table public.user_roles (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  role app_role not null,
-  unique (user_id, role)
-);
+-- Unicidade de CNPJ (validação no banco)
+-- Normalizar antes de criar índice
+update public.companies set cnpj = regexp_replace(cnpj, '\D', '', 'g');
+create unique index companies_cnpj_unique on public.companies (cnpj);
 
-create table public.role_permissions (
-  id uuid primary key default gen_random_uuid(),
-  role app_role not null,
-  permission app_permission not null,
-  unique (role, permission)
-);
+-- Endereço obrigatório
+update public.companies set address = '—' where address is null or trim(address) = '';
+alter table public.companies alter column address set not null;
+
+-- RLS: substituir policies abertas por permissão real
+drop policy companies_select_all on public.companies;
+drop policy companies_insert_all on public.companies;
+drop policy companies_update_all on public.companies;
+drop policy companies_delete_all on public.companies;
+
+create policy "empresas view" on public.companies for select 
+  to authenticated using (public.has_permission(auth.uid(), 'empresas.view'));
+
+-- Apenas admin pode criar/editar/inativar empresas (PRD-10: área administrativa)
+create policy "empresas insert admin" on public.companies for insert 
+  to authenticated with check (public.is_admin(auth.uid()));
+create policy "empresas update admin" on public.companies for update 
+  to authenticated using (public.is_admin(auth.uid())) 
+  with check (public.is_admin(auth.uid()));
+-- DELETE: bloqueado totalmente (PRD-05 §5.5 — sem exclusão física). 
+-- Sem policy de DELETE = ninguém deleta.
 ```
 
-**Seed** das permissões (admin = todas; operacional = empresas/funcionarios/estrutura/folha/relatorios; consulta = empresas/funcionarios/relatorios).
+#### 2. Tipo `Company` (`src/types/payroll.ts`)
+Adicionar `isActive: boolean` e tornar `address: string` (não opcional).
 
-**Funções `SECURITY DEFINER`:**
-- `has_role(_user_id, _role)` → boolean
-- `has_permission(_user_id, _permission)` → boolean (verifica via `user_roles` + `role_permissions`)
-- `is_admin(_user_id)` → boolean (atalho)
+#### 3. `PayrollContext.tsx`
+- `mapCompanyRowToModel`: incluir `isActive`.
+- `addCompany` / `updateCompany`: incluir `is_active`, normalizar CNPJ (só dígitos), tratar erro `23505` (unique violation) → `throw new Error("CNPJ já cadastrado")`.
+- **Substituir `deleteCompany`** por `setCompanyActive(id, isActive)` (UPDATE em `is_active`). Manter assinatura `deleteCompany` quebraria o contrato — vamos renomear na interface e ajustar consumidores (apenas `Companies.tsx`).
+- `selectedCompany` default → primeira **ativa**, não primeira qualquer.
+- Filtros operacionais (Funcionários, Central de Folha, JobRoles, Departments) que usam `companies` para seleção → mostrar apenas `isActive` (PRD-05 §5.4).
 
-**RLS:**
-- `user_roles` e `role_permissions`: SELECT autenticado, INSERT/UPDATE/DELETE só admin
-- `profiles`: substituir UPDATE permissivo — usuário edita o próprio nome; admin edita tudo (inclusive `is_active`)
-- Manter demais tabelas como estão (escopo desta v1 é RBAC, não revisão de RLS de dados — anotado como ponto fora de escopo)
+#### 4. `src/pages/Companies.tsx`
+- **Validação CNPJ**: helper `isValidCNPJ()` com algoritmo dos dígitos verificadores + máscara visual `00.000.000/0000-00`.
+- **Endereço obrigatório**: validação no submit + asterisco no label.
+- **Status**: badge dinâmica (verde "Ativa" / cinza "Inativa") usando `company.isActive`.
+- **Filtros**: 
+  - Listar todas (ativas + inativas) por padrão? → PRD diz "inativas não aparecem em **novos lançamentos**", mas na própria tela de Empresas faz sentido mostrar todas com filtro. Default do filtro: "Ativas". Usuário pode trocar para "Inativas" / "Todas".
+  - KPIs corretos: total / ativas / inativas reais.
+- **Ações no menu "..."**:
+  - Editar (sempre)
+  - Inativar (se ativa) → confirmação
+  - Reativar (se inativa)
+  - **Remover ação "Excluir"** completamente.
+- **Estados**:
+  - Loading: spinner já existe — manter.
+  - Vazio (zero empresas): card centralizado "Nenhuma empresa cadastrada" + CTA "Nova empresa".
+  - Erro: capturar erro de carregamento (novo estado em `PayrollContext` ou local) → mensagem + botão "Tentar novamente" (chama `loadData`).
+- Form: campos exatamente Nome / CNPJ (mascarado) / Endereço / Status (toggle apenas na edição — criação sempre = ativa).
 
-**Bootstrap admin:** o primeiro usuário cadastrado vira admin (verificar se `user_roles` está vazia; se sim, atribuir admin via trigger no `handle_new_user` adaptado, OU script manual após migração para o usuário existente atual).
-
----
-
-### 2. Edge Functions (backend enforcement)
-
-Adicionar **em ambas** (`admin-create-user`, `admin-update-user`):
-- Ler `Authorization: Bearer <token>` do request
-- Validar via `supabaseAdmin.auth.getUser(token)`
-- Verificar `has_role(uid, 'admin')` — senão 403
-- `admin-create-user`: aceitar `role: app_role` no body, criar entrada em `user_roles` após criar usuário
-- `admin-update-user`: aceitar `role` opcional, fazer upsert em `user_roles` (delete + insert da nova role)
-
-Manter `verify_jwt = false` (validação manual em código, padrão do projeto).
-
----
-
-### 3. Frontend
-
-**`AuthContext.tsx`:**
-- Buscar role + permissions junto com profile (single roundtrip): `supabase.from('user_roles').select('role').eq('user_id', uid)` + `role_permissions` ou criar view `user_permissions_view`
-- Expor: `role: AppRole | null`, `permissions: Set<string>`, `hasPermission(code) => boolean`, `isAdmin: boolean`
-
-**Novo `PermissionRoute.tsx`** (envolve `ProtectedRoute`):
-```tsx
-<PermissionRoute permission="usuarios.manage">
-  <UsersAdmin />
-</PermissionRoute>
-```
-- Sem permissão → renderiza `<Forbidden />` dentro do `AppLayout` (mensagem "Você não possui permissão para acessar esta área" + botão voltar)
-
-**`App.tsx`:** envolver cada rota com a permissão correspondente:
-| Rota | Permissão |
-|---|---|
-| `/central-de-folha` | `folha.operar` |
-| `/empresas` | `empresas.view` |
-| `/funcionarios` | `funcionarios.view` |
-| `/setores`, `/funcoes-cargos` | `estrutura.view` |
-| `/rubricas` | `rubricas.manage` |
-| `/usuarios` | `usuarios.manage` |
-| `/configuracoes` | `configuracoes.manage` |
-
-**`AppLayout.tsx`:** filtrar `mainNavItems`, `cadastrosNavItems`, `secondaryNavItems` por `hasPermission()` antes de renderizar. Esconder grupo "Cadastros" se vazio.
-
-**`UsersAdmin.tsx`** (mudança mínima):
-- Listar `role` (badge colorida) na coluna após status
-- No formulário: `<Select>` de role (admin/operacional/consulta), obrigatório na criação, editável na edição
-- Buscar role atual junto com profiles via join ou query paralela
-- Bloquear o admin de remover sua própria role admin (simples check no submit)
+#### 5. Manter intacto
+- Importar/exportar (não está no PRD, mas já existe — não remover).
+- AppLayout, rota, permissão da rota.
 
 ---
 
-### 4. Arquivos alterados
+### Arquivos alterados
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/migrations/<nova>.sql` | enums, tabelas, RLS, funções, seed, bootstrap admin |
-| `supabase/functions/admin-create-user/index.ts` | validação caller-admin + criar user_role |
-| `supabase/functions/admin-update-user/index.ts` | validação caller-admin + atualizar user_role |
-| `src/contexts/AuthContext.tsx` | carregar role/permissions, expor `hasPermission` |
-| `src/components/auth/PermissionRoute.tsx` | **novo** guard por permissão |
-| `src/components/auth/Forbidden.tsx` | **novo** tela "sem permissão" |
-| `src/App.tsx` | envolver rotas com `PermissionRoute` |
-| `src/components/layout/AppLayout.tsx` | filtrar menus por permissão |
-| `src/pages/UsersAdmin.tsx` | coluna role + select no form |
+| `supabase/migrations/<nova>.sql` | `is_active`, unique CNPJ, address NOT NULL, RLS por permissão |
+| `src/types/payroll.ts` | `Company.isActive`, `address` obrigatório |
+| `src/contexts/PayrollContext.tsx` | mapeamento + `setCompanyActive`, normalização CNPJ, tratamento 23505, filtros operacionais por ativa |
+| `src/pages/Companies.tsx` | validação CNPJ, máscara, endereço obrigatório, inativar/reativar, KPIs reais, estado vazio/erro |
 
 ---
 
 ### Resultado
-- 3 roles + 8 permissões fixas, persistidas
-- Backend (RLS + edge) bloqueia operações não autorizadas
-- Rotas protegidas individualmente; URL direta sem permissão → tela Forbidden
-- Menu lateral mostra só itens permitidos
-- `/usuarios`, `/rubricas`, `/configuracoes` exclusivos de admin
-- Usuário inativo já bloqueado no login pelo `AuthContext` (mantido)
+- PRD-05 atendido: status, sem exclusão física, endereço obrigatório, CNPJ único, filtros corretos, estados completos.
+- PRD-10 atendido: RLS bloqueia operações sem permissão; somente admin cria/edita/inativa; `empresas.view` necessário para listar.
+- Empresas inativas não aparecem em Funcionários/Central de Folha por padrão.
+- DELETE físico **impossível** (sem policy + frontend sem botão).
 
-### Fora de escopo v1 (anotado)
-- Revisão de RLS das tabelas de dados (companies, employees, etc.) — hoje permissivas
-- Permissões customizadas por usuário
-- Auditoria/logs
+### Fora de escopo (anotado)
+- Quebra de endereço em campos estruturados (PRD §13).
+- Importar/exportar permanece como está (não-PRD, mas funcional).
 
