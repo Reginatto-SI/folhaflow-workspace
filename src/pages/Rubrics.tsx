@@ -1084,7 +1084,15 @@ const Rubrics: React.FC = () => {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => openEdit(rubric)}>
-                                <Pencil className="mr-2 h-4 w-4" /> Editar
+                                {rubric.nature === "calculada" ? (
+                                  <>
+                                    <Eye className="mr-2 h-4 w-4" /> Visualizar
+                                  </>
+                                ) : (
+                                  <>
+                                    <Pencil className="mr-2 h-4 w-4" /> Editar
+                                  </>
+                                )}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive"
