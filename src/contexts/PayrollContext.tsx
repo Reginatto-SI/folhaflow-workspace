@@ -381,14 +381,61 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const validateRubricPayload = useCallback((rubric: Omit<Rubric, "id"> | Partial<Rubric>) => {
+  // PRD-02 — gateway único de validação de contrato canônico de rubricas.
+  // Espelhado por CHECK constraints no banco (defesa em profundidade). Regras:
+  //  • rubrica ATIVA exige `nature`, `calculation_method` e `classification`;
+  //  • `classification` deve ser COERENTE com o `type` (proventos vs descontos);
+  //  • nome/código nunca podem inferir comportamento — apenas o contrato técnico vale.
+  // Aceita tanto insert (Omit<Rubric,"id">) quanto update parcial (Partial<Rubric>).
+  const PROVENTO_CLASSIFICATIONS = new Set(["salario_ctps","salario_g","outros_rendimentos","horas_extras","salario_familia","ferias_terco","insalubridade"]);
+  const DESCONTO_CLASSIFICATIONS = new Set(["inss","emprestimos","adiantamentos","vales","faltas"]);
+
+  const validateRubricPayload = useCallback((rubric: Omit<Rubric, "id"> | Partial<Rubric>, options?: { existing?: Rubric }) => {
+    const existing = options?.existing;
+    // Helpers: valor efetivo após o update (campo do payload OU do registro atual).
+    const effective = <K extends keyof Rubric>(key: K): Rubric[K] | undefined => {
+      const partial = rubric as Partial<Rubric>;
+      return partial[key] !== undefined ? (partial[key] as Rubric[K]) : existing?.[key];
+    };
+    const isInsert = !existing;
+
     if (rubric.name !== undefined && !normalizeRequiredText(rubric.name)) throw new Error("Nome da rubrica é obrigatório.");
     if (rubric.code !== undefined && !normalizeRequiredText(rubric.code)) throw new Error("Código da rubrica é obrigatório.");
     if (rubric.order !== undefined && (!Number.isFinite(rubric.order) || rubric.order < 0)) throw new Error("Ordem deve ser numérica válida.");
-    // PRD-02 — classificação é obrigatória; nunca dependa do nome.
-    if (rubric.classification !== undefined && !rubric.classification) {
-      throw new Error("Classificação é obrigatória (PRD-02).");
+
+    // PRD-02 — campos canônicos: insert sempre exige; update bloqueia tentativa de zerar.
+    if (isInsert) {
+      if (!rubric.nature) throw new Error("Natureza da rubrica é obrigatória (PRD-02).");
+      if (!rubric.calculationMethod) throw new Error("Método de cálculo é obrigatório (PRD-02).");
+      if (!rubric.type) throw new Error("Tipo (provento/desconto) é obrigatório.");
+    } else {
+      if (rubric.nature === null) throw new Error("Natureza não pode ser removida (PRD-02).");
+      if (rubric.calculationMethod === null) throw new Error("Método de cálculo não pode ser removido (PRD-02).");
     }
+
+    // Classificação: obrigatória para rubrica ATIVA. Se inativa, pode ficar pendente.
+    const effectiveActive = effective("isActive");
+    const effectiveClassification = effective("classification");
+    if (effectiveActive && !effectiveClassification) {
+      throw new Error("Rubrica ativa exige classificação técnica (PRD-02). Inative a rubrica ou selecione uma classificação.");
+    }
+    // Bloqueia tentativa explícita de remover classificação de ativa.
+    if (rubric.classification === null && effectiveActive) {
+      throw new Error("Não é possível remover a classificação de uma rubrica ativa.");
+    }
+
+    // Coerência tipo × classificação (espelha CHECK do banco).
+    const effectiveType = effective("type");
+    if (effectiveClassification && effectiveType) {
+      if (effectiveType === "provento" && !PROVENTO_CLASSIFICATIONS.has(effectiveClassification)) {
+        throw new Error("Classificação incompatível com tipo Provento (PRD-02).");
+      }
+      if (effectiveType === "desconto" && !DESCONTO_CLASSIFICATIONS.has(effectiveClassification)) {
+        throw new Error("Classificação incompatível com tipo Desconto (PRD-02).");
+      }
+    }
+
+    // Campos condicionais por método.
     if (rubric.calculationMethod === "formula" && (!rubric.formulaItems || rubric.formulaItems.length === 0)) {
       throw new Error("Rubrica de fórmula precisa de ao menos um item.");
     }
@@ -831,8 +878,9 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [validateCircularRubricDependency, validateRubricPayload]);
 
   const updateRubric = useCallback(async (id: string, updates: Partial<Rubric>) => {
-    validateRubricPayload(updates);
     const current = rubrics.find((rubric) => rubric.id === id);
+    // PRD-02: passa o registro atual para validar `isActive` efetivo + coerência tipo×classificação.
+    validateRubricPayload(updates, { existing: current });
     const methodToValidate = updates.calculationMethod ?? current?.calculationMethod ?? "manual";
     const itemsToValidate = updates.formulaItems ?? current?.formulaItems ?? [];
     await validateCircularRubricDependency(id, methodToValidate === "formula" ? "formula" : "manual", itemsToValidate);
