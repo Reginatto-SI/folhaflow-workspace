@@ -37,50 +37,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return data as Profile;
   };
 
-  const handleSession = async (session: Session | null) => {
-    if (!session?.user) {
-      setUser(null);
-      setProfile(null);
-      setLoading(false);
-      return;
-    }
-
-    const prof = await fetchProfile(session.user.id);
-
-    if (prof && !prof.is_active) {
-      await supabase.auth.signOut();
-      setUser(null);
-      setProfile(null);
-      setLoading(false);
-      toast.error("Usuário inativo. Contate o administrador.");
-      return;
-    }
-
-    setUser(session.user);
-    setProfile(prof);
-    setLoading(false);
-  };
-
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        await handleSession(session);
-      }
-    );
+    let isMounted = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      handleSession(session);
+    const applySession = (session: Session | null, prof: Profile | null) => {
+      if (!isMounted) return;
+
+      if (prof && !prof.is_active) {
+        supabase.auth.signOut();
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        toast.error("Usuário inativo. Contate o administrador.");
+        return;
+      }
+
+      setUser(session?.user ?? null);
+      setProfile(prof);
+      setLoading(false);
+    };
+
+    // Listener: SEM await — fire-and-forget para evitar deadlock no cliente Supabase
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+      if (!session?.user) {
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+      fetchProfile(session.user.id).then((prof) => applySession(session, prof));
     });
 
-    return () => subscription.unsubscribe();
+    // Hidratação inicial
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
+      if (!session?.user) {
+        setLoading(false);
+        return;
+      }
+      fetchProfile(session.user.id).then((prof) => applySession(session, prof));
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    // Garante que o provider assuma a sessão antes de a tela navegar.
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    await handleSession(data.session);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setLoading(false);
+      throw error;
+    }
+    // O listener onAuthStateChange tratará da sessão e atualizará o estado.
   };
 
   const signOut = async () => {
