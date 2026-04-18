@@ -2,10 +2,16 @@
 // /rubricas — Cadastro de Rubricas (PRD-02)
 //
 // Regras críticas (não violar):
-//  • Classificação técnica é OBRIGATÓRIA ao salvar (catálogo canônico do PRD-02).
+//  • Rubricas BASE (operacionais): inputs da folha. Classificação técnica
+//    OBRIGATÓRIA ao salvar quando ATIVA (catálogo canônico do PRD-02).
+//  • Rubricas CALCULADAS (derivadas): SAÍDAS do motor de cálculo (PRD-01).
+//    NÃO recebem classificação. NÃO admitem edição manual. NÃO aparecem como
+//    input na Central de Folha. O cálculo real será implementado quando o motor
+//    for ativado em sprint futura — hoje existem apenas como cadastro.
 //  • Nome/código/categoria NUNCA definem comportamento — use `nature`/`classification`.
-//  • Backend reforça permissão via RLS `has_permission('rubricas.manage')`.
-//    A rota também é protegida no `App.tsx`. Não confiar só em ocultação de UI.
+//  • Backend reforça permissão via RLS `has_permission('rubricas.manage')` e
+//    CHECK constraints (`rubricas_active_base_requires_classification`,
+//    `rubricas_calculada_no_classification`). Não confiar só em ocultação de UI.
 //  • Campos `category` e `entry_mode` continuam gravados só para compat de coluna
 //    legada — serão removidos em sprint futura. Não consumir em lógica nova.
 // ──────────────────────────────────────────────────────────────────────────────

@@ -413,15 +413,31 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (rubric.calculationMethod === null) throw new Error("Método de cálculo não pode ser removido (PRD-02).");
     }
 
-    // Classificação: obrigatória para rubrica ATIVA. Se inativa, pode ficar pendente.
+    // PRD-02 — natureza calculada (DERIVADA): rubrica é OUTPUT do motor de cálculo.
+    //  • NÃO recebe classificação técnica (a classificação é apenas para inputs/operacionais);
+    //  • NÃO admite edição manual na folha (é resultado, não entrada).
+    // Espelhado por CHECK constraint `rubricas_calculada_no_classification` no banco.
+    const effectiveNature = effective("nature");
     const effectiveActive = effective("isActive");
     const effectiveClassification = effective("classification");
-    if (effectiveActive && !effectiveClassification) {
-      throw new Error("Rubrica ativa exige classificação técnica (PRD-02). Inative a rubrica ou selecione uma classificação.");
-    }
-    // Bloqueia tentativa explícita de remover classificação de ativa.
-    if (rubric.classification === null && effectiveActive) {
-      throw new Error("Não é possível remover a classificação de uma rubrica ativa.");
+    const effectiveAllowOverride = effective("allowManualOverride");
+
+    if (effectiveNature === "calculada") {
+      if (effectiveClassification) {
+        throw new Error("Rubricas calculadas (derivadas) não recebem classificação técnica — elas são saídas do sistema (PRD-02).");
+      }
+      if (effectiveAllowOverride === true) {
+        throw new Error("Rubricas calculadas (derivadas) não admitem edição manual — o valor é resultado do cálculo (PRD-02).");
+      }
+    } else {
+      // Classificação: obrigatória para rubrica BASE ATIVA. Se inativa, pode ficar pendente.
+      if (effectiveActive && !effectiveClassification) {
+        throw new Error("Rubrica ativa exige classificação técnica (PRD-02). Inative a rubrica ou selecione uma classificação.");
+      }
+      // Bloqueia tentativa explícita de remover classificação de ativa base.
+      if (rubric.classification === null && effectiveActive) {
+        throw new Error("Não é possível remover a classificação de uma rubrica ativa.");
+      }
     }
 
     // Coerência tipo × classificação (espelha CHECK do banco).
