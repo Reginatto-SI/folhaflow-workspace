@@ -43,11 +43,27 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useVersionCheck } from "@/hooks/useVersionCheck";
 
 const MONTHS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
+
+const APP_VERSION = "1.0";
+
+// Formata o ISO injetado em build-time como "DD/MM/AAAA HH:mm" (PT-BR).
+function formatBuildDateTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch {
+    return iso;
+  }
+}
 
 const mainNavItems = [
   { to: "/central-de-folha", label: "Central de Folha", icon: FileSpreadsheet },
@@ -77,7 +93,10 @@ const routeLabels: Record<string, string> = {
   "/configuracoes": "Configurações",
 };
 
-const BUILD_DATETIME = "13/04/2026 20:05";
+// Valores reais virão de __BUILD_TIME__ / __BUILD_ID__ (injetados pelo Vite).
+const BUILD_TIME_ISO = __BUILD_TIME__;
+const BUILD_ID = __BUILD_ID__;
+const BUILD_DATETIME = formatBuildDateTime(BUILD_TIME_ISO);
 
 function AppSidebar() {
   const { state } = useSidebar();
@@ -185,11 +204,24 @@ function AppSidebar() {
 
       <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
         {!collapsed && (
-          <>
-            {/* Exibe versão do sistema + data/hora da última atualização */}
-            {/* Usado para validar rapidamente se o deploy já refletiu no frontend */}
-            <p className="text-xs text-sidebar-foreground/50">v1.0 • {BUILD_DATETIME}</p>
-          </>
+          // Versão + build ID curto + data/hora real do build (auto-atualizado a cada deploy).
+          // Tooltip mostra o ISO completo para diagnóstico rápido.
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="cursor-default leading-tight">
+                  <p className="text-xs text-sidebar-foreground/60">
+                    v{APP_VERSION} <span className="text-sidebar-foreground/40">({BUILD_ID})</span>
+                  </p>
+                  <p className="text-[11px] text-sidebar-foreground/40">{BUILD_DATETIME}</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="start">
+                <p className="text-xs">Build ID: {BUILD_ID}</p>
+                <p className="text-xs">{BUILD_TIME_ISO}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </SidebarFooter>
     </Sidebar>
@@ -201,6 +233,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  // Detecta novos deploys e oferece "Atualizar agora" via toast persistente.
+  useVersionCheck();
   // Evita fallback com o nome da marca em texto visível no header.
   const pageTitle = routeLabels[location.pathname] || "";
 
