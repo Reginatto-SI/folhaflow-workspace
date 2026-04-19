@@ -301,3 +301,9 @@ Esses comentários são obrigatórios para evitar interpretações erradas futur
 - Sistema não bloqueia lançamentos cruzados entre matriz e filiais
 - Separação entre cadastro e folha fica clara para usuário e para código
 - Base preparada para evolução futura sem complexidade desnecessária
+
+---
+
+## Observação de alinhamento documental
+
+Este módulo deve manter compatibilidade com o PRD-12 para consumo das rubricas canônicas (`salario_real`, `g2_complemento`, `salario_liquido`) quando aplicável ao fluxo do módulo.

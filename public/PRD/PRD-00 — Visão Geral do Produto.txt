@@ -77,7 +77,7 @@ O sistema deve evoluir para:
 
 > Um motor de processamento de folha determinístico, desacoplado da interface, com uma experiência operacional rápida e confiável.
 
-A interface deve atuar apenas como camada de operação, nunca como responsável pelas regras de cálculo.
+A interface deve atuar como camada de operação, acionando e consumindo o cálculo centralizado, sem lógica distribuída entre componentes.
 
 ---
 
@@ -170,6 +170,18 @@ A interface não deve conter regras de negócio.
 ### 7.6 Relatórios / Recibos
 - Geração de saída operacional
 - Visualização de resultados
+
+---
+
+### 7.7 Modo de Visualização (Clássico vs Avançado)
+- Fidelidade ao modo clássico no drawer
+- Tabela gerencial compacta permitida sem divergência de valores
+
+---
+
+### 7.8 Rubricas Canônicas
+- Rubricas estruturais definidas no PRD-12
+- Consumo transversal por Central, Totais, Recibos e Relatórios
 
 ---
 
