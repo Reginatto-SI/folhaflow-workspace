@@ -13,7 +13,14 @@ import { FileText, Save } from "lucide-react";
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 const parseCurrency = (v: string): number => {
-  const cleaned = v.replace(/[^\d,.-]/g, "").replace(".", "").replace(",", ".");
+  // Normalização mínima pt-BR: remove símbolos, mantém apenas dígitos/sinais,
+  // remove TODOS os separadores de milhar e converte a vírgula decimal para ponto.
+  // Evita perda silenciosa em entradas como 1.234.567,89.
+  const cleaned = v
+    .replace(/\s/g, "")
+    .replace(/[^\d,.-]/g, "")
+    .replace(/\./g, "")
+    .replace(/,/g, ".");
   return Number.isFinite(Number(cleaned)) ? Math.max(0, Number(cleaned)) : 0;
 };
 
@@ -162,15 +169,12 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       return acc;
     }, emptyValues);
 
-    // Compatibilidade adicional: se houver rubrica-base sem valor legado, usa base_salary atual apenas no primeiro item.
-    const firstBaseRubric = groupedRubrics.base[0];
-    if (firstBaseRubric && !nextValues[firstBaseRubric.id] && entry.baseSalary > 0) {
-      nextValues[firstBaseRubric.id] = entry.baseSalary;
-    }
+    // PRD-01/PRD-02: não reconstruir rubricas-base por heurística.
+    // O drawer deve refletir somente o que está persistido por rubrica.
 
     setRubricValues(nextValues);
     setNotes(entry.notes || "");
-  }, [activeRubricsOrdered, entry, groupedRubrics.base, isCreateMode, open]);
+  }, [activeRubricsOrdered, entry, isCreateMode, open]);
 
   const totals = useMemo(() => {
     const baseTotal = groupedRubrics.base.reduce((sum, rubric) => sum + (rubricValues[rubric.id] || 0), 0);
@@ -201,16 +205,15 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     const earningsPayload: Record<string, number> = {};
     const deductionsPayload: Record<string, number> = {};
 
-    // Persistência transicional: grava por rubric.id (chave estável), mantendo compatibilidade de leitura legado.
+    // PRD-01/PRD-02: gravação por rubric.id (chave estável) para TODAS as rubricas operacionais,
+    // incluindo rubricas-base. Isso mantém rastreabilidade e evita divergência na reidratação.
     activeRubricsOrdered.forEach((rubric) => {
       const value = rubricValues[rubric.id] || 0;
       if (rubric.type === "desconto") {
         deductionsPayload[rubric.id] = value;
         return;
       }
-      if (!isBaseRubric(rubric)) {
-        earningsPayload[rubric.id] = value;
-      }
+      earningsPayload[rubric.id] = value;
     });
 
     try {
@@ -352,7 +355,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
           <section className="border rounded-lg bg-card p-3 space-y-1">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prévia (em edição)</h4>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Total Proventos</span>
+              <span className="text-muted-foreground">Total Proventos (prévia)</span>
               <span className="font-semibold tabular-nums">{fmt(totals.gross)}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
