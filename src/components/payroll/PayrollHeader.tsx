@@ -2,8 +2,9 @@ import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, RefreshCw } from "lucide-react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { toast } from "sonner";
 
 const MONTHS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -15,7 +16,8 @@ interface PayrollHeaderProps {
 }
 
 const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
-  const { activeCompanies, selectedCompany, setSelectedCompany, selectedMonth, setSelectedMonth } = usePayroll();
+  const { activeCompanies, selectedCompany, setSelectedCompany, selectedMonth, setSelectedMonth, recalculatePayrollBatch } = usePayroll();
+  const [isRecalculating, setIsRecalculating] = React.useState(false);
 
   // Range mais amplo (-12 / +12 meses): com busca por digitação, escala sem fricção.
   const monthOptions = React.useMemo(() => {
@@ -45,6 +47,20 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
   );
 
   const selectedMonthValue = `${selectedMonth.month}-${selectedMonth.year}`;
+
+  const handleRecalculate = async () => {
+    setIsRecalculating(true);
+    try {
+      // Bloco 3 / Fase 1: recálculo final deve ser executado no backend como fonte de verdade.
+      // A UI apenas dispara a ação e exibe o resultado persistido.
+      await recalculatePayrollBatch();
+      toast.success("Folha recalculada com sucesso.");
+    } catch {
+      toast.error("Não foi possível recalcular a folha.");
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
 
   return (
     <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -83,6 +99,10 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
         <Button size="sm" onClick={onNewEntry}>
           <Plus className="h-4 w-4 mr-1" />
           Novo lançamento
+        </Button>
+        <Button size="sm" variant="outline" onClick={handleRecalculate} disabled={isRecalculating}>
+          <RefreshCw className="h-4 w-4 mr-1" />
+          Recalcular
         </Button>
         <Button size="sm" variant="outline" disabled>
           <FileText className="h-4 w-4 mr-1" />

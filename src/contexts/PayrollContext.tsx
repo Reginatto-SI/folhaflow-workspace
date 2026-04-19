@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { Company, Department, Employee, JobRole, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
+import { Company, Department, Employee, JobRole, PayrollBatch, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -22,6 +22,7 @@ interface PayrollContextType {
   isLoading: boolean;
   loadError: string | null;
   reloadData: () => Promise<void>;
+  recalculatePayrollBatch: () => Promise<void>;
   updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
   addPayrollEntry: (entry: Omit<PayrollEntry, "id">) => Promise<void>;
   addCompany: (company: Omit<Company, "id">) => Promise<void>;
@@ -324,6 +325,7 @@ const mapFormulaItemInsertToRow = (rubricaId: string, item: Rubric["formulaItems
 
 const mapPayrollEntryRowToModel = (row: {
   id: string;
+  payroll_batch_id: string | null;
   employee_id: string;
   company_id: string;
   month: number;
@@ -332,8 +334,13 @@ const mapPayrollEntryRowToModel = (row: {
   earnings: Record<string, number> | null;
   deductions: Record<string, number> | null;
   notes: string | null;
+  earnings_total: number | null;
+  deductions_total: number | null;
+  inss_amount: number | null;
+  net_salary: number | null;
 }): PayrollEntry => ({
   id: row.id,
+  payrollBatchId: row.payroll_batch_id,
   employeeId: row.employee_id,
   companyId: row.company_id,
   month: row.month,
@@ -342,9 +349,14 @@ const mapPayrollEntryRowToModel = (row: {
   earnings: row.earnings || {},
   deductions: row.deductions || {},
   notes: row.notes || "",
+  earningsTotal: row.earnings_total !== null ? Number(row.earnings_total) : undefined,
+  deductionsTotal: row.deductions_total !== null ? Number(row.deductions_total) : undefined,
+  inssAmount: row.inss_amount !== null ? Number(row.inss_amount) : undefined,
+  netSalary: row.net_salary !== null ? Number(row.net_salary) : undefined,
 });
 
 const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
+  payroll_batch_id: entry.payrollBatchId ?? null,
   employee_id: entry.employeeId,
   company_id: entry.companyId,
   month: entry.month,
@@ -353,6 +365,20 @@ const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
   earnings: entry.earnings,
   deductions: entry.deductions,
   notes: normalizeText(entry.notes),
+});
+
+const mapPayrollBatchRowToModel = (row: {
+  id: string;
+  company_id: string;
+  month: number;
+  year: number;
+  status: string;
+}): PayrollBatch => ({
+  id: row.id,
+  companyId: row.company_id,
+  month: row.month,
+  year: row.year,
+  status: row.status as PayrollBatch["status"],
 });
 
 // Comentário: a tabela de itens possui duas FKs para `rubricas`; usamos embed explícito para evitar ambiguidade no PostgREST.
@@ -369,11 +395,14 @@ export const usePayroll = () => {
 export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { loading: authLoading, hasPermission } = useAuth();
   const canViewStructure = hasPermission("estrutura.view");
+  const canViewEmployees = hasPermission("funcionarios.view");
+  const canOperatePayroll = hasPermission("folha.operar");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [allJobRoles, setAllJobRoles] = useState<JobRole[]>([]);
   const [allPayrollEntries, setAllPayrollEntries] = useState<PayrollEntry[]>([]);
+  const [allPayrollBatches, setAllPayrollBatches] = useState<PayrollBatch[]>([]);
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
   const [payrollCatalogErrors, setPayrollCatalogErrors] = useState<{ departments?: string; jobRoles?: string; payrollEntries?: string }>({});
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -527,21 +556,38 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const jobRolesRequest = canViewStructure
       ? supabase.from("job_roles").select("id, company_id, name, is_active").order("name", { ascending: true })
       : Promise.resolve({ data: [], error: null });
+    // Bloco 1 / Fase 1 (segurança): a Central depende de employees + payroll_entries,
+    // mas a proteção real passa a existir no backend via RLS por permissão.
+    // No frontend, evitamos consultas desnecessárias sem permissão para reduzir ruído
+    // (ex.: usuário sem `folha.operar` navegando em outra tela).
+    const employeesRequest = (canViewEmployees || canOperatePayroll)
+      ? supabase.from("employees").select("*").order("name", { ascending: true })
+      : Promise.resolve({ data: [], error: null });
+    const payrollBatchesRequest = canOperatePayroll
+      ? supabase
+          .from("payroll_batches")
+          .select("id, company_id, month, year, status")
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null });
+    const payrollEntriesRequest = canOperatePayroll
+      ? supabase
+          .from("payroll_entries")
+          .select("id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary")
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null });
 
     // Comentário: mantemos os demais cadastros na mesma origem para preservar o padrão já existente no provider.
-    const [companiesRes, employeesRes, departmentsRes, rolesRes, rubricsRes, payrollEntriesRes] = await Promise.all([
+    const [companiesRes, employeesRes, departmentsRes, rolesRes, rubricsRes, payrollBatchesRes, payrollEntriesRes] = await Promise.all([
       supabase.from("companies").select("id, name, cnpj, address, is_active").order("name", { ascending: true }),
-      supabase.from("employees").select("*").order("name", { ascending: true }),
+      employeesRequest,
       departmentsRequest,
       jobRolesRequest,
       supabase
         .from("rubricas")
         .select(RUBRICA_SELECT_WITH_ITEMS)
         .order("display_order", { ascending: true }),
-      supabase
-        .from("payroll_entries")
-        .select("id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes")
-        .order("created_at", { ascending: false }),
+      payrollBatchesRequest,
+      payrollEntriesRequest,
     ]);
     const nextCatalogErrors: { departments?: string; jobRoles?: string; payrollEntries?: string } = {};
 
@@ -577,6 +623,10 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setRubrics(rubricsRes.data.map((row) => mapRubricRowToModel(row as Parameters<typeof mapRubricRowToModel>[0])));
     }
 
+    if (!payrollBatchesRes.error && payrollBatchesRes.data) {
+      setAllPayrollBatches(payrollBatchesRes.data.map(mapPayrollBatchRowToModel));
+    }
+
     if (!payrollEntriesRes.error && payrollEntriesRes.data) {
       setAllPayrollEntries(payrollEntriesRes.data.map(mapPayrollEntryRowToModel));
     } else if (payrollEntriesRes.error) {
@@ -586,7 +636,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setPayrollCatalogErrors(nextCatalogErrors);
 
     setIsLoading(false);
-  }, [authLoading, canViewStructure]);
+  }, [authLoading, canOperatePayroll, canViewEmployees, canViewStructure]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -599,15 +649,79 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const departments = allDepartments.filter((department) => department.companyId === selectedCompany?.id);
   const jobRoles = allJobRoles.filter((jobRole) => jobRole.companyId === selectedCompany?.id);
 
+  const currentBatch = React.useMemo(() => {
+    if (!selectedCompany) return null;
+    return (
+      allPayrollBatches.find(
+        (batch) =>
+          batch.companyId === selectedCompany.id &&
+          batch.month === selectedMonth.month &&
+          batch.year === selectedMonth.year
+      ) ?? null
+    );
+  }, [allPayrollBatches, selectedCompany, selectedMonth.month, selectedMonth.year]);
+
+  const ensureCurrentBatch = useCallback(async (): Promise<PayrollBatch | null> => {
+    if (!canOperatePayroll || !selectedCompany) return null;
+    if (currentBatch) return currentBatch;
+
+    // Bloco 2 / Fase 1: a Central passa a ter uma folha formal por empresa+competência.
+    // Usamos upsert conservador para evitar duplicidade e manter compatibilidade com o fluxo atual.
+    const { data, error } = await supabase
+      .from("payroll_batches")
+      .upsert(
+        {
+          company_id: selectedCompany.id,
+          month: selectedMonth.month,
+          year: selectedMonth.year,
+          status: "draft",
+        },
+        { onConflict: "company_id,month,year" }
+      )
+      .select("id, company_id, month, year, status")
+      .single();
+    if (error || !data) throw error;
+
+    const mapped = mapPayrollBatchRowToModel(data);
+    setAllPayrollBatches((prev) => {
+      const withoutSameScope = prev.filter(
+        (item) =>
+          !(
+            item.companyId === mapped.companyId &&
+            item.month === mapped.month &&
+            item.year === mapped.year
+          )
+      );
+      return [mapped, ...withoutSameScope];
+    });
+    return mapped;
+  }, [canOperatePayroll, currentBatch, selectedCompany, selectedMonth.month, selectedMonth.year]);
+
+  useEffect(() => {
+    if (!canOperatePayroll || !selectedCompany) return;
+    void ensureCurrentBatch();
+  }, [canOperatePayroll, ensureCurrentBatch, selectedCompany]);
+
   const payrollEntries = React.useMemo(() => {
     if (!selectedCompany) return [];
+    if (currentBatch) {
+      return allPayrollEntries.filter(
+        (entry) =>
+          entry.payrollBatchId === currentBatch.id ||
+          (!entry.payrollBatchId &&
+            entry.companyId === selectedCompany.id &&
+            entry.month === selectedMonth.month &&
+            entry.year === selectedMonth.year)
+      );
+    }
+    // Compatibilidade transitória: mantém leitura antiga se ainda não existir batch carregado.
     return allPayrollEntries.filter(
       (entry) =>
         entry.companyId === selectedCompany.id &&
         entry.month === selectedMonth.month &&
         entry.year === selectedMonth.year
     );
-  }, [allPayrollEntries, selectedCompany, selectedMonth]);
+  }, [allPayrollEntries, currentBatch, selectedCompany, selectedMonth]);
 
   const updatePayrollEntry = useCallback(
     async (id: string, updates: Partial<PayrollEntry>) => {
@@ -621,7 +735,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .from("payroll_entries")
         .update(payload)
         .eq("id", id)
-        .select("id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes")
+        .select("id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary")
         .single();
       if (error || !data) throw error;
 
@@ -633,17 +747,57 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const addPayrollEntry = useCallback(
     async (entry: Omit<PayrollEntry, "id">) => {
+      // Bloco 2 / Fase 1: novos lançamentos devem nascer vinculados à folha formal.
+      // Mantemos company/month/year no payload por compatibilidade com o modelo transitório atual.
+      const batch = await ensureCurrentBatch();
+      const payload = mapPayrollEntryInsertToRow({
+        ...entry,
+        payrollBatchId: batch?.id ?? entry.payrollBatchId ?? null,
+      });
       const { data, error } = await supabase
         .from("payroll_entries")
-        .insert(mapPayrollEntryInsertToRow(entry))
-        .select("id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes")
+        .insert(payload)
+        .select("id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary")
         .single();
       if (error || !data) throw error;
 
       setAllPayrollEntries((prev) => [mapPayrollEntryRowToModel(data as any), ...prev]);
     },
-    []
+    [ensureCurrentBatch]
   );
+
+  const recalculatePayrollBatch = useCallback(async () => {
+    const batch = await ensureCurrentBatch();
+    if (!batch) return;
+
+    // Bloco 3 / Fase 1: cálculo final sai da UI e passa ao backend como fonte de verdade mínima.
+    // Não é motor completo de rubricas; apenas recálculo determinístico do modelo atual (JSONB + base_salary).
+    const { data, error } = await supabase.rpc("recalculate_payroll_batch", { p_batch_id: batch.id });
+    if (error) throw error;
+    const rows = (data || []) as Array<{
+      id: string;
+      payroll_batch_id: string | null;
+      employee_id: string;
+      company_id: string;
+      month: number;
+      year: number;
+      base_salary: number;
+      earnings: Record<string, number> | null;
+      deductions: Record<string, number> | null;
+      notes: string | null;
+      earnings_total: number | null;
+      deductions_total: number | null;
+      inss_amount: number | null;
+      net_salary: number | null;
+    }>;
+    const mapped = rows.map(mapPayrollEntryRowToModel);
+    const mappedIds = new Set(mapped.map((item) => item.id));
+
+    setAllPayrollEntries((prev) => [
+      ...mapped,
+      ...prev.filter((item) => !mappedIds.has(item.id)),
+    ]);
+  }, [ensureCurrentBatch]);
 
 
   const addCompany = useCallback(async (company: Omit<Company, "id">) => {
@@ -968,6 +1122,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isLoading,
         loadError,
         reloadData: loadData,
+        recalculatePayrollBatch,
         addPayrollEntry,
         updatePayrollEntry,
         addCompany,

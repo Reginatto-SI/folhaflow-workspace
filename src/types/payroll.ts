@@ -52,6 +52,9 @@ export interface Employee {
 
 export interface PayrollEntry {
   id: string;
+  // Bloco 2 da fase 1: vínculo mínimo com a folha formal (payroll_batches).
+  // Mantemos companyId/month/year por compatibilidade transitória nesta etapa.
+  payrollBatchId?: string | null;
   employeeId: string;
   companyId: string;
   month: number;
@@ -60,6 +63,11 @@ export interface PayrollEntry {
   earnings: Record<string, number>;
   deductions: Record<string, number>;
   notes: string;
+  // Bloco 3 da fase 1: campos calculados no backend (fonte de verdade mínima).
+  earningsTotal?: number;
+  deductionsTotal?: number;
+  inssAmount?: number;
+  netSalary?: number;
 }
 
 export interface RubricFormulaItem {
@@ -124,3 +132,11 @@ export type PayrollMonth = {
   month: number;
   year: number;
 };
+
+export interface PayrollBatch {
+  id: string;
+  companyId: string;
+  month: number;
+  year: number;
+  status: "draft";
+}

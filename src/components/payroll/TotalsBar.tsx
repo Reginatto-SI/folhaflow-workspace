@@ -10,15 +10,23 @@ const TotalsBar: React.FC = () => {
   const totals = React.useMemo(() => {
     let gross = 0;
     let totalDeductions = 0;
+    let totalInss = 0;
+    let net = 0;
 
     payrollEntries.forEach((entry) => {
-      const earnSum = Object.values(entry.earnings).reduce((a, b) => a + b, 0);
-      const dedSum = Object.values(entry.deductions).reduce((a, b) => a + b, 0);
-      gross += entry.baseSalary + earnSum;
-      totalDeductions += dedSum;
+      // Ajuste do bloco 3: UI não deve recalcular resultado final.
+      // Fallback mínimo seguro: zero quando ainda não houver materialização backend.
+      const earningsTotal = entry.earningsTotal ?? 0;
+      const deductionsTotal = entry.deductionsTotal ?? 0;
+      const inss = entry.inssAmount ?? 0;
+      const netSalary = entry.netSalary ?? 0;
+      gross += earningsTotal;
+      totalDeductions += deductionsTotal;
+      totalInss += inss;
+      net += netSalary;
     });
 
-    return { gross, deductions: totalDeductions, net: gross - totalDeductions, count: payrollEntries.length };
+    return { gross, deductions: totalDeductions, inss: totalInss, net, count: payrollEntries.length };
   }, [payrollEntries]);
 
   return (
@@ -36,6 +44,11 @@ const TotalsBar: React.FC = () => {
       <div>
         <p className="text-xs text-muted-foreground font-medium">Descontos</p>
         <p className="text-lg font-semibold tabular-nums text-destructive">{fmt(totals.deductions)}</p>
+      </div>
+      <div className="h-8 w-px bg-border" />
+      <div>
+        <p className="text-xs text-muted-foreground font-medium">INSS</p>
+        <p className="text-lg font-semibold tabular-nums text-muted-foreground">{fmt(totals.inss)}</p>
       </div>
       <div className="h-8 w-px bg-border" />
       <div>

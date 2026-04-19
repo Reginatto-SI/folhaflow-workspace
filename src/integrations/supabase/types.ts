@@ -213,12 +213,17 @@ export type Database = {
           base_salary: number
           company_id: string
           created_at: string
+          deductions_total: number
           deductions: Json
           earnings: Json
+          earnings_total: number
           employee_id: string
           id: string
+          inss_amount: number
           month: number
+          net_salary: number
           notes: string | null
+          payroll_batch_id: string | null
           updated_at: string
           year: number
         }
@@ -226,12 +231,17 @@ export type Database = {
           base_salary?: number
           company_id: string
           created_at?: string
+          deductions_total?: number
           deductions?: Json
           earnings?: Json
+          earnings_total?: number
           employee_id: string
           id?: string
+          inss_amount?: number
           month: number
+          net_salary?: number
           notes?: string | null
+          payroll_batch_id?: string | null
           updated_at?: string
           year: number
         }
@@ -239,16 +249,28 @@ export type Database = {
           base_salary?: number
           company_id?: string
           created_at?: string
+          deductions_total?: number
           deductions?: Json
           earnings?: Json
+          earnings_total?: number
           employee_id?: string
           id?: string
+          inss_amount?: number
           month?: number
+          net_salary?: number
           notes?: string | null
+          payroll_batch_id?: string | null
           updated_at?: string
           year?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "payroll_entries_payroll_batch_id_fkey"
+            columns: ["payroll_batch_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_batches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payroll_entries_company_id_fkey"
             columns: ["company_id"]
@@ -261,6 +283,44 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_batches: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          month: number
+          status: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          month: number
+          status?: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          month?: number
+          status?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_batches_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -479,6 +539,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      recalculate_payroll_batch: {
+        Args: { p_batch_id: string }
+        Returns: Database["public"]["Tables"]["payroll_entries"]["Row"][]
+      }
     }
     Enums: {
       app_permission:
