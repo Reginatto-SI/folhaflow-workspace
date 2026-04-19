@@ -149,6 +149,17 @@ Este módulo deve deixar claro que:
 - não existem campos fixos internos no sistema
 - classificação é a única fonte de agregação
 
+Campos derivados canônicos como:
+
+- salario_real
+- g2_complemento
+- salario_liquido
+
+NÃO devem ser agrupados por classificação.
+
+Esses valores devem ser obtidos diretamente do motor de cálculo (PRD-01)
+e exibidos como totais finais no recibo.
+
 ---
 
 ## 14. Estratégia de transição
@@ -177,8 +188,3 @@ Este módulo deve deixar claro que:
 - geração em lote funcionando
 - consistência total com relatórios
 
----
-
-## Observação de alinhamento documental
-
-Este módulo deve manter compatibilidade com o PRD-12 para consumo das rubricas canônicas (`salario_real`, `g2_complemento`, `salario_liquido`) quando aplicável ao fluxo do módulo.
