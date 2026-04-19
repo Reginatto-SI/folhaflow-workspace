@@ -349,7 +349,29 @@ Modal com abas:
 
 ---
 
-## 12. Estratégia de transição
+
+## 12. Integração com rubricas canônicas (PRD-12)
+
+O PRD-02 permanece como documento principal de cadastro e configuração de rubricas.
+
+Porém, o cadastro deve respeitar o PRD-12 para rubricas com papel estrutural no sistema.
+
+Rubricas canônicas estruturais:
+
+- `salario_real`
+- `g2_complemento`
+- `salario_liquido`
+
+Regras obrigatórias:
+
+- essas rubricas fazem parte da arquitetura
+- não devem ser tratadas como rubricas operacionais comuns
+- devem ser preservadas para consumo consistente pela Central, Totais, Recibos e Relatórios
+- alterações de cadastro não podem quebrar a compatibilidade definida no PRD-12
+
+---
+
+## 13. Estratégia de transição
 
 - mapear rubricas existentes  
 - identificar fórmulas utilizadas no sistema atual  
@@ -359,7 +381,7 @@ Modal com abas:
 
 ---
 
-## 13. Fora do escopo
+## 14. Fora do escopo
 
 - cálculo automático de impostos  
 - regras fiscais complexas  
@@ -369,7 +391,7 @@ Modal com abas:
 
 ---
 
-## 14. Critérios de sucesso
+## 15. Critérios de sucesso
 
 - usuário consegue definir qualquer regra via fórmula  
 - sistema executa exatamente o configurado  
