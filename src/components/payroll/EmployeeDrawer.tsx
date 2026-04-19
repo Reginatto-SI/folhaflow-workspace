@@ -115,9 +115,14 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       base: editable.filter(isBaseRubric),
       proventos: editable.filter((rubric) => !isBaseRubric(rubric) && rubric.type === "provento"),
       descontos: editable.filter((rubric) => !isBaseRubric(rubric) && rubric.type === "desconto"),
-      derivadas: activeRubricsOrdered.filter(isDerivedRubric),
     };
   }, [activeRubricsOrdered]);
+
+  // Estrutura legada: bloco de Proventos agrega rubricas-base e proventos operacionais.
+  const proventosRubrics = useMemo(
+    () => [...groupedRubrics.base, ...groupedRubrics.proventos],
+    [groupedRubrics.base, groupedRubrics.proventos]
+  );
 
   const derivedResultRubricIds = useMemo(() => {
     const findDerivedByCode = (canonicalCode: string) =>
@@ -265,70 +270,32 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             </div>
           )}
 
-          {/* Densidade e alinhamento: menos respiro vertical para leitura operacional mais rápida. */}
-          <section className="border rounded-md bg-card p-2.5 space-y-1.5">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rubricas-base</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-              {groupedRubrics.base.length > 0 ? (
-                groupedRubrics.base.map((rubric) => (
-                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
-                ))
-              ) : (
-                <p className="text-xs text-muted-foreground col-span-full">Nenhuma rubrica-base identificada para a empresa/competência atual.</p>
-              )}
-            </div>
-          </section>
-
-          {/* Proventos e descontos recebem bloco levemente destacado, aproximando a leitura ao layout legado. */}
-          <section className="border rounded-md border-slate-200 bg-slate-50/70 p-2.5 space-y-1.5">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proventos</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-              {groupedRubrics.proventos.length > 0 ? (
-                groupedRubrics.proventos.map((rubric) => (
-                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
-                ))
-              ) : (
-                <p className="text-xs text-muted-foreground col-span-full">Nenhuma rubrica de provento ativa.</p>
-              )}
-            </div>
-          </section>
-
-          <section className="border rounded-md border-red-100 bg-red-50/30 p-2.5 space-y-1.5">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-destructive">Descontos</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-              {groupedRubrics.descontos.length > 0 ? (
-                groupedRubrics.descontos.map((rubric) => (
-                  <NumericRubricInput
-                    key={rubric.id}
-                    rubric={rubric}
-                    value={rubricValues[rubric.id] || 0}
-                    disabled={!canEditValues}
-                    labelClassName="text-destructive"
-                    onChange={updateRubricValue}
-                  />
-                ))
-              ) : (
-                <p className="text-xs text-muted-foreground col-span-full">Nenhuma rubrica de desconto ativa.</p>
-              )}
-            </div>
-          </section>
-
-          {/* Campos derivados ficam readonly e recalculam no frontend imediatamente. */}
-          {groupedRubrics.derivadas.length > 0 && (
-            <section className="border rounded-md bg-slate-100 p-2.5 space-y-1.5">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Campos derivados (readonly)</h4>
+          {proventosRubrics.length > 0 && (
+            <section className="border rounded-md border-slate-200 bg-slate-50/70 p-2.5 space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proventos</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-                {groupedRubrics.derivadas.map((rubric) => (
-                  <NumericRubricInput
-                    key={rubric.id}
-                    rubric={rubric}
-                    value={spreadsheetPreview.valuesByRubricId[rubric.id] || 0}
-                    disabled
-                    inputClassName="bg-slate-200/80 border-slate-300 text-slate-900"
-                    onChange={() => {}}
-                  />
+                {proventosRubrics.map((rubric) => (
+                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
                 ))}
               </div>
+            </section>
+          )}
+
+          {groupedRubrics.descontos.length > 0 && (
+            <section className="border rounded-md border-red-100 bg-red-50/30 p-2.5 space-y-1.5">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-destructive">Descontos</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+              {groupedRubrics.descontos.map((rubric) => (
+                <NumericRubricInput
+                  key={rubric.id}
+                  rubric={rubric}
+                  value={rubricValues[rubric.id] || 0}
+                  disabled={!canEditValues}
+                  labelClassName="text-destructive"
+                  onChange={updateRubricValue}
+                />
+              ))}
+            </div>
             </section>
           )}
 
