@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { Company, Department, Employee, JobRole, PayrollBatch, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,7 +24,6 @@ interface PayrollContextType {
   isLoading: boolean;
   loadError: string | null;
   reloadData: () => Promise<void>;
-  recalculatePayrollBatch: () => Promise<void>;
   updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
   addPayrollEntry: (entry: Omit<PayrollEntry, "id">) => Promise<void>;
   addCompany: (company: Omit<Company, "id">) => Promise<void>;
@@ -678,6 +677,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     );
   }, [allPayrollBatches, selectedCompany, selectedMonth.month, selectedMonth.year]);
 
+  const lastAutoReprocessedScopeRef = useRef<string | null>(null);
+
   const ensureCurrentBatch = useCallback(async (): Promise<PayrollBatch | null> => {
     if (!canOperatePayroll || !selectedCompany) return null;
     if (currentBatch) return currentBatch;
@@ -740,6 +741,66 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     );
   }, [allPayrollEntries, currentBatch, selectedCompany, selectedMonth]);
 
+  const runPayrollBatchReprocess = useCallback(
+    async ({
+      batchId,
+      trigger,
+      silent = false,
+    }: {
+      batchId?: string | null;
+      trigger: "open" | "save" | "duplication";
+      silent?: boolean;
+    }) => {
+      // Função reutilizada para reprocessamento automático da folha (antes acionada manualmente pelo botão Recalcular)
+      // O frontend continua calculando a experiência imediata da planilha; aqui garantimos consistência persistida em background.
+      // O usuário não depende de ação manual para recalcular e o botão não deve voltar para a UI.
+      const resolvedBatchId = batchId ?? (await ensureCurrentBatch())?.id ?? null;
+      if (!resolvedBatchId) return;
+
+      // Bloco 3 / Fase 1: cálculo final sai da UI e passa ao backend como fonte de verdade mínima.
+      // Não é motor completo de rubricas; apenas recálculo determinístico do modelo atual (JSONB + base_salary).
+      const { data, error } = await supabase.rpc("recalculate_payroll_batch", { p_batch_id: resolvedBatchId });
+      if (error) {
+        if (!silent) throw error;
+        return;
+      }
+
+      const rows = (data || []) as Array<{
+        id: string;
+        payroll_batch_id: string | null;
+        employee_id: string;
+        company_id: string;
+        month: number;
+        year: number;
+        base_salary: number;
+        earnings: Record<string, number> | null;
+        deductions: Record<string, number> | null;
+        notes: string | null;
+        earnings_total: number | null;
+        deductions_total: number | null;
+        inss_amount: number | null;
+        net_salary: number | null;
+      }>;
+      const mapped = rows.map(mapPayrollEntryRowToModel);
+      const mappedIds = new Set(mapped.map((item) => item.id));
+
+      setAllPayrollEntries((prev) => [
+        ...mapped,
+        ...prev.filter((item) => !mappedIds.has(item.id)),
+      ]);
+
+      if (trigger === "open") {
+        console.log("Reprocessamento automático executado ao abrir folha");
+      } else if (trigger === "save") {
+        console.log("Reprocessamento automático executado após salvar");
+      } else if (trigger === "duplication") {
+        // Trigger reservado para futura implementação da duplicação de folha. A funcionalidade ainda não existe no fluxo atual da Central.
+        console.log("Reprocessamento automático executado após duplicação");
+      }
+    },
+    [ensureCurrentBatch]
+  );
+
   const updatePayrollEntry = useCallback(
     async (id: string, updates: Partial<PayrollEntry>) => {
       const payload = {
@@ -758,8 +819,12 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       const mapped = mapPayrollEntryRowToModel(data as any);
       setAllPayrollEntries((prev) => prev.map((entry) => (entry.id === id ? mapped : entry)));
+
+      // Comentário: este ponto é seguro para reprocessar porque updatePayrollEntry só é disparado no "Salvar" do drawer
+      // (não em cada digitação). Mantemos automático e sem bloqueio para alinhar ao legado: usuário não precisa clicar em recalcular.
+      void runPayrollBatchReprocess({ batchId: mapped.payrollBatchId ?? null, trigger: "save", silent: true });
     },
-    []
+    [runPayrollBatchReprocess]
   );
 
   const addPayrollEntry = useCallback(
@@ -783,38 +848,16 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [ensureCurrentBatch]
   );
 
-  const recalculatePayrollBatch = useCallback(async () => {
-    const batch = await ensureCurrentBatch();
-    if (!batch) return;
+  useEffect(() => {
+    if (!canOperatePayroll || !selectedCompany || !currentBatch) return;
+    const scopeKey = `${selectedCompany.id}:${selectedMonth.month}:${selectedMonth.year}:${currentBatch.id}`;
+    if (lastAutoReprocessedScopeRef.current === scopeKey) return;
+    lastAutoReprocessedScopeRef.current = scopeKey;
 
-    // Bloco 3 / Fase 1: cálculo final sai da UI e passa ao backend como fonte de verdade mínima.
-    // Não é motor completo de rubricas; apenas recálculo determinístico do modelo atual (JSONB + base_salary).
-    const { data, error } = await supabase.rpc("recalculate_payroll_batch", { p_batch_id: batch.id });
-    if (error) throw error;
-    const rows = (data || []) as Array<{
-      id: string;
-      payroll_batch_id: string | null;
-      employee_id: string;
-      company_id: string;
-      month: number;
-      year: number;
-      base_salary: number;
-      earnings: Record<string, number> | null;
-      deductions: Record<string, number> | null;
-      notes: string | null;
-      earnings_total: number | null;
-      deductions_total: number | null;
-      inss_amount: number | null;
-      net_salary: number | null;
-    }>;
-    const mapped = rows.map(mapPayrollEntryRowToModel);
-    const mappedIds = new Set(mapped.map((item) => item.id));
-
-    setAllPayrollEntries((prev) => [
-      ...mapped,
-      ...prev.filter((item) => !mappedIds.has(item.id)),
-    ]);
-  }, [ensureCurrentBatch]);
+    // Comentário: ao abrir a folha/competência, reprocessamos em background para manter persistência consistente sem travar a UI.
+    // A experiência visual imediata continua no frontend (modo planilha), igual ao comportamento operacional legado.
+    void runPayrollBatchReprocess({ batchId: currentBatch.id, trigger: "open", silent: true });
+  }, [canOperatePayroll, currentBatch, runPayrollBatchReprocess, selectedCompany, selectedMonth.month, selectedMonth.year]);
 
 
   const addCompany = useCallback(async (company: Omit<Company, "id">) => {
@@ -1140,7 +1183,6 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isLoading,
         loadError,
         reloadData: loadData,
-        recalculatePayrollBatch,
         addPayrollEntry,
         updatePayrollEntry,
         addCompany,

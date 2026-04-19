@@ -2,10 +2,9 @@ import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText, RefreshCw } from "lucide-react";
+import { Plus, FileText } from "lucide-react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { toast } from "sonner";
 
 const MONTHS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -30,10 +29,8 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
     setSelectedCompany,
     selectedMonth,
     setSelectedMonth,
-    recalculatePayrollBatch,
     currentBatch,
   } = usePayroll();
-  const [isRecalculating, setIsRecalculating] = React.useState(false);
 
   // Range mais amplo (-12 / +12 meses): com busca por digitação, escala sem fricção.
   const monthOptions = React.useMemo(() => {
@@ -63,20 +60,6 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
   );
 
   const selectedMonthValue = `${selectedMonth.month}-${selectedMonth.year}`;
-
-  const handleRecalculate = async () => {
-    setIsRecalculating(true);
-    try {
-      // Bloco 3 / Fase 1: recálculo final deve ser executado no backend como fonte de verdade.
-      // A UI apenas dispara a ação e exibe o resultado persistido.
-      await recalculatePayrollBatch();
-      toast.success("Folha recalculada com sucesso.");
-    } catch {
-      toast.error("Não foi possível recalcular a folha.");
-    } finally {
-      setIsRecalculating(false);
-    }
-  };
 
   const statusLabel = currentBatch ? (STATUS_LABEL[currentBatch.status] ?? currentBatch.status) : "Em edição";
 
@@ -119,10 +102,6 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
           <Button size="sm" onClick={onNewEntry} className="h-8 px-3">
             <Plus className="h-4 w-4 mr-1" />
             Novo lançamento
-          </Button>
-          <Button size="sm" variant="outline" onClick={handleRecalculate} disabled={isRecalculating} className="h-8 px-3">
-            <RefreshCw className="h-4 w-4 mr-1" />
-            Recalcular
           </Button>
           {/* Tooltip explica que relatório é PRD-08, fora do escopo desta sprint. */}
           <Tooltip>
