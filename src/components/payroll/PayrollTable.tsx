@@ -52,10 +52,10 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
           <tbody>
             {entries.map((entry) => {
               const emp = getEmployee(entry.employeeId);
-              const totalEarnings = Object.values(entry.earnings).reduce((a, b) => a + b, 0);
-              const totalDeductions = Object.values(entry.deductions).reduce((a, b) => a + b, 0);
-              const gross = entry.baseSalary + totalEarnings;
-              const net = gross - totalDeductions;
+              // Ajuste do bloco 3: cálculo final exibido é sempre backend-first.
+              const totalEarnings = entry.earningsTotal ?? 0;
+              const totalDeductions = entry.deductionsTotal ?? 0;
+              const net = entry.netSalary ?? 0;
 
               return (
                 <tr

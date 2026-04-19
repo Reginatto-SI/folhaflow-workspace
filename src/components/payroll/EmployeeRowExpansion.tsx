@@ -15,10 +15,9 @@ const EmployeeRowExpansion: React.FC<Props> = ({ entry, colSpan }) => {
   const { updatePayrollEntry, allEmployees } = usePayroll();
   const employee = allEmployees.find((e) => e.id === entry.employeeId);
 
-  const totalEarnings = Object.values(entry.earnings).reduce((a, b) => a + b, 0);
-  const totalDeductions = Object.values(entry.deductions).reduce((a, b) => a + b, 0);
-  const gross = entry.baseSalary + totalEarnings;
-  const net = gross - totalDeductions;
+  const totalEarnings = entry.earningsTotal ?? 0;
+  const totalDeductions = entry.deductionsTotal ?? 0;
+  const net = entry.netSalary ?? 0;
 
   return (
     <tr className="bg-muted/30">
