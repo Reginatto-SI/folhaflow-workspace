@@ -99,9 +99,12 @@ Deve conter:
 - adiantamentos
 - vales/descontos
 - faltas/descontos
-- salário real
-- G2 complemento
-- salário líquido
+
+Rubricas derivadas não devem ser apresentadas como opções de duplicação.
+
+Esses valores são sempre calculados pelo motor (PRD-01) e não fazem parte da base operacional duplicável.
+
+A duplicação deve considerar apenas dados manuais e operacionais.
 
 ---
 

@@ -212,6 +212,12 @@ Esses grupos só devem ser copiados se o usuário marcar explicitamente, e mesmo
 
 Rubricas canônicas derivadas não devem ser duplicadas.
 
+Inclui explicitamente:
+
+- salario_real
+- g2_complemento
+- salario_liquido
+
 Esses valores devem ser sempre recalculados pelo motor após a criação da nova folha, não podendo ser tratados como base operacional.
 
 ---
