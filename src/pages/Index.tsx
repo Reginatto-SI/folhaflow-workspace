@@ -23,6 +23,7 @@ const Index = () => {
     rubrics,
     updatePayrollEntry,
     addPayrollEntry,
+    recalculatePayrollBatch,
     selectedCompany,
     selectedMonth,
   } = usePayroll();
@@ -70,10 +71,18 @@ const Index = () => {
   }, []);
 
   const handleSave = useCallback(
-    (id: string, updates: Partial<PayrollEntry>) => {
-      return updatePayrollEntry(id, updates);
+    async (id: string, updates: Partial<PayrollEntry>) => {
+      await updatePayrollEntry(id, updates);
+      // PRD-01 / PRD-03 §2: backend é fonte única de verdade dos totais.
+      // Recalcula silenciosamente após cada save para manter tabela e TotaisBar sincronizados
+      // sem exigir clique manual em "Recalcular".
+      try {
+        await recalculatePayrollBatch();
+      } catch {
+        // Falha no recálculo automático não bloqueia o save; usuário pode disparar manualmente.
+      }
     },
-    [updatePayrollEntry]
+    [updatePayrollEntry, recalculatePayrollBatch]
   );
 
   const availableEmployeesForEntry = useMemo(() => {
