@@ -5,6 +5,7 @@ import { computeSpreadsheetEntry, getEntryManualValues } from "@/lib/payrollSpre
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const normalizeRubricCode = (value?: string) => (value || "").trim().toLowerCase();
 
 interface PayrollTableProps {
   entries: PayrollEntry[];
@@ -19,6 +20,18 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
   entries = [], allEmployees = [], allDepartments = [], allJobRoles = [], rubrics = [], onRowClick,
 }) => {
   const getEmployee = (id: string) => allEmployees.find((e) => e.id === id);
+  // Comentário: grade e drawer precisam usar o mesmo contrato visual por código canônico de rubrica derivada.
+  const derivedRubricIds = React.useMemo(() => {
+    const activeRubrics = rubrics.filter((rubric) => rubric.isActive && rubric.nature === "calculada");
+    const findDerivedId = (code: "salario_real" | "g2_complemento" | "salario_liquido") =>
+      activeRubrics.find((rubric) => normalizeRubricCode(rubric.code) === code)?.id || null;
+
+    return {
+      salarioRealId: findDerivedId("salario_real"),
+      g2ComplementoId: findDerivedId("g2_complemento"),
+      salarioLiquidoId: findDerivedId("salario_liquido"),
+    };
+  }, [rubrics]);
   const getDeptName = (emp?: Employee) => {
     if (!emp?.departmentId) return emp?.department || "—";
     return allDepartments.find((d) => d.id === emp.departmentId)?.name || emp.department || "—";
@@ -45,10 +58,9 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
               <th className="text-left px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Funcionário</th>
               <th className="text-left px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Setor</th>
               <th className="text-left px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Função</th>
-              <th className="text-right px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Salário Base</th>
-              <th className="text-right px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Proventos</th>
-              <th className="text-right px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Descontos</th>
-              <th className="text-right px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground bg-muted/80">Líquido</th>
+              <th className="text-right px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Salário Real</th>
+              <th className="text-right px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">G2 Complemento</th>
+              <th className="text-right px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground bg-muted/80">Salário Líquido</th>
             </tr>
           </thead>
           <tbody>
@@ -73,10 +85,16 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
                   </td>
                   <td className="px-3 py-1.5 text-sm text-muted-foreground">{getDeptName(emp)}</td>
                   <td className="px-3 py-1.5 text-sm text-muted-foreground">{getRoleName(emp)}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmt(localComputed.baseSalary)}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmt(localComputed.earningsTotal)}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-destructive font-medium">{fmt(localComputed.deductionsTotal)}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums font-semibold bg-muted/30">{fmt(localComputed.netSalary)}</td>
+                  {/* Comentário: leitura das colunas pelos mesmos derivados do drawer (valuesByRubricId). */}
+                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">
+                    {fmt(derivedRubricIds.salarioRealId ? (localComputed.valuesByRubricId[derivedRubricIds.salarioRealId] || 0) : 0)}
+                  </td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">
+                    {fmt(derivedRubricIds.g2ComplementoId ? (localComputed.valuesByRubricId[derivedRubricIds.g2ComplementoId] || 0) : 0)}
+                  </td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-semibold bg-muted/30">
+                    {fmt(derivedRubricIds.salarioLiquidoId ? (localComputed.valuesByRubricId[derivedRubricIds.salarioLiquidoId] || 0) : 0)}
+                  </td>
                 </tr>
               );
             })}
