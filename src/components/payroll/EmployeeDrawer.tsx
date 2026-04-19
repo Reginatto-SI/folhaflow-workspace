@@ -13,13 +13,24 @@ import { computeSpreadsheetEntry, getEntryManualValues } from "@/lib/payrollSpre
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const parseCurrency = (v: string): number => {
-  const cleaned = v
-    .replace(/\s/g, "")
-    .replace(/[^\d,.-]/g, "")
-    .replace(/\./g, "")
-    .replace(/,/g, ".");
-  return Number.isFinite(Number(cleaned)) ? Math.max(0, Number(cleaned)) : 0;
+// Estratégia BRL: texto livre durante digitação (sem travar cursor/teclas) e
+// normalização apenas no blur para manter experiência operacional estilo planilha.
+const formatCurrencyDisplay = (value: number) => fmt(Number.isFinite(value) ? value : 0);
+const formatEditCurrency = (value: number) =>
+  Number.isFinite(value)
+    ? value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : "0,00";
+
+const parseCurrency = (value: string): number => {
+  const normalized = value.trim();
+  if (!normalized) return 0;
+
+  const keepsNumericTokens = normalized.replace(/[^\d,.-]/g, "");
+  const withoutThousands = keepsNumericTokens.replace(/\./g, "");
+  const decimalNormalized = withoutThousands.replace(/,/g, ".");
+  const parsed = Number(decimalNormalized);
+
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 };
 
 type RubricValueInput = {
@@ -50,11 +61,12 @@ const NumericRubricInput: React.FC<{
   inputClassName?: string;
   onChange: (next: RubricValueInput) => void;
 }> = ({ rubric, value, disabled, labelClassName, inputClassName, onChange }) => {
-  const [text, setText] = useState(value.toFixed(2));
+  const [text, setText] = useState(formatCurrencyDisplay(value));
+  const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
-    setText(value.toFixed(2));
-  }, [value]);
+    setText(isFocused ? formatEditCurrency(value) : formatCurrencyDisplay(value));
+  }, [isFocused, value]);
 
   return (
     <div className="space-y-1">
@@ -69,10 +81,15 @@ const NumericRubricInput: React.FC<{
         value={text}
         disabled={disabled}
         onChange={(event) => setText(event.target.value)}
+        onFocus={() => {
+          setIsFocused(true);
+          setText(formatEditCurrency(value));
+        }}
         onBlur={() => {
           const parsed = parseCurrency(text);
           onChange({ rubricId: rubric.id, value: parsed });
-          setText(parsed.toFixed(2));
+          setIsFocused(false);
+          setText(formatCurrencyDisplay(parsed));
         }}
       />
     </div>
@@ -81,7 +98,6 @@ const NumericRubricInput: React.FC<{
 
 // Regra operacional da Central simplificada: rubrica calculada (nature=calculada)
 // é tratada como campo derivado readonly na tela estilo planilha.
-const isBaseRubric = (rubric: Rubric) => rubric.nature === "base";
 const isDerivedRubric = (rubric: Rubric) => rubric.nature === "calculada";
 const normalizeRubricCode = (value?: string) => (value || "").trim().toLowerCase();
 
@@ -112,28 +128,10 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     const editable = activeRubricsOrdered.filter((rubric) => !isDerivedRubric(rubric));
 
     return {
-      base: editable.filter(isBaseRubric),
-      proventos: editable.filter((rubric) => !isBaseRubric(rubric) && rubric.type === "provento"),
-      descontos: editable.filter((rubric) => !isBaseRubric(rubric) && rubric.type === "desconto"),
-    };
-  }, [activeRubricsOrdered]);
-
-  // Estrutura legada: bloco de Proventos agrega rubricas-base e proventos operacionais.
-  const proventosRubrics = useMemo(
-    () => [...groupedRubrics.base, ...groupedRubrics.proventos],
-    [groupedRubrics.base, groupedRubrics.proventos]
-  );
-
-  const derivedResultRubricIds = useMemo(() => {
-    const findDerivedByCode = (canonicalCode: string) =>
-      activeRubricsOrdered.find(
-        (rubric) => rubric.nature === "calculada" && normalizeRubricCode(rubric.code) === canonicalCode
-      )?.id;
-
-    return {
-      salarioReal: findDerivedByCode("salario_real"),
-      g2Complemento: findDerivedByCode("g2_complemento"),
-      salarioLiquido: findDerivedByCode("salario_liquido"),
+      // Agrupamento guiado por metadado técnico da rubrica (type/nature), nunca por label.
+      proventos: editable.filter((rubric) => rubric.type === "provento"),
+      descontos: editable.filter((rubric) => rubric.type === "desconto"),
+      resultados: activeRubricsOrdered.filter(isDerivedRubric),
     };
   }, [activeRubricsOrdered]);
 
@@ -165,16 +163,20 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     [activeRubricsOrdered, rubricValues]
   );
 
-  const derivedResultValues = useMemo(() => {
-    const { valuesByRubricId } = spreadsheetPreview;
-    const readDerivedValue = (rubricId?: string) => (rubricId ? valuesByRubricId[rubricId] || 0 : 0);
-
-    return {
-      salarioReal: readDerivedValue(derivedResultRubricIds.salarioReal),
-      g2Complemento: readDerivedValue(derivedResultRubricIds.g2Complemento),
-      salarioLiquido: readDerivedValue(derivedResultRubricIds.salarioLiquido),
+  const orderedDerivedRubrics = useMemo(() => {
+    const priorityByCode: Record<string, number> = {
+      salario_real: 0,
+      g2_complemento: 1,
+      salario_liquido: 2,
     };
-  }, [derivedResultRubricIds, spreadsheetPreview]);
+
+    return [...groupedRubrics.resultados].sort((a, b) => {
+      const aPriority = priorityByCode[normalizeRubricCode(a.code)] ?? 999;
+      const bPriority = priorityByCode[normalizeRubricCode(b.code)] ?? 999;
+      if (aPriority !== bPriority) return aPriority - bPriority;
+      return a.order - b.order;
+    });
+  }, [groupedRubrics.resultados]);
 
   const updateRubricValue = ({ rubricId, value }: RubricValueInput) => {
     setRubricValues((prev) => ({ ...prev, [rubricId]: value }));
@@ -270,11 +272,11 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             </div>
           )}
 
-          {proventosRubrics.length > 0 && (
+          {groupedRubrics.proventos.length > 0 && (
             <section className="border rounded-md border-slate-200 bg-slate-50/70 p-2.5 space-y-1.5">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proventos</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-                {proventosRubrics.map((rubric) => (
+                {groupedRubrics.proventos.map((rubric) => (
                   <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
                 ))}
               </div>
@@ -299,26 +301,32 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             </section>
           )}
 
-          {/* Linha crítica de resultado: este bloco é somente exibição.
-              Os valores devem vir das rubricas derivadas reais (por code canônico),
-              sem fórmula paralela hardcoded na UI. */}
-          <section className="border rounded-md bg-slate-100/80 p-2.5 space-y-1.5">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resultados</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-              <div className="rounded-md border bg-white px-2 py-1.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Salário Real</p>
-                <p className="text-sm font-semibold tabular-nums">{fmt(derivedResultValues.salarioReal)}</p>
+          {/* Evita bloco vazio: resultados só aparecem quando há rubricas derivadas ativas carregadas. */}
+          {orderedDerivedRubrics.length > 0 && (
+            <section className="border rounded-md bg-slate-100/80 p-2.5 space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resultados</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                {orderedDerivedRubrics.map((rubric) => {
+                  const canonicalCode = normalizeRubricCode(rubric.code);
+                  const isNetSalary = canonicalCode === "salario_liquido";
+
+                  return (
+                    <div
+                      key={rubric.id}
+                      className={`rounded-md border px-2 py-1.5 ${isNetSalary ? "border-emerald-200 bg-emerald-50" : "bg-white"}`}
+                    >
+                      <p className={`text-[11px] font-semibold uppercase tracking-wide ${isNetSalary ? "text-emerald-800" : "text-muted-foreground"}`}>
+                        {rubric.name}
+                      </p>
+                      <p className={`text-sm tabular-nums ${isNetSalary ? "font-bold text-emerald-900" : "font-semibold"}`}>
+                        {fmt(spreadsheetPreview.valuesByRubricId[rubric.id] || 0)}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="rounded-md border bg-white px-2 py-1.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">G2 Complemento</p>
-                <p className="text-sm font-semibold tabular-nums">{fmt(derivedResultValues.g2Complemento)}</p>
-              </div>
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">Salário Líquido</p>
-                <p className="text-sm font-bold tabular-nums text-emerald-900">{fmt(derivedResultValues.salarioLiquido)}</p>
-              </div>
-            </div>
-          </section>
+            </section>
+          )}
 
           <section className="border rounded-md bg-card p-2.5 space-y-1.5">
             <Label htmlFor="payroll-notes" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Observação</Label>
