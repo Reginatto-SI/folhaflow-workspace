@@ -1,11 +1,10 @@
 import React from "react";
 import { PayrollEntry, Employee, Department, JobRole, Rubric } from "@/types/payroll";
 import { cn } from "@/lib/utils";
-import { computeSpreadsheetEntry, getEntryManualValues } from "@/lib/payrollSpreadsheet";
+import { computeSpreadsheetEntry, getEntryManualValues, resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const normalizeRubricCode = (value?: string) => (value || "").trim().toLowerCase();
 
 interface PayrollTableProps {
   entries: PayrollEntry[];
@@ -20,18 +19,10 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
   entries = [], allEmployees = [], allDepartments = [], allJobRoles = [], rubrics = [], onRowClick,
 }) => {
   const getEmployee = (id: string) => allEmployees.find((e) => e.id === id);
-  // Comentário: grade e drawer precisam usar o mesmo contrato visual por código canônico de rubrica derivada.
-  const derivedRubricIds = React.useMemo(() => {
-    const activeRubrics = rubrics.filter((rubric) => rubric.isActive && rubric.nature === "calculada");
-    const findDerivedId = (code: "salario_real" | "g2_complemento" | "salario_liquido") =>
-      activeRubrics.find((rubric) => normalizeRubricCode(rubric.code) === code)?.id || null;
-
-    return {
-      salarioRealId: findDerivedId("salario_real"),
-      g2ComplementoId: findDerivedId("g2_complemento"),
-      salarioLiquidoId: findDerivedId("salario_liquido"),
-    };
-  }, [rubrics]);
+  // Comentário: divergência anterior acontecia quando grade/totais dependiam só de `code`.
+  // Usamos o mesmo resolvedor de derivados da Central (code canônico + fallback legado explícito)
+  // para manter linha + drawer + totais sincronizados sem lógica paralela.
+  const derivedRubricIds = React.useMemo(() => resolveCanonicalDerivedRubricIds(rubrics), [rubrics]);
   const getDeptName = (emp?: Employee) => {
     if (!emp?.departmentId) return emp?.department || "—";
     return allDepartments.find((d) => d.id === emp.departmentId)?.name || emp.department || "—";

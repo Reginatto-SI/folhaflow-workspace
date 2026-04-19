@@ -1,25 +1,15 @@
 import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
-import { computeSpreadsheetEntry, getEntryManualValues } from "@/lib/payrollSpreadsheet";
+import { computeSpreadsheetEntry, getEntryManualValues, resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const normalizeRubricCode = (value?: string) => (value || "").trim().toLowerCase();
 
 const TotalsBar: React.FC = () => {
   const { payrollEntries, rubrics } = usePayroll();
-  // Comentário: totais seguem o mesmo contrato visual da grade/drawer (rubricas derivadas canônicas).
-  const derivedRubricIds = React.useMemo(() => {
-    const activeRubrics = rubrics.filter((rubric) => rubric.isActive && rubric.nature === "calculada");
-    const findDerivedId = (code: "salario_real" | "g2_complemento" | "salario_liquido") =>
-      activeRubrics.find((rubric) => normalizeRubricCode(rubric.code) === code)?.id || null;
-
-    return {
-      salarioRealId: findDerivedId("salario_real"),
-      g2ComplementoId: findDerivedId("g2_complemento"),
-      salarioLiquidoId: findDerivedId("salario_liquido"),
-    };
-  }, [rubrics]);
+  // Comentário: evita cálculo paralelo ao drawer.
+  // Fonte única: resolvedor canônico de derivados (code oficial) com fallback legado rastreável.
+  const derivedRubricIds = React.useMemo(() => resolveCanonicalDerivedRubricIds(rubrics), [rubrics]);
 
   const totals = React.useMemo(() => {
     let totalSalarioReal = 0;

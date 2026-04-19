@@ -9,7 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { FileText, Save } from "lucide-react";
-import { computeSpreadsheetEntry, getEntryManualValues } from "@/lib/payrollSpreadsheet";
+import {
+  computeSpreadsheetEntry,
+  diagnoseCanonicalDerivedRubrics,
+  getEntryManualValues,
+  hasCanonicalRubricInconsistency,
+  resolveCanonicalDerivedRubricIds,
+} from "@/lib/payrollSpreadsheet";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -99,8 +105,6 @@ const NumericRubricInput: React.FC<{
 // Regra operacional da Central simplificada: rubrica calculada (nature=calculada)
 // é tratada como campo derivado readonly na tela estilo planilha.
 const isDerivedRubric = (rubric: Rubric) => rubric.nature === "calculada";
-const normalizeRubricCode = (value?: string) => (value || "").trim().toLowerCase();
-
 const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   open,
   onOpenChange,
@@ -163,20 +167,62 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     [activeRubricsOrdered, rubricValues]
   );
 
-  const orderedDerivedRubrics = useMemo(() => {
-    const priorityByCode: Record<string, number> = {
-      salario_real: 0,
-      g2_complemento: 1,
-      salario_liquido: 2,
-    };
+  const canonicalDerivedRubricIds = useMemo(
+    () => resolveCanonicalDerivedRubricIds(activeRubricsOrdered),
+    [activeRubricsOrdered]
+  );
+  const canonicalDiagnosis = useMemo(
+    () => diagnoseCanonicalDerivedRubrics(activeRubricsOrdered),
+    [activeRubricsOrdered]
+  );
+  const hasCanonicalInconsistency = useMemo(
+    () => hasCanonicalRubricInconsistency(canonicalDiagnosis),
+    [canonicalDiagnosis]
+  );
+  const canonicalDiagnosticMessage = useMemo(() => {
+    if (!hasCanonicalInconsistency) return null;
+    const statuses = Object.values(canonicalDiagnosis).map((item) => item.status);
+    const hasAmbiguity = statuses.includes("ambiguous_code") || statuses.includes("ambiguous_name");
+    const hasMissing = statuses.includes("missing");
+    const hasLegacyFallback = statuses.includes("resolved_by_legacy_name");
 
-    return [...groupedRubrics.resultados].sort((a, b) => {
-      const aPriority = priorityByCode[normalizeRubricCode(a.code)] ?? 999;
-      const bPriority = priorityByCode[normalizeRubricCode(b.code)] ?? 999;
-      if (aPriority !== bPriority) return aPriority - bPriority;
-      return a.order - b.order;
-    });
-  }, [groupedRubrics.resultados]);
+    // Comentário: mensagem vem do diagnóstico estruturado das rubricas canônicas.
+    // Objetivo: orientar operação com texto curto, sem expor detalhes técnicos.
+    // A correção definitiva continua no cadastro das rubricas (origem dos dados).
+    if (hasAmbiguity) {
+      if (hasMissing || hasLegacyFallback) {
+        return "Há inconsistências no cadastro das rubricas canônicas. Revise o cadastro.";
+      }
+      return "Há conflito no cadastro das rubricas canônicas. Revise o cadastro.";
+    }
+    if (hasMissing) {
+      if (hasLegacyFallback) {
+        return "Há inconsistências no cadastro das rubricas canônicas. Revise o cadastro.";
+      }
+      return "Rubricas canônicas obrigatórias não foram encontradas. Revise o cadastro.";
+    }
+    return "Rubricas canônicas em compatibilidade legada. Revise o cadastro.";
+  }, [canonicalDiagnosis, hasCanonicalInconsistency]);
+
+  const orderedDerivedRubrics = useMemo(() => {
+    // Comentário: drawer, tabela e totais precisam consumir a MESMA resolução canônica.
+    // Primeiro exibimos os 3 campos canônicos já resolvidos no helper compartilhado.
+    const canonicalOrder = [
+      canonicalDerivedRubricIds.salarioRealId,
+      canonicalDerivedRubricIds.g2ComplementoId,
+      canonicalDerivedRubricIds.salarioLiquidoId,
+    ].filter((rubricId): rubricId is string => !!rubricId);
+    const canonicalSet = new Set(canonicalOrder);
+
+    const canonicalRubrics = canonicalOrder
+      .map((rubricId) => groupedRubrics.resultados.find((rubric) => rubric.id === rubricId))
+      .filter((rubric): rubric is Rubric => !!rubric);
+    const nonCanonicalRubrics = groupedRubrics.resultados
+      .filter((rubric) => !canonicalSet.has(rubric.id))
+      .sort((a, b) => a.order - b.order);
+
+    return [...canonicalRubrics, ...nonCanonicalRubrics];
+  }, [canonicalDerivedRubricIds.g2ComplementoId, canonicalDerivedRubricIds.salarioLiquidoId, canonicalDerivedRubricIds.salarioRealId, groupedRubrics.resultados]);
 
   const updateRubricValue = ({ rubricId, value }: RubricValueInput) => {
     setRubricValues((prev) => ({ ...prev, [rubricId]: value }));
@@ -302,29 +348,37 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
           )}
 
           {/* Evita bloco vazio: resultados só aparecem quando há rubricas derivadas ativas carregadas. */}
-          {orderedDerivedRubrics.length > 0 && (
+          {(orderedDerivedRubrics.length > 0 || !!canonicalDiagnosticMessage) && (
             <section className="border rounded-md bg-slate-100/80 p-2.5 space-y-1.5">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resultados</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-                {orderedDerivedRubrics.map((rubric) => {
-                  const canonicalCode = normalizeRubricCode(rubric.code);
-                  const isNetSalary = canonicalCode === "salario_liquido";
-
-                  return (
-                    <div
-                      key={rubric.id}
-                      className={`rounded-md border px-2 py-1.5 ${isNetSalary ? "border-emerald-200 bg-emerald-50" : "bg-white"}`}
-                    >
-                      <p className={`text-[11px] font-semibold uppercase tracking-wide ${isNetSalary ? "text-emerald-800" : "text-muted-foreground"}`}>
-                        {rubric.name}
-                      </p>
-                      <p className={`text-sm tabular-nums ${isNetSalary ? "font-bold text-emerald-900" : "font-semibold"}`}>
-                        {fmt(spreadsheetPreview.valuesByRubricId[rubric.id] || 0)}
-                      </p>
-                    </div>
-                  );
-                })}
+              <div className="space-y-0.5">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resultados</h4>
+                {canonicalDiagnosticMessage && (
+                  <p className="text-[11px] text-amber-700">
+                    {canonicalDiagnosticMessage}
+                  </p>
+                )}
               </div>
+              {orderedDerivedRubrics.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                  {orderedDerivedRubrics.map((rubric) => {
+                    const isNetSalary = canonicalDerivedRubricIds.salarioLiquidoId === rubric.id;
+
+                    return (
+                      <div
+                        key={rubric.id}
+                        className={`rounded-md border px-2 py-1.5 ${isNetSalary ? "border-emerald-200 bg-emerald-50" : "bg-white"}`}
+                      >
+                        <p className={`text-[11px] font-semibold uppercase tracking-wide ${isNetSalary ? "text-emerald-800" : "text-muted-foreground"}`}>
+                          {rubric.name}
+                        </p>
+                        <p className={`text-sm tabular-nums ${isNetSalary ? "font-bold text-emerald-900" : "font-semibold"}`}>
+                          {fmt(spreadsheetPreview.valuesByRubricId[rubric.id] || 0)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           )}
 
