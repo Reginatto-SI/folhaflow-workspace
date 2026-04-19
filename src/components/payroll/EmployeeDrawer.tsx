@@ -368,10 +368,11 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             </div>
           </section>
 
-          {/* PRD-01: backend é fonte única de verdade. Mostra o último valor persistido após save/recálculo. */}
+          {/* PRD-01 (regra INSS manual): backend continua como fonte de verdade para totais consolidados,
+              mas INSS não deve ser comunicado como "valor calculado" separado. */}
           {!isCreateMode && entry && (entry.earningsTotal !== undefined || entry.netSalary !== undefined) && (
             <section className="border rounded-lg bg-muted/40 p-3 space-y-1">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Valores calculados (backend)</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Valores consolidados (backend)</h4>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Proventos</span>
                 <span className="tabular-nums">{fmt(entry.earningsTotal ?? 0)}</span>
@@ -379,10 +380,6 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Descontos</span>
                 <span className="tabular-nums text-destructive">{fmt(entry.deductionsTotal ?? 0)}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">INSS</span>
-                <span className="tabular-nums text-destructive">{fmt(entry.inssAmount ?? 0)}</span>
               </div>
               <div className="flex items-center justify-between text-sm font-bold">
                 <span>Líquido</span>

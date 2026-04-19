@@ -288,6 +288,14 @@ const Rubrics: React.FC = () => {
       return "Classificação é obrigatória para rubricas base ativas (PRD-02).";
     }
 
+    // Regra crítica INSS (PRD-01/PRD-02): bloqueia combinações estruturais incompatíveis
+    // no próprio formulário para evitar persistência inválida.
+    if (draft.classification === "inss") {
+      if (draft.type !== "desconto") return "Classificação INSS exige tipo Desconto.";
+      if (draft.nature !== "base") return "Classificação INSS exige natureza Base (input operacional).";
+      if (draft.calculationMethod !== "manual") return "Classificação INSS exige método Manual.";
+    }
+
     const duplicatedCode = rubrics.some(
       (rubric) => rubric.code.toLowerCase() === draft.code.toLowerCase() && rubric.id !== editing?.id
     );
