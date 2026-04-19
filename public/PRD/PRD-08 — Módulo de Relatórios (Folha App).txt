@@ -309,9 +309,10 @@ Ela é definida no:
 
 ## Regra adicional
 
-- Campos como salário_fiscal, salário_real, salário_g2 e salário_liquido são derivados
+- Campos derivados canônicos `salario_real`, `g2_complemento` e `salario_liquido`
 - NÃO devem ser agrupados por classificação
-- Devem ser exibidos separadamente como totais calculados
+- Devem ser obtidos diretamente do resultado do motor de cálculo (PRD-01)
+- Devem ser exibidos separadamente como totais finais
 
 ## Regra adicional — Bases
 

@@ -157,6 +157,12 @@ Não pode haver múltiplas fontes concorrentes de verdade dentro da própria tel
 
 A lógica deve ser centralizada em uma única função reutilizável da Central de Folha.
 
+Regra de alinhamento com a Central (PRD-03):
+
+- A UI não deve conter lógica de cálculo distribuída
+- A UI pode acionar e consumir essa função única
+- O comportamento de planilha controlada é preservado
+
 Essa função deve ser responsável por:
 
 - ler os valores manuais
