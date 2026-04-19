@@ -39,27 +39,77 @@ export function useVersionCheck() {
         if (toastShownRef.current) return;
 
         toastShownRef.current = true;
-        toast("Nova versão disponível", {
-          description: "Atualize para receber as últimas melhorias.",
-          duration: Infinity,
-          action: {
-            label: "Atualizar agora",
-            onClick: () => {
-              void hardReload();
-            },
+        const snooze = () => {
+          snoozedUntilRef.current = Date.now() + SNOOZE_MS;
+          toastShownRef.current = false;
+        };
+
+        toast.custom(
+          (t) =>
+            createElement(
+              "div",
+              {
+                className:
+                  "w-[380px] max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-background shadow-lg p-4 flex gap-3 items-start transition-shadow hover:shadow-xl",
+              },
+              createElement(
+                "div",
+                {
+                  className:
+                    "shrink-0 h-9 w-9 rounded-md bg-primary/10 text-primary flex items-center justify-center",
+                },
+                createElement(RefreshCw, { className: "h-[18px] w-[18px]" }),
+              ),
+              createElement(
+                "div",
+                { className: "flex-1 min-w-0" },
+                createElement(
+                  "p",
+                  { className: "text-sm font-semibold text-foreground leading-tight" },
+                  "Nova versão disponível",
+                ),
+                createElement(
+                  "p",
+                  { className: "text-xs text-muted-foreground mt-1 leading-snug" },
+                  "Atualize para receber as últimas melhorias.",
+                ),
+                createElement(
+                  "div",
+                  { className: "flex gap-2 justify-end mt-3" },
+                  createElement(
+                    Button,
+                    {
+                      variant: "ghost",
+                      size: "sm",
+                      className: "h-8 px-3 text-xs",
+                      onClick: () => {
+                        snooze();
+                        toast.dismiss(t);
+                      },
+                    },
+                    "Depois",
+                  ),
+                  createElement(
+                    Button,
+                    {
+                      variant: "default",
+                      size: "sm",
+                      className: "h-8 px-3 text-xs",
+                      onClick: () => {
+                        toast.dismiss(t);
+                        void hardReload();
+                      },
+                    },
+                    "Atualizar agora",
+                  ),
+                ),
+              ),
+            ),
+          {
+            duration: Infinity,
+            onDismiss: snooze,
           },
-          cancel: {
-            label: "Depois",
-            onClick: () => {
-              snoozedUntilRef.current = Date.now() + SNOOZE_MS;
-              toastShownRef.current = false;
-            },
-          },
-          onDismiss: () => {
-            snoozedUntilRef.current = Date.now() + SNOOZE_MS;
-            toastShownRef.current = false;
-          },
-        });
+        );
       } catch {
         // Falhas de rede são silenciadas — tenta de novo no próximo ciclo.
       }
