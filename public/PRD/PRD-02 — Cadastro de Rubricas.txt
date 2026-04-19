@@ -4,9 +4,9 @@
 
 ## 1. Objetivo
 
-Permitir a criação e gestão de rubricas de forma estruturada, garantindo que todas as regras da folha sejam explícitas, previsíveis e compatíveis com o motor de cálculo (PRD-01).
+Permitir a criação e gestão de rubricas de forma estruturada, garantindo que todas as regras da folha sejam explícitas, configuráveis, previsíveis e executáveis pelo motor de cálculo.
 
-As rubricas representam todos os valores que compõem a folha de pagamento, sendo a única fonte de entrada de dados operacionais do sistema.
+As rubricas representam a única fonte de entrada de dados operacionais e também a definição das regras de cálculo da folha.
 
 ---
 
@@ -15,11 +15,11 @@ As rubricas representam todos os valores que compõem a folha de pagamento, send
 - Nenhuma regra implícita  
 - Zero heurística baseada em nome  
 - Rubricas são a única fonte de valores operacionais da folha  
+- Fórmulas definem o comportamento do cálculo  
 - Separação entre cálculo e exibição  
-- Compatibilidade total com o motor  
-- Estrutura preparada para relatórios e recibos  
-- Toda rubrica operacional deve possuir classificação obrigatória  
-- Rubricas derivadas não devem ser tratadas como operacionais  
+- Compatibilidade total com o motor (PRD-01)  
+- Sistema totalmente configurável sem necessidade de código  
+- Rubricas calculadas devem ser executadas, não apenas descritas  
 - O sistema deve refletir a operação real da empresa  
 
 ---
@@ -42,12 +42,12 @@ As rubricas representam todos os valores que compõem a folha de pagamento, send
   - `valor_fixo`
   - `percentual`
   - `formula`
-- ordem_calculo (inteiro obrigatório)  
+- ordem_calculo (opcional — apenas fallback)  
 - ativa (boolean)  
 
 ---
 
-### 3.2 Campo condicional (classificação)
+### 3.2 Campo condicional — classificação
 
 - classificacao (obrigatória apenas para rubricas operacionais)
 
@@ -63,11 +63,11 @@ As rubricas representam todos os valores que compõem a folha de pagamento, send
 - referencia_base  
 
 #### formula
-- formula  
+- formula (expressão obrigatória)
 
 ---
 
-## 4. Classificação de Rubricas (CORE DO SISTEMA)
+## 4. Classificação de Rubricas
 
 ### 4.1 Conceito
 
@@ -75,56 +75,39 @@ A classificação organiza as rubricas operacionais para:
 
 - recibos  
 - relatórios  
-- consolidação financeira  
+- consolidação visual  
 
-A classificação é a única fonte de agrupamento de valores.
+A classificação NÃO interfere no cálculo.
 
 ---
 
-### 4.2 Valores possíveis (padrão do sistema)
+### 4.2 Classificações padrão
 
 #### Proventos
 
-- `salario_ctps`  
-- `salario_g`  
-- `outros_rendimentos`  
-- `horas_extras`  
-- `salario_familia`  
-- `ferias_terco`  
-- `insalubridade`  
+- salario_ctps  
+- salario_g  
+- outros_rendimentos  
+- horas_extras  
+- salario_familia  
+- ferias_terco  
+- insalubridade  
 
 #### Descontos
 
-- `inss`  
-- `emprestimos`  
-- `adiantamentos`  
-- `vales`  
-- `faltas`  
+- inss  
+- emprestimos  
+- adiantamentos  
+- vales  
+- faltas  
 
 ---
 
-### 4.3 Regra CRÍTICA — INSS (ATUALIZAÇÃO)
-
-- INSS é uma rubrica operacional  
-- tipo: `desconto`  
-- natureza: `base`  
-- método: `manual`  
-- deve ser informada pelo usuário  
-- NÃO deve ser calculada automaticamente pelo sistema  
-
-Motivação:
-
-> O sistema deve refletir a operação real da empresa, onde o INSS é lançado manualmente.
-
----
-
-### 4.4 Regras obrigatórias
+### 4.3 Regra crítica
 
 - Toda rubrica operacional deve possuir UMA classificação  
-- Uma rubrica não pode possuir múltiplas classificações  
-- Classificação não depende do nome da rubrica  
-- Classificação define apenas organização (não cálculo)  
-- Rubricas derivadas NÃO participam da classificação  
+- Classificação não define comportamento de cálculo  
+- Classificação é apenas para exibição  
 
 ---
 
@@ -134,93 +117,181 @@ Motivação:
 
 ### 5.1 Rubricas Operacionais (INPUT)
 
-São rubricas utilizadas diretamente na composição da folha.
+São utilizadas diretamente na folha.
 
-#### Exemplos:
+Características:
 
-- salário  
-- horas extras  
-- INSS  
-- vales  
-- faltas  
-
-#### Características:
-
-- exigem classificação obrigatória  
-- podem ser editadas pelo usuário  
+- possuem valor manual ou derivado simples  
+- exigem classificação  
 - são persistidas  
-- fazem parte do cálculo  
-- alimentam relatórios e recibos  
+- alimentam o motor  
 
 ---
 
-### 5.2 Rubricas Derivadas (OUTPUT DO SISTEMA)
+### 5.2 Rubricas Calculadas (OUTPUT)
 
-São valores gerados automaticamente pelo motor.
+São valores derivados a partir de fórmulas.
 
-#### Exemplos:
+Exemplos:
 
 - salario_real  
-- salario_ajustado  
+- g2_complemento  
 - salario_liquido  
 
-#### Características:
+Características:
 
-- NÃO são editáveis  
-- NÃO possuem classificação  
-- NÃO são persistidas como entrada  
-- são resultado do cálculo  
-- não podem ser alteradas manualmente  
-
----
-
-### 5.3 Regra estrutural obrigatória
-
-- Apenas rubricas operacionais são input  
-- Rubricas derivadas são output  
-- O sistema deve impedir edição manual de rubricas derivadas  
-- O motor de cálculo é responsável por gerar essas rubricas  
+- não são editáveis diretamente  
+- não possuem classificação  
+- dependem de outras rubricas  
+- são calculadas pelo motor  
 
 ---
 
 ## 6. Métodos de cálculo
 
-### Manual
-- valor informado pelo usuário  
+---
 
-### Valor fixo
-- valor constante  
+### 6.1 Manual
 
-### Percentual
-- baseado em outra rubrica  
-
-### Fórmula
-- expressão com códigos de rubricas  
+- valor informado diretamente pelo usuário  
 
 ---
 
-## 7. Validações
+### 6.2 Valor fixo
 
-### Para rubricas operacionais
+- valor constante definido no cadastro  
+
+---
+
+### 6.3 Percentual
+
+- cálculo baseado em outra rubrica  
+
+Fórmula implícita:
+
+valor = referencia_base * percentual
+
+---
+
+### 6.4 Fórmula (CORE DO SISTEMA)
+
+- expressão matemática configurada pelo usuário  
+
+---
+
+## 6.5 Execução obrigatória das fórmulas
+
+### Regra principal
+
+> Toda fórmula cadastrada deve ser executada pelo sistema.
+
+---
+
+### Comportamento esperado
+
+- a fórmula define exatamente o cálculo  
+- o sistema deve interpretar a expressão  
+- o resultado deve refletir diretamente a fórmula  
+
+---
+
+### Exemplo
+
+Se a fórmula for:
+
+salario_real = salario_g - inss
+
+O sistema deve retornar exatamente esse resultado.
+
+---
+
+### Dependência entre rubricas
+
+O sistema deve suportar:
+
+- uso de múltiplas rubricas  
+- encadeamento de cálculo  
+- referências cruzadas  
+- cálculo em múltiplas etapas  
+
+---
+
+### Proibições
+
+É proibido:
+
+- tratar fórmula como texto decorativo  
+- ignorar fórmula no cálculo  
+- substituir fórmula por lógica interna  
+- exigir alteração de código para nova regra  
+
+---
+
+### Regra de extensibilidade
+
+O sistema deve permitir:
+
+> criação de qualquer nova rubrica calculada apenas via configuração.
+
+---
+
+## 7. Estrutura da fórmula
+
+A fórmula deve:
+
+- usar códigos de rubricas  
+- suportar operações matemáticas:
+  - soma (+)
+  - subtração (-)
+  - multiplicação (*)
+  - divisão (/)
+- suportar parênteses  
+- ser interpretável pelo motor  
+
+---
+
+## 8. Validações
+
+---
+
+### 8.1 Validação geral
 
 - código único  
-- ordem obrigatória  
-- fórmula válida  
-- sem dependência circular  
-- classificação obrigatória  
-- coerência entre tipo e classificação  
+- nome obrigatório  
+- tipo obrigatório  
+- método obrigatório  
 
 ---
 
-### Para rubricas derivadas
+### 8.2 Validação de fórmula
 
-- não permitir edição manual  
-- não exigir classificação  
-- não permitir alteração estrutural  
+O sistema deve validar:
+
+- sintaxe válida  
+- referências existentes  
+- ausência de dependência circular  
+- coerência matemática  
 
 ---
 
-## 8. Interface (UX)
+### 8.3 Dependência circular
+
+O sistema deve impedir:
+
+- A depende de B  
+- B depende de A  
+
+---
+
+### 8.4 Referência inválida
+
+- não permitir uso de rubricas inexistentes  
+
+---
+
+## 9. Interface (UX)
+
+---
 
 ### Estrutura
 
@@ -242,59 +313,68 @@ Modal com abas:
 
 ---
 
-#### Aba 3 — Classificação
-- obrigatória apenas para rubricas operacionais  
+#### Aba 3 — Fórmula (quando aplicável)
+- editor de fórmula  
+- validação em tempo real  
+- ajuda contextual  
 
 ---
 
-## 9. Regras críticas
+#### Aba 4 — Classificação
+- apenas para rubricas operacionais  
+
+---
+
+## 10. Regras críticas
 
 - Nome não define comportamento  
 - Código é a referência técnica  
-- Classificação é a referência de exibição  
+- Fórmula define o cálculo  
+- Classificação não interfere no cálculo  
 - Não permitir rubrica operacional sem classificação  
-- Não permitir lógica ambígua  
-- Não usar heurística baseada em nome  
-- Não tratar rubricas derivadas como operacionais  
-- Não calcular automaticamente valores que devem ser informados manualmente  
+- Não permitir rubrica calculada sem fórmula  
+- Não permitir lógica implícita  
+- Não permitir dependência circular  
+- Não permitir comportamento divergente da fórmula  
 
 ---
 
-## 10. Integração com motor (PRD-01)
+## 11. Integração com motor (PRD-01)
 
-- motor consome rubricas operacionais  
-- rubricas derivadas são geradas pelo motor  
-- classificação não interfere no cálculo  
-- o motor NÃO deve criar ou sobrescrever rubricas operacionais  
-
----
-
-## 11. Estratégia de transição
-
-- manter compatibilidade com dados existentes  
-- identificar rubricas que eram tratadas como calculadas e ajustar  
-- garantir que INSS passe a ser tratado como manual  
-- não quebrar sistema atual  
-- migrar comportamento de forma controlada  
+- motor executa fórmulas das rubricas calculadas  
+- rubricas operacionais são entrada  
+- rubricas calculadas são resultado  
+- o motor não define regra  
+- o motor executa configuração  
 
 ---
 
-## 12. Fora do escopo
+## 12. Estratégia de transição
+
+- mapear rubricas existentes  
+- identificar fórmulas utilizadas no sistema atual  
+- validar resultados com o modelo legado  
+- garantir equivalência de cálculo  
+- evitar mudança de comportamento  
+
+---
+
+## 13. Fora do escopo
 
 - cálculo automático de impostos  
-- regras tributárias complexas  
-- múltiplos layouts de classificação  
-- múltiplos agrupamentos paralelos  
+- regras fiscais complexas  
+- múltiplos modelos de cálculo paralelos  
+- personalização por usuário  
+- lógica baseada em nome  
 
 ---
 
-## 13. Critérios de sucesso
+## 14. Critérios de sucesso
 
-- rubricas operacionais são a única entrada da folha  
-- rubricas derivadas são apenas resultado  
-- sistema não depende de nome para lógica  
-- INSS é tratado corretamente como valor manual  
-- cálculo é consistente e previsível  
-- recibos e relatórios refletem exatamente a folha  
-
----
+- usuário consegue definir qualquer regra via fórmula  
+- sistema executa exatamente o configurado  
+- resultados batem com o sistema atual  
+- nenhuma regra depende de código  
+- cálculo é previsível e auditável  
+- sistema é totalmente configurável  
+- confiança total no resultado  
