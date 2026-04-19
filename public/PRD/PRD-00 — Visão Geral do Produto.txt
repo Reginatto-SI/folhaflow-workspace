@@ -130,6 +130,10 @@ Responsável por:
 
 A interface não deve conter regras de negócio.
 
+Embora o sistema esteja conceitualmente organizado em camadas,
+na versão atual o processamento de cálculo ocorre no frontend,
+mantendo o backend focado em persistência e suporte operacional.
+
 ---
 
 ## 7. Principais módulos do sistema
