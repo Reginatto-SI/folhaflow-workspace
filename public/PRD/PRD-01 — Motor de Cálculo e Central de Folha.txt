@@ -1,299 +1,336 @@
-# PRD-01 — Motor de Cálculo da Folha
+# PRD-01 — Lógica de Cálculo Operacional da Central de Folha
 
 ---
 
 ## 1. Objetivo
 
-Definir o funcionamento do motor de cálculo da folha de pagamento, garantindo:
+Definir a lógica de cálculo operacional utilizada na Central de Folha, garantindo um comportamento simples, rápido, previsível e coerente com a rotina real da empresa.
 
-- cálculo determinístico  
-- execução baseada em fórmulas configuradas  
-- ausência de heurísticas  
-- rastreabilidade total dos valores  
-- consistência entre folha, recibos e relatórios  
+Este módulo não deve ser tratado como um motor sofisticado de folha de pagamento.  
+Seu objetivo é funcionar como uma planilha operacional controlada, onde:
 
-O motor é responsável por transformar os valores informados pelo usuário (rubricas operacionais) em resultados finais da folha, respeitando exclusivamente regras explícitas e configuráveis.
+- o usuário informa os valores base manualmente
+- os campos derivados são recalculados imediatamente
+- a experiência é simples e responsiva
+- o backend é usado principalmente para persistência e carregamento
 
 ---
 
 ## 2. Princípios obrigatórios
 
-- Nenhuma regra implícita  
-- Zero heurística baseada em nome  
-- Separação entre cálculo e exibição  
-- Campos derivados não são entrada manual  
-- O motor é a única fonte de verdade dos valores calculados  
-- O sistema deve ser auditável  
-- O motor NÃO pode sobrescrever valores informados manualmente  
-- O sistema deve refletir a operação real da empresa  
-- O cálculo deve ser definido por fórmulas configuradas  
-- O sistema deve ser totalmente extensível sem alteração de código  
+- Simplicidade operacional acima de sofisticação técnica
+- Comportamento estilo planilha
+- Resposta imediata na tela
+- Cálculo local no frontend
+- Backend focado em persistência
+- Nenhuma heurística por nome de exibição
+- Nenhuma complexidade desnecessária
+- Previsibilidade total para o usuário
+- Mesma entrada deve gerar o mesmo resultado
+- A tela deve refletir o modo real de operação da empresa
 
 ---
 
-## 3. Papel do motor no sistema
+## 3. Papel da lógica de cálculo no sistema
 
-O motor de cálculo é responsável por:
+A lógica de cálculo da Central de Folha é responsável por:
 
-- executar fórmulas configuradas nas rubricas  
-- resolver dependências entre rubricas  
-- consolidar valores da folha  
-- calcular resultados finais de forma determinística  
-- garantir consistência entre todos os módulos  
+- recalcular imediatamente os campos derivados da tela
+- consolidar totais da linha
+- manter tabela, drawer e barra de totais sincronizados
+- refletir visualmente o resultado enquanto o usuário digita
 
-O motor NÃO é responsável por:
+A lógica de cálculo da Central NÃO é responsável por:
 
-- interface do usuário  
-- definir regras fixas de cálculo  
-- criar valores automaticamente sem configuração  
-- sobrescrever valores manuais  
-- impor lógica baseada em nome de rubrica  
-- aplicar regras invisíveis ao usuário  
+- executar folha trabalhista complexa
+- implementar engine genérica de mercado
+- inferir regras por nome de campo
+- aplicar inteligência excessiva
+- substituir a decisão operacional do usuário
 
 ---
 
-## 4. Modelo estrutural da folha
+## 4. Modelo operacional da tela
 
-O sistema trabalha com dois tipos de dados:
+O funcionamento da Central deve seguir a lógica de uma planilha controlada.
 
----
+### 4.1 Campos manuais
 
-### 4.1 Rubricas Operacionais (INPUT)
-
-São os valores informados manualmente pelo usuário.
+São os campos digitados diretamente pelo usuário.
 
 Exemplos:
+- salário CTPS
+- salário G
+- salário fiscal
+- outros rendimentos
+- horas extras
+- salário família
+- 1/3 de férias
+- insalubridade
+- INSS
+- empréstimos
+- vales
+- faltas
+- adiantamentos
 
-- salario_ctps  
-- salario_g  
-- outros_rendimentos  
-- horas_extras  
-- salario_familia  
-- ferias_terco  
-- insalubridade  
-- inss  
-- emprestimos  
-- vales  
-- faltas  
-
-Características:
-
-- são editáveis  
-- possuem classificação  
-- são persistidas no sistema  
-- são a única fonte de entrada da folha  
-- podem ser alteradas a qualquer momento  
+Regras:
+- são editáveis
+- aceitam entrada direta do usuário
+- representam a base do cálculo
+- devem atualizar a tela imediatamente
 
 ---
 
-### 4.2 Rubricas Calculadas (OUTPUT DO MOTOR)
+### 4.2 Campos derivados
 
-São valores gerados automaticamente pelo sistema com base em fórmulas configuradas.
+São campos calculados automaticamente a partir dos campos manuais e/ou de outras rubricas derivadas.
 
 Exemplos:
+- salário real
+- G2 complemento
+- salário líquido
 
-- salario_real  
-- g2_complemento  
-- salario_liquido  
-
-Características:
-
-- não são editáveis diretamente  
-- não possuem classificação  
-- são resultado da execução de fórmulas  
-- dependem de outras rubricas  
-- são reproduzíveis a qualquer momento  
+Regras:
+- são readonly
+- não são digitados manualmente
+- devem recalcular imediatamente no frontend
+- devem ser exibidos com clareza para o usuário
 
 ---
 
-## 5. Regra CRÍTICA — INSS
+## 5. Regra central do produto
 
-- INSS é uma rubrica operacional do tipo desconto  
-- INSS deve ser informado manualmente pelo usuário  
-- O motor NÃO deve calcular INSS automaticamente  
-- O motor NÃO pode sobrescrever o valor informado  
-
-Motivação:
-
-> O sistema deve refletir a operação real da empresa.
+> O usuário informa os valores operacionais manualmente e o sistema recalcula apenas os campos derivados necessários, de forma simples e imediata.
 
 ---
 
-## 6. Execução do motor de cálculo
+## 6. Onde o cálculo acontece
+
+O cálculo operacional da Central de Folha deve acontecer no frontend.
+
+### Motivo
+O sistema é uma ferramenta interna, com necessidade de:
+
+- resposta imediata
+- experiência simples
+- funcionamento estilo Excel
+- baixa complexidade operacional
+
+### Regra
+- frontend calcula
+- backend persiste
 
 ---
 
-### 6.1 Regra estrutural — Execução por Fórmula
+## 7. Papel do backend
 
-O motor deve operar como um **executor de fórmulas configuradas**, e não como um conjunto de regras fixas.
+O backend neste fluxo é responsável por:
 
----
+- carregar os dados existentes
+- persistir os valores salvos
+- manter consistência de armazenamento
+- servir de base para relatórios e recibos
 
-### Princípio central
-
-> O sistema NÃO define como calcular valores derivados.  
-> O usuário define através das fórmulas cadastradas.
-
----
-
-### Fluxo de execução
-
-1. Carregar todas as rubricas operacionais
-2. Identificar rubricas calculadas
-3. Ordenar cálculo com base em dependências
-4. Resolver dependências entre rubricas
-5. Executar fórmulas
-6. Gerar resultados finais
+O backend NÃO deve ser responsável pela experiência de cálculo em tempo real da Central.
 
 ---
 
-### 6.2 Execução de fórmulas
+## 8. Fonte dos dados
 
-Para toda rubrica com:
+A tela deve trabalhar com:
 
-- natureza = `calculada`
-- método_calculo = `formula`
+- rubricas ativas
+- valores manuais da folha
+- fórmulas configuradas no cadastro de rubricas
 
-O motor deve:
+A Central deve sempre usar os mesmos dados para:
 
-- interpretar a fórmula cadastrada  
-- substituir referências por valores reais  
-- executar a expressão matemática  
-- retornar o resultado  
+- drawer
+- tabela
+- barra de totais
 
----
-
-### 6.3 Dependência entre rubricas
-
-O sistema deve suportar:
-
-- uso de múltiplas rubricas em uma fórmula  
-- encadeamento de cálculos  
-- dependências entre rubricas calculadas  
-- ordem de cálculo dinâmica  
+Não pode haver múltiplas fontes concorrentes de verdade dentro da própria tela.
 
 ---
 
-### 6.4 Ordem de cálculo
+## 9. Estrutura do cálculo
 
-A ordem deve ser definida por:
+A lógica deve ser centralizada em uma única função reutilizável da Central de Folha.
 
-- dependência entre rubricas  
-- não por ordem fixa manual  
+Essa função deve ser responsável por:
 
-O sistema deve:
+- ler os valores manuais
+- resolver rubricas derivadas
+- consolidar totais
+- retornar o estado calculado da linha
 
-- detectar dependências automaticamente  
-- impedir dependência circular  
-- garantir execução consistente  
-
----
-
-## 7. Regras críticas do motor
-
-- não sobrescrever valores manuais  
-- não ignorar fórmulas cadastradas  
-- não hardcodar regras de cálculo  
-- não inferir comportamento por nome  
-- não misturar input com output  
-- não permitir dependência circular  
-- não aplicar lógica invisível  
-- não executar cálculos fora da ordem de dependência  
+Isso evita:
+- cálculo espalhado
+- divergência entre componentes
+- duplicação de lógica
 
 ---
 
-## 8. Integração com rubricas (PRD-02)
+## 10. Regras de fórmula
 
-- rubricas operacionais alimentam o motor  
-- rubricas calculadas são executadas via fórmula  
-- classificação NÃO interfere no cálculo  
-- o motor NÃO deve criar rubricas automaticamente  
-- o motor NÃO deve alterar valores operacionais  
+### 10.1 Modelo atual suportado
 
----
+Nesta fase do projeto, a fórmula deve ser tratada de forma simples e operacional.
 
-## 9. Persistência de dados
+O sistema deve suportar prioritariamente:
 
-- valores de entrada devem ser persistidos  
-- fórmulas devem ser persistidas  
-- valores calculados podem ser recalculados  
-- o sistema deve permitir reprocessamento completo  
+- soma
+- subtração
+- dependência simples entre rubricas
+
+Esse modelo é suficiente para o comportamento atual da empresa.
 
 ---
 
-## 10. Auditoria
+### 10.2 Não sofisticar sem necessidade
 
-O sistema deve permitir:
+Não é objetivo desta fase:
 
-- rastrear cada valor informado  
-- identificar origem de cada rubrica  
-- visualizar fórmula aplicada  
-- reproduzir cálculo completo  
-- validar resultados com transparência  
+- criar parser avançado
+- criar linguagem de fórmula livre complexa
+- suportar expressões sofisticadas desnecessárias
+- transformar a Central em engine genérica
 
----
-
-## 11. Segurança
-
-- cálculo não pode depender da interface  
-- backend é responsável pela execução das fórmulas  
-- não permitir manipulação manual de valores calculados  
-- validação de fórmulas deve ser obrigatória  
+Se no futuro houver necessidade real, isso poderá evoluir de forma controlada.
 
 ---
 
-## 12. Performance
+## 11. Regra de usabilidade
 
-- cálculo deve ser rápido (< 200ms por funcionário)  
-- permitir execução em lote  
-- evitar recomputação desnecessária  
-- otimizar resolução de dependências  
+A tela deve reagir imediatamente conforme o usuário digita.
 
----
+O usuário não deve depender de:
 
-## 13. Estados do cálculo
+- RPC manual
+- recálculo remoto
+- salvar para “ver o resultado”
+- refresh para conferir cálculo
 
-### Sucesso
-- cálculo completo e consistente  
-
-### Incompleto
-- ausência de dados necessários  
-
-### Erro
-- fórmula inválida  
-- dependência circular  
-- referência inexistente  
+A experiência deve ser contínua, direta e operacional.
 
 ---
 
-## 14. Estratégia de implementação
+## 12. Persistência
 
-1. receber rubricas operacionais  
-2. carregar fórmulas configuradas  
-3. montar grafo de dependências  
-4. ordenar execução  
-5. executar fórmulas  
-6. gerar resultados finais  
-7. retornar valores  
+Ao salvar uma linha da folha, o sistema deve persistir:
 
----
+- valores manuais informados
+- observações
+- dados necessários para reabrir a edição corretamente
 
-## 15. Fora do escopo
+Os valores derivados podem ser:
+- recalculados novamente ao carregar
+- ou persistidos, desde que não criem divergência operacional
 
-- cálculo automático de impostos  
-- regras trabalhistas complexas  
-- integração com governo  
-- validações fiscais avançadas  
-- múltiplos motores paralelos  
+A regra principal é:
+> ao reabrir a folha, o comportamento deve permanecer coerente e previsível.
 
 ---
 
-## 16. Critérios de sucesso
+## 13. Tabela, drawer e totais
 
-- usuário controla totalmente as regras de cálculo  
-- sistema não depende de lógica hardcoded  
-- novas regras podem ser criadas sem desenvolvimento  
-- cálculo é consistente e previsível  
-- resultados batem com o sistema atual da empresa  
-- ausência total de heurística  
-- confiança total no sistema  
+A mesma lógica de cálculo deve alimentar:
+
+- drawer do funcionário
+- linha da tabela
+- barra de totais da Central
+
+É proibido:
+- cada componente calcular de um jeito
+- uma parte usar backend e outra usar preview local
+- existir divergência entre os componentes
+
+---
+
+## 14. Validação de entrada
+
+Valores informados pelo usuário devem ser tratados com segurança.
+
+Regras:
+- entradas inválidas não devem gerar resultado silencioso incorreto
+- a UI deve tratar valor inválido de forma previsível
+- não transformar erro em zero sem critério explícito
+- manter comportamento simples, mas confiável
+
+---
+
+## 15. Regras críticas
+
+- Não criar engine complexa desnecessária
+- Não depender de backend para feedback imediato da tela
+- Não espalhar cálculo em múltiplos componentes
+- Não manter múltiplas fontes de verdade
+- Não aplicar heurística por nome visual
+- Não criar comportamento “mágico”
+- Não complicar o que deve funcionar como planilha
+- Não tratar a ferramenta como produto SaaS genérico de mercado
+
+---
+
+## 16. Integração com outros módulos
+
+### 16.1 Recibos
+Recibos devem refletir os valores salvos da folha.
+
+### 16.2 Relatórios
+Relatórios devem consumir os dados da folha sem recalcular lógica própria.
+
+### 16.3 Cadastro de Rubricas
+O cadastro de rubricas continua definindo:
+- campos base
+- campos derivados
+- regras de cálculo
+
+---
+
+## 17. Estratégia de implementação
+
+A implementação da Central deve seguir esta ordem:
+
+1. usuário edita valores base
+2. tela recalcula localmente
+3. campos derivados são atualizados
+4. tabela e totais refletem o mesmo cálculo
+5. usuário salva
+6. backend persiste
+7. ao reabrir, a tela reconstrói o estado corretamente
+
+---
+
+## 18. Fora do escopo
+
+Não faz parte desta fase:
+
+- engine de cálculo corporativa
+- cálculo trabalhista avançado
+- múltiplos motores paralelos
+- parser sofisticado de linguagem de fórmula
+- arquitetura distribuída de cálculo
+- automações complexas de folha
+- dependência obrigatória de backend para experiência da tela
+
+---
+
+## 19. Critérios de sucesso
+
+Este PRD será considerado atendido quando:
+
+- a Central funcionar como planilha controlada
+- o cálculo responder imediatamente na tela
+- drawer, tabela e totais baterem entre si
+- o usuário não precisar salvar para “ver o cálculo”
+- o sistema ficar simples de entender e manter
+- a experiência refletir o modo real de operação da empresa
+- a complexidade desnecessária for removida
+- o sistema ficar rápido, previsível e confiável
+
+---
+
+## 20. Regra de ouro
+
+> A Central de Folha deve ser simples como uma planilha, confiável como um sistema e rápida como a operação exige.
