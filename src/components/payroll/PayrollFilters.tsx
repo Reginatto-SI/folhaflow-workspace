@@ -26,20 +26,20 @@ const PayrollFilters: React.FC<PayrollFiltersProps> = ({
   const hasFilters = search || departmentId || jobRoleId;
 
   return (
-    <div className="bg-card border rounded-lg p-3 mb-4">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="bg-card border rounded-md p-2.5 mb-3">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px] max-w-[300px]">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por nome..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-9 h-9"
+            className="pl-9 h-8"
           />
         </div>
 
         <Select value={departmentId} onValueChange={onDepartmentChange}>
-          <SelectTrigger className="w-[180px] h-9">
+          <SelectTrigger className="w-[170px] h-8">
             <SelectValue placeholder="Todos os setores" />
           </SelectTrigger>
           <SelectContent>
@@ -51,7 +51,7 @@ const PayrollFilters: React.FC<PayrollFiltersProps> = ({
         </Select>
 
         <Select value={jobRoleId} onValueChange={onJobRoleChange}>
-          <SelectTrigger className="w-[180px] h-9">
+          <SelectTrigger className="w-[170px] h-8">
             <SelectValue placeholder="Todas as funções" />
           </SelectTrigger>
           <SelectContent>
@@ -63,7 +63,7 @@ const PayrollFilters: React.FC<PayrollFiltersProps> = ({
         </Select>
 
         {hasFilters && (
-          <Button variant="ghost" size="sm" onClick={onClear} className="h-9">
+          <Button variant="ghost" size="sm" onClick={onClear} className="h-8 px-2.5">
             <X className="h-4 w-4 mr-1" />
             Limpar filtros
           </Button>

@@ -30,25 +30,25 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
 
   if (entries.length === 0) {
     return (
-      <div className="border rounded-lg bg-card p-8 text-center text-muted-foreground text-sm">
+      <div className="border rounded-md bg-card p-6 text-center text-muted-foreground text-sm">
         Nenhum funcionário encontrado para os filtros selecionados.
       </div>
     );
   }
 
   return (
-    <div className="border rounded-lg overflow-hidden bg-card">
+    <div className="border rounded-md overflow-hidden bg-card">
       <div className="overflow-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-muted/50 border-b">
-              <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Funcionário</th>
-              <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Setor</th>
-              <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Função</th>
-              <th className="text-right px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Salário Base</th>
-              <th className="text-right px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Proventos</th>
-              <th className="text-right px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Descontos</th>
-              <th className="text-right px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground bg-muted/80">Líquido</th>
+              <th className="text-left px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Funcionário</th>
+              <th className="text-left px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Setor</th>
+              <th className="text-left px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Função</th>
+              <th className="text-right px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Salário Base</th>
+              <th className="text-right px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Proventos</th>
+              <th className="text-right px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">Descontos</th>
+              <th className="text-right px-3 py-1.5 font-semibold text-[11px] uppercase tracking-wider text-muted-foreground bg-muted/80">Líquido</th>
             </tr>
           </thead>
           <tbody>
@@ -67,16 +67,16 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
                   className={cn("border-b transition-colors duration-150 hover:bg-muted/30 cursor-pointer")}
                   onClick={() => onRowClick(entry)}
                 >
-                  <td className="px-3 py-2 font-medium">
+                  <td className="px-3 py-1.5 font-medium">
                     <span className="text-sm">{emp?.name || "—"}</span>
                     <span className="block text-xs text-muted-foreground">{emp?.cpf || ""}</span>
                   </td>
-                  <td className="px-3 py-2 text-sm text-muted-foreground">{getDeptName(emp)}</td>
-                  <td className="px-3 py-2 text-sm text-muted-foreground">{getRoleName(emp)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmt(localComputed.baseSalary)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmt(localComputed.earningsTotal)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-destructive">{fmt(localComputed.deductionsTotal)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold bg-muted/30">{fmt(localComputed.netSalary)}</td>
+                  <td className="px-3 py-1.5 text-sm text-muted-foreground">{getDeptName(emp)}</td>
+                  <td className="px-3 py-1.5 text-sm text-muted-foreground">{getRoleName(emp)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmt(localComputed.baseSalary)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmt(localComputed.earningsTotal)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-destructive font-medium">{fmt(localComputed.deductionsTotal)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-semibold bg-muted/30">{fmt(localComputed.netSalary)}</td>
                 </tr>
               );
             })}

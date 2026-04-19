@@ -82,7 +82,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
 
   return (
     <TooltipProvider>
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-2.5 mb-3">
         {/* Combobox com busca: o usuário digita parte do nome da empresa para filtrar a lista. */}
         <SearchableCombobox
           value={selectedCompany?.id || ""}
@@ -90,7 +90,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
           placeholder="Selecione a empresa"
           searchPlaceholder="Buscar empresa..."
           emptyMessage="Nenhuma empresa encontrada."
-          className="w-[240px]"
+          className="w-[220px]"
           onValueChange={(id) => {
             const c = activeCompanies.find((c) => c.id === id);
             if (c) setSelectedCompany(c);
@@ -104,7 +104,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
           placeholder="Selecione o mês"
           searchPlaceholder="Buscar competência..."
           emptyMessage="Nenhuma competência encontrada."
-          className="w-[200px]"
+          className="w-[190px]"
           onValueChange={(v) => {
             if (!v) return;
             const [m, y] = v.split("-").map(Number);
@@ -113,14 +113,14 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
         />
 
         {/* PRD-03 §4: badge reativa ao status real do batch. */}
-        <Badge variant="outline" className="text-xs font-medium">{statusLabel}</Badge>
+        <Badge variant="outline" className="text-xs font-medium h-8">{statusLabel}</Badge>
 
         <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" onClick={onNewEntry}>
+          <Button size="sm" onClick={onNewEntry} className="h-8 px-3">
             <Plus className="h-4 w-4 mr-1" />
             Novo lançamento
           </Button>
-          <Button size="sm" variant="outline" onClick={handleRecalculate} disabled={isRecalculating}>
+          <Button size="sm" variant="outline" onClick={handleRecalculate} disabled={isRecalculating} className="h-8 px-3">
             <RefreshCw className="h-4 w-4 mr-1" />
             Recalcular
           </Button>
@@ -128,7 +128,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
           <Tooltip>
             <TooltipTrigger asChild>
               <span tabIndex={0}>
-                <Button size="sm" variant="outline" disabled>
+                <Button size="sm" variant="outline" disabled className="h-8 px-3">
                   <FileText className="h-4 w-4 mr-1" />
                   Gerar relatório
                 </Button>
