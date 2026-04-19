@@ -524,6 +524,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      duplicate_payroll_batch: {
+        Args: {
+          p_source_batch_id: string
+          p_target_company_id: string
+          p_target_month: number
+          p_target_year: number
+        }
+        Returns: {
+          base_salary: number
+          company_id: string
+          created_at: string
+          deductions: Json
+          deductions_total: number
+          earnings: Json
+          earnings_total: number
+          employee_id: string
+          id: string
+          inss_amount: number
+          month: number
+          net_salary: number
+          notes: string | null
+          payroll_batch_id: string | null
+          updated_at: string
+          year: number
+        }[]
+      }
       has_permission: {
         Args: {
           _permission: Database["public"]["Enums"]["app_permission"]
