@@ -29,30 +29,30 @@ const TotalsBar: React.FC = () => {
   }, [payrollEntries, rubrics]);
 
   return (
-    <div className="bg-card border rounded-lg p-4 flex items-center gap-8 mb-4">
+    <div className="bg-card border rounded-md p-3 flex items-center gap-6 mb-3">
       <div>
         <p className="text-xs text-muted-foreground font-medium">Funcionários</p>
-        <p className="text-lg font-semibold tabular-nums">{totals.count}</p>
+        <p className="text-base font-semibold tabular-nums">{totals.count}</p>
       </div>
-      <div className="h-8 w-px bg-border" />
+      <div className="h-7 w-px bg-border" />
       <div>
         <p className="text-xs text-muted-foreground font-medium">Total Bruto</p>
-        <p className="text-lg font-semibold tabular-nums">{fmt(totals.gross)}</p>
+        <p className="text-base font-semibold tabular-nums">{fmt(totals.gross)}</p>
       </div>
-      <div className="h-8 w-px bg-border" />
+      <div className="h-7 w-px bg-border" />
       <div>
         <p className="text-xs text-muted-foreground font-medium">Descontos</p>
-        <p className="text-lg font-semibold tabular-nums text-destructive">{fmt(totals.deductions)}</p>
+        <p className="text-base font-semibold tabular-nums text-destructive">{fmt(totals.deductions)}</p>
       </div>
-      <div className="h-8 w-px bg-border" />
+      <div className="h-7 w-px bg-border" />
       <div>
         <p className="text-xs text-muted-foreground font-medium">INSS</p>
-        <p className="text-lg font-semibold tabular-nums text-muted-foreground">{fmt(totals.inss)}</p>
+        <p className="text-base font-semibold tabular-nums text-muted-foreground">{fmt(totals.inss)}</p>
       </div>
-      <div className="h-8 w-px bg-border" />
+      <div className="h-7 w-px bg-border" />
       <div>
         <p className="text-xs text-muted-foreground font-medium">Líquido Total</p>
-        <p className="text-lg font-semibold tabular-nums text-success">{fmt(totals.net)}</p>
+        <p className="text-base font-semibold tabular-nums text-success">{fmt(totals.net)}</p>
       </div>
     </div>
   );
