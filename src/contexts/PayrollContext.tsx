@@ -482,6 +482,21 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
+    // Regra crítica INSS (PRD-01/PRD-02): quando classificada como `inss`,
+    // a rubrica deve permanecer operacional manual (desconto + base + manual).
+    if (effectiveClassification === "inss") {
+      if (effectiveType !== "desconto") {
+        throw new Error("Classificação INSS exige tipo Desconto (PRD-02).");
+      }
+      if (effectiveNature !== "base") {
+        throw new Error("Classificação INSS exige natureza Base (input operacional) (PRD-02).");
+      }
+      const effectiveMethod = effective("calculationMethod");
+      if (effectiveMethod !== "manual") {
+        throw new Error("Classificação INSS exige método Manual (PRD-01/PRD-02).");
+      }
+    }
+
     // Campos condicionais por método.
     if (rubric.calculationMethod === "formula" && (!rubric.formulaItems || rubric.formulaItems.length === 0)) {
       throw new Error("Rubrica de fórmula precisa de ao menos um item.");
