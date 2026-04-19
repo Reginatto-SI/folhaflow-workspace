@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { PayrollEntry, Employee, Rubric } from "@/types/payroll";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { FileText, Save } from "lucide-react";
 
@@ -253,10 +254,20 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
               <Save className="mr-1 h-4 w-4" />
               {isCreateMode ? "Criar" : "Salvar"}
             </Button>
-            <Button variant="outline" size="sm" disabled className="h-8 rounded-md px-4">
-              <FileText className="mr-1 h-4 w-4" />
-              Gerar recibo
-            </Button>
+            {/* Tooltip explica que recibo é PRD-07, fora do escopo desta sprint. */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0}>
+                    <Button variant="outline" size="sm" disabled className="h-8 rounded-md px-4">
+                      <FileText className="mr-1 h-4 w-4" />
+                      Gerar recibo
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Disponível em sprint futura (PRD-07).</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </SheetHeader>
 
@@ -336,8 +347,10 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             </div>
           </section>
 
+          {/* PRD-01 / PRD-03 §2.1: a prévia local é apenas uma estimativa de digitação.
+              Não inclui INSS nem outras rubricas calculadas pelo motor — por isso fica explícito. */}
           <section className="border rounded-lg bg-card p-3 space-y-1">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resumo</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prévia (em edição)</h4>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Total Proventos</span>
               <span className="font-semibold tabular-nums">{fmt(totals.gross)}</span>
@@ -347,10 +360,33 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
               <span className="font-semibold tabular-nums text-destructive">{fmt(totals.deductionTotal)}</span>
             </div>
             <div className="flex items-center justify-between text-sm font-bold">
-              <span>Líquido</span>
+              <span>Líquido (prévia, sem encargos)</span>
               <span className="tabular-nums text-success">{fmt(totals.net)}</span>
             </div>
           </section>
+
+          {/* PRD-01: backend é fonte única de verdade. Mostra o último valor persistido após save/recálculo. */}
+          {!isCreateMode && entry && (entry.earningsTotal !== undefined || entry.netSalary !== undefined) && (
+            <section className="border rounded-lg bg-muted/40 p-3 space-y-1">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Valores calculados (backend)</h4>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Proventos</span>
+                <span className="tabular-nums">{fmt(entry.earningsTotal ?? 0)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Descontos</span>
+                <span className="tabular-nums text-destructive">{fmt(entry.deductionsTotal ?? 0)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">INSS</span>
+                <span className="tabular-nums text-destructive">{fmt(entry.inssAmount ?? 0)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm font-bold">
+                <span>Líquido</span>
+                <span className="tabular-nums text-success">{fmt(entry.netSalary ?? 0)}</span>
+              </div>
+            </section>
+          )}
 
           <section className="border rounded-lg bg-card p-3 space-y-2">
             <Label htmlFor="payroll-notes" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Observação</Label>

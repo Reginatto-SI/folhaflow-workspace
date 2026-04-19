@@ -146,7 +146,7 @@ const Index = () => {
     } finally {
       setIsSavingNewEntry(false);
     }
-  }, [addPayrollEntry, allEmployees, newEmployeeId, selectedCompany, selectedMonth.month, selectedMonth.year]);
+  }, [addPayrollEntry, allEmployees, newEmployeeId, recalculatePayrollBatch, selectedCompany, selectedMonth.month, selectedMonth.year]);
 
   const clearFilters = () => {
     setSearch("");
