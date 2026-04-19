@@ -18,6 +18,8 @@ interface PayrollContextType {
   rubrics: Rubric[];
   allJobRoles: JobRole[];
   payrollEntries: PayrollEntry[];
+  // PRD-03 §4: status da folha (batch) é parte do contexto operacional da Central.
+  currentBatch: PayrollBatch | null;
   payrollCatalogErrors: { departments?: string; jobRoles?: string; payrollEntries?: string };
   isLoading: boolean;
   loadError: string | null;
@@ -1118,6 +1120,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         allJobRoles,
         rubrics,
         payrollEntries,
+        currentBatch,
         payrollCatalogErrors,
         isLoading,
         loadError,
