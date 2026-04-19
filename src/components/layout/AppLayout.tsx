@@ -129,10 +129,12 @@ function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
-        <div className="flex items-center gap-2">
+      <SidebarHeader className="border-b border-sidebar-border px-4 py-3 group-data-[collapsible=icon]:px-2">
+        {/* O logo colapsado ficava deslocado porque o header mantinha padding horizontal de layout expandido (px-4). */}
+        {/* Ajuste mínimo: no modo icon, reaproveitamos o mesmo "encaixe" horizontal (px-2) usado pelos botões do menu. */}
+        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
           {collapsed ? (
-            // Estado colapsado: abreviação intencional e legível da marca.
+            // Mantemos o mesmo box 8x8 dos itens colapsados para alinhar visualmente no mesmo eixo dos ícones.
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm">
               DF
             </div>
