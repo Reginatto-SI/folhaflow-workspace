@@ -208,85 +208,6 @@ export type Database = {
           },
         ]
       }
-      payroll_entries: {
-        Row: {
-          base_salary: number
-          company_id: string
-          created_at: string
-          deductions_total: number
-          deductions: Json
-          earnings: Json
-          earnings_total: number
-          employee_id: string
-          id: string
-          inss_amount: number
-          month: number
-          net_salary: number
-          notes: string | null
-          payroll_batch_id: string | null
-          updated_at: string
-          year: number
-        }
-        Insert: {
-          base_salary?: number
-          company_id: string
-          created_at?: string
-          deductions_total?: number
-          deductions?: Json
-          earnings?: Json
-          earnings_total?: number
-          employee_id: string
-          id?: string
-          inss_amount?: number
-          month: number
-          net_salary?: number
-          notes?: string | null
-          payroll_batch_id?: string | null
-          updated_at?: string
-          year: number
-        }
-        Update: {
-          base_salary?: number
-          company_id?: string
-          created_at?: string
-          deductions_total?: number
-          deductions?: Json
-          earnings?: Json
-          earnings_total?: number
-          employee_id?: string
-          id?: string
-          inss_amount?: number
-          month?: number
-          net_salary?: number
-          notes?: string | null
-          payroll_batch_id?: string | null
-          updated_at?: string
-          year?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "payroll_entries_payroll_batch_id_fkey"
-            columns: ["payroll_batch_id"]
-            isOneToOne: false
-            referencedRelation: "payroll_batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payroll_entries_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payroll_entries_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       payroll_batches: {
         Row: {
           company_id: string
@@ -321,6 +242,85 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_entries: {
+        Row: {
+          base_salary: number
+          company_id: string
+          created_at: string
+          deductions: Json
+          deductions_total: number
+          earnings: Json
+          earnings_total: number
+          employee_id: string
+          id: string
+          inss_amount: number
+          month: number
+          net_salary: number
+          notes: string | null
+          payroll_batch_id: string | null
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          base_salary?: number
+          company_id: string
+          created_at?: string
+          deductions?: Json
+          deductions_total?: number
+          earnings?: Json
+          earnings_total?: number
+          employee_id: string
+          id?: string
+          inss_amount?: number
+          month: number
+          net_salary?: number
+          notes?: string | null
+          payroll_batch_id?: string | null
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          base_salary?: number
+          company_id?: string
+          created_at?: string
+          deductions?: Json
+          deductions_total?: number
+          earnings?: Json
+          earnings_total?: number
+          employee_id?: string
+          id?: string
+          inss_amount?: number
+          month?: number
+          net_salary?: number
+          notes?: string | null
+          payroll_batch_id?: string | null
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entries_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entries_payroll_batch_id_fkey"
+            columns: ["payroll_batch_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_batches"
             referencedColumns: ["id"]
           },
         ]
@@ -541,7 +541,30 @@ export type Database = {
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       recalculate_payroll_batch: {
         Args: { p_batch_id: string }
-        Returns: Database["public"]["Tables"]["payroll_entries"]["Row"][]
+        Returns: {
+          base_salary: number
+          company_id: string
+          created_at: string
+          deductions: Json
+          deductions_total: number
+          earnings: Json
+          earnings_total: number
+          employee_id: string
+          id: string
+          inss_amount: number
+          month: number
+          net_salary: number
+          notes: string | null
+          payroll_batch_id: string | null
+          updated_at: string
+          year: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "payroll_entries"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
     }
     Enums: {
