@@ -23,7 +23,6 @@ const Index = () => {
     rubrics,
     updatePayrollEntry,
     addPayrollEntry,
-    recalculatePayrollBatch,
     selectedCompany,
     selectedMonth,
   } = usePayroll();
@@ -72,17 +71,10 @@ const Index = () => {
 
   const handleSave = useCallback(
     async (id: string, updates: Partial<PayrollEntry>) => {
+      // Fluxo simplificado: salvar apenas persistência; cálculo de tela já foi resolvido no frontend.
       await updatePayrollEntry(id, updates);
-      // PRD-01 / PRD-03 §2: backend é fonte única de verdade dos totais.
-      // Recalcula silenciosamente após cada save para manter tabela e TotaisBar sincronizados
-      // sem exigir clique manual em "Recalcular".
-      try {
-        await recalculatePayrollBatch();
-      } catch {
-        // Falha no recálculo automático não bloqueia o save; usuário pode disparar manualmente.
-      }
     },
-    [updatePayrollEntry, recalculatePayrollBatch]
+    [updatePayrollEntry]
   );
 
   const availableEmployeesForEntry = useMemo(() => {
@@ -127,12 +119,6 @@ const Index = () => {
         deductions: {},
         notes: "",
       });
-      // PRD-01: dispara recálculo backend para que totais reflitam o novo entry imediatamente.
-      try {
-        await recalculatePayrollBatch();
-      } catch {
-        // Falha silenciosa — usuário pode recalcular manualmente.
-      }
       toast.success("Lançamento criado com sucesso.");
       setNewEntryOpen(false);
       setNewEmployeeId("");
@@ -146,7 +132,7 @@ const Index = () => {
     } finally {
       setIsSavingNewEntry(false);
     }
-  }, [addPayrollEntry, allEmployees, newEmployeeId, recalculatePayrollBatch, selectedCompany, selectedMonth.month, selectedMonth.year]);
+  }, [addPayrollEntry, allEmployees, newEmployeeId, selectedCompany, selectedMonth.month, selectedMonth.year]);
 
   const clearFilters = () => {
     setSearch("");
@@ -194,6 +180,7 @@ const Index = () => {
         allDepartments={allDepartments}
         allJobRoles={allJobRoles}
         onRowClick={handleRowClick}
+        rubrics={rubrics}
       />
       <EmployeeDrawer
         open={drawerOpen}

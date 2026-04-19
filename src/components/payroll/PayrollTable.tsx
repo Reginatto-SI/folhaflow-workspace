@@ -1,6 +1,7 @@
 import React from "react";
-import { PayrollEntry, Employee, Department, JobRole } from "@/types/payroll";
+import { PayrollEntry, Employee, Department, JobRole, Rubric } from "@/types/payroll";
 import { cn } from "@/lib/utils";
+import { computeSpreadsheetEntry, getEntryManualValues } from "@/lib/payrollSpreadsheet";
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -10,11 +11,12 @@ interface PayrollTableProps {
   allEmployees: Employee[];
   allDepartments: Department[];
   allJobRoles: JobRole[];
+  rubrics: Rubric[];
   onRowClick: (entry: PayrollEntry) => void;
 }
 
 const PayrollTable: React.FC<PayrollTableProps> = ({
-  entries = [], allEmployees = [], allDepartments = [], allJobRoles = [], onRowClick,
+  entries = [], allEmployees = [], allDepartments = [], allJobRoles = [], rubrics = [], onRowClick,
 }) => {
   const getEmployee = (id: string) => allEmployees.find((e) => e.id === id);
   const getDeptName = (emp?: Employee) => {
@@ -52,17 +54,17 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
           <tbody>
             {entries.map((entry) => {
               const emp = getEmployee(entry.employeeId);
-              // Ajuste do bloco 3: cálculo final exibido é sempre backend-first.
-              const totalEarnings = entry.earningsTotal ?? 0;
-              const totalDeductions = entry.deductionsTotal ?? 0;
-              const net = entry.netSalary ?? 0;
+              // A tabela agora usa o mesmo cálculo local centralizado da Central,
+              // evitando dependência do recálculo backend para feedback imediato.
+              const localComputed = computeSpreadsheetEntry({
+                rubrics,
+                manualValues: getEntryManualValues(entry, rubrics),
+              });
 
               return (
                 <tr
                   key={entry.id}
-                  className={cn(
-                    "border-b transition-colors duration-150 hover:bg-muted/30 cursor-pointer"
-                  )}
+                  className={cn("border-b transition-colors duration-150 hover:bg-muted/30 cursor-pointer")}
                   onClick={() => onRowClick(entry)}
                 >
                   <td className="px-3 py-2 font-medium">
@@ -71,10 +73,10 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
                   </td>
                   <td className="px-3 py-2 text-sm text-muted-foreground">{getDeptName(emp)}</td>
                   <td className="px-3 py-2 text-sm text-muted-foreground">{getRoleName(emp)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmt(entry.baseSalary)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmt(totalEarnings)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-destructive">{fmt(totalDeductions)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold bg-muted/30">{fmt(net)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmt(localComputed.baseSalary)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmt(localComputed.earningsTotal)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-destructive">{fmt(localComputed.deductionsTotal)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold bg-muted/30">{fmt(localComputed.netSalary)}</td>
                 </tr>
               );
             })}

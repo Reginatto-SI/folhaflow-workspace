@@ -9,13 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { FileText, Save } from "lucide-react";
+import { computeSpreadsheetEntry, getEntryManualValues } from "@/lib/payrollSpreadsheet";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 const parseCurrency = (v: string): number => {
-  // Normalização mínima pt-BR: remove símbolos, mantém apenas dígitos/sinais,
-  // remove TODOS os separadores de milhar e converte a vírgula decimal para ponto.
-  // Evita perda silenciosa em entradas como 1.234.567,89.
   const cleaned = v
     .replace(/\s/g, "")
     .replace(/[^\d,.-]/g, "")
@@ -76,34 +74,10 @@ const NumericRubricInput: React.FC<{
   );
 };
 
-// PRD-02 + PRD-01: a única verdade de comportamento é `rubric.nature`.
-// • `nature = base` → input operacional (rubrica-base ou provento/desconto manual);
-// • `nature = calculada` → DERIVADA (output do motor de cálculo). Não é editável manualmente,
-//   não aparece como campo de entrada no drawer. O cálculo real será implementado quando o
-//   motor (PRD-01) for ativado em sprint futura — até lá, derivadas existem apenas como cadastro.
-// Heurística por nome/código foi removida. `getLegacyValue` permanece SOMENTE para leitura
-// de payloads antigos persistidos por chave-nome (compat transitória).
+// Regra operacional da Central simplificada: rubrica calculada (nature=calculada)
+// é tratada como campo derivado readonly na tela estilo planilha.
 const isBaseRubric = (rubric: Rubric) => rubric.nature === "base";
 const isDerivedRubric = (rubric: Rubric) => rubric.nature === "calculada";
-
-const getLegacyValue = (rubric: Rubric, payload: Record<string, number>) => {
-  const directById = payload[rubric.id];
-  if (typeof directById === "number") return directById;
-
-  const byCode = payload[rubric.code];
-  if (typeof byCode === "number") return byCode;
-
-  const byName = payload[rubric.name];
-  if (typeof byName === "number") return byName;
-
-  const codeInsensitive = Object.entries(payload).find(([key]) => key.toLowerCase() === rubric.code.toLowerCase());
-  if (codeInsensitive && typeof codeInsensitive[1] === "number") return codeInsensitive[1];
-
-  const nameInsensitive = Object.entries(payload).find(([key]) => key.toLowerCase() === rubric.name.toLowerCase());
-  if (nameInsensitive && typeof nameInsensitive[1] === "number") return nameInsensitive[1];
-
-  return 0;
-};
 
 const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   open,
@@ -129,15 +103,13 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   );
 
   const groupedRubrics = useMemo(() => {
-    const base = activeRubricsOrdered.filter(isBaseRubric);
-    // PRD-02/PRD-01: derivadas (nature=calculada) NÃO entram como input no drawer —
-    // são saídas do motor de cálculo. Filtradas defensivamente das seções operacionais.
-    const operational = activeRubricsOrdered.filter((rubric) => !isBaseRubric(rubric) && !isDerivedRubric(rubric));
+    const editable = activeRubricsOrdered.filter((rubric) => !isDerivedRubric(rubric));
 
     return {
-      base,
-      proventos: operational.filter((rubric) => rubric.type === "provento"),
-      descontos: operational.filter((rubric) => rubric.type === "desconto"),
+      base: editable.filter(isBaseRubric),
+      proventos: editable.filter((rubric) => !isBaseRubric(rubric) && rubric.type === "provento"),
+      descontos: editable.filter((rubric) => !isBaseRubric(rubric) && rubric.type === "desconto"),
+      derivadas: activeRubricsOrdered.filter(isDerivedRubric),
     };
   }, [activeRubricsOrdered]);
 
@@ -149,46 +121,25 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       return acc;
     }, {});
 
-    if (isCreateMode) {
+    if (isCreateMode || !entry) {
       setRubricValues(emptyValues);
       setNotes("");
       return;
     }
 
-    if (!entry) {
-      setRubricValues(emptyValues);
-      setNotes("");
-      return;
-    }
-
-    // Compatibilidade transitória: leitura aceita chaves legadas por nome/código
-    // e prioriza chave estável por rubric.id quando disponível.
-    const nextValues = activeRubricsOrdered.reduce<Record<string, number>>((acc, rubric) => {
-      const source = rubric.type === "desconto" ? entry.deductions : entry.earnings;
-      acc[rubric.id] = getLegacyValue(rubric, source);
-      return acc;
-    }, emptyValues);
-
-    // PRD-01/PRD-02: não reconstruir rubricas-base por heurística.
-    // O drawer deve refletir somente o que está persistido por rubrica.
-
-    setRubricValues(nextValues);
+    // Leitura padronizada da entrada manual para evitar dupla transformação local vs salvo.
+    setRubricValues({
+      ...emptyValues,
+      ...getEntryManualValues(entry, activeRubricsOrdered),
+    });
     setNotes(entry.notes || "");
   }, [activeRubricsOrdered, entry, isCreateMode, open]);
 
-  const totals = useMemo(() => {
-    const baseTotal = groupedRubrics.base.reduce((sum, rubric) => sum + (rubricValues[rubric.id] || 0), 0);
-    const earningsTotal = groupedRubrics.proventos.reduce((sum, rubric) => sum + (rubricValues[rubric.id] || 0), 0);
-    const deductionTotal = groupedRubrics.descontos.reduce((sum, rubric) => sum + (rubricValues[rubric.id] || 0), 0);
-    const gross = baseTotal + earningsTotal;
-    return {
-      baseTotal,
-      earningsTotal,
-      deductionTotal,
-      gross,
-      net: gross - deductionTotal,
-    };
-  }, [groupedRubrics.base, groupedRubrics.descontos, groupedRubrics.proventos, rubricValues]);
+  // Cálculo único da tela: usado para prévia, derivados readonly e totais persistidos.
+  const spreadsheetPreview = useMemo(
+    () => computeSpreadsheetEntry({ rubrics: activeRubricsOrdered, manualValues: rubricValues }),
+    [activeRubricsOrdered, rubricValues]
+  );
 
   const updateRubricValue = ({ rubricId, value }: RubricValueInput) => {
     setRubricValues((prev) => ({ ...prev, [rubricId]: value }));
@@ -205,9 +156,8 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     const earningsPayload: Record<string, number> = {};
     const deductionsPayload: Record<string, number> = {};
 
-    // PRD-01/PRD-02: gravação por rubric.id (chave estável) para TODAS as rubricas operacionais,
-    // incluindo rubricas-base. Isso mantém rastreabilidade e evita divergência na reidratação.
     activeRubricsOrdered.forEach((rubric) => {
+      if (isDerivedRubric(rubric)) return;
       const value = rubricValues[rubric.id] || 0;
       if (rubric.type === "desconto") {
         deductionsPayload[rubric.id] = value;
@@ -218,7 +168,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
     try {
       await onSave(entry.id, {
-        baseSalary: totals.baseTotal,
+        baseSalary: spreadsheetPreview.baseSalary,
         earnings: earningsPayload,
         deductions: deductionsPayload,
         notes,
@@ -235,7 +185,6 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-hidden px-0">
-        {/* Header reorganizado: metadados ficam no topo e ações logo abaixo para não competir com o botão de fechar. */}
         <SheetHeader className="px-5 pb-3 border-b">
           <div className="min-w-0">
             <SheetTitle className="text-lg">{isCreateMode ? "Novo lançamento" : employee?.name}</SheetTitle>
@@ -246,18 +195,11 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             </SheetDescription>
           </div>
 
-          {/* Responsividade: botões quebram para nova linha quando necessário, sem corte e sem encostar no "X" do drawer. */}
           <div className="mt-2 flex w-full flex-wrap justify-end gap-2">
-            <Button
-              onClick={handleSave}
-              size="sm"
-              className="h-8 rounded-md px-4"
-              disabled={!canEditValues}
-            >
+            <Button onClick={handleSave} size="sm" className="h-8 rounded-md px-4" disabled={!canEditValues}>
               <Save className="mr-1 h-4 w-4" />
               {isCreateMode ? "Criar" : "Salvar"}
             </Button>
-            {/* Tooltip explica que recibo é PRD-07, fora do escopo desta sprint. */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -298,13 +240,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {groupedRubrics.base.length > 0 ? (
                 groupedRubrics.base.map((rubric) => (
-                  <NumericRubricInput
-                    key={rubric.id}
-                    rubric={rubric}
-                    value={rubricValues[rubric.id] || 0}
-                    disabled={!canEditValues}
-                    onChange={updateRubricValue}
-                  />
+                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
                 ))
               ) : (
                 <p className="text-xs text-muted-foreground col-span-full">Nenhuma rubrica-base identificada para a empresa/competência atual.</p>
@@ -317,13 +253,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {groupedRubrics.proventos.length > 0 ? (
                 groupedRubrics.proventos.map((rubric) => (
-                  <NumericRubricInput
-                    key={rubric.id}
-                    rubric={rubric}
-                    value={rubricValues[rubric.id] || 0}
-                    disabled={!canEditValues}
-                    onChange={updateRubricValue}
-                  />
+                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
                 ))
               ) : (
                 <p className="text-xs text-muted-foreground col-span-full">Nenhuma rubrica de provento ativa.</p>
@@ -336,13 +266,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {groupedRubrics.descontos.length > 0 ? (
                 groupedRubrics.descontos.map((rubric) => (
-                  <NumericRubricInput
-                    key={rubric.id}
-                    rubric={rubric}
-                    value={rubricValues[rubric.id] || 0}
-                    disabled={!canEditValues}
-                    onChange={updateRubricValue}
-                  />
+                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
                 ))
               ) : (
                 <p className="text-xs text-muted-foreground col-span-full">Nenhuma rubrica de desconto ativa.</p>
@@ -350,43 +274,39 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             </div>
           </section>
 
-          {/* PRD-01 / PRD-03 §2.1: a prévia local é apenas uma estimativa de digitação.
-              Não inclui INSS nem outras rubricas calculadas pelo motor — por isso fica explícito. */}
-          <section className="border rounded-lg bg-card p-3 space-y-1">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prévia (em edição)</h4>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Total Proventos (prévia)</span>
-              <span className="font-semibold tabular-nums">{fmt(totals.gross)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Total Descontos</span>
-              <span className="font-semibold tabular-nums text-destructive">{fmt(totals.deductionTotal)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm font-bold">
-              <span>Líquido (prévia, sem encargos)</span>
-              <span className="tabular-nums text-success">{fmt(totals.net)}</span>
-            </div>
-          </section>
-
-          {/* PRD-01 (regra INSS manual): backend continua como fonte de verdade para totais consolidados,
-              mas INSS não deve ser comunicado como "valor calculado" separado. */}
-          {!isCreateMode && entry && (entry.earningsTotal !== undefined || entry.netSalary !== undefined) && (
-            <section className="border rounded-lg bg-muted/40 p-3 space-y-1">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Valores consolidados (backend)</h4>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Proventos</span>
-                <span className="tabular-nums">{fmt(entry.earningsTotal ?? 0)}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Descontos</span>
-                <span className="tabular-nums text-destructive">{fmt(entry.deductionsTotal ?? 0)}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm font-bold">
-                <span>Líquido</span>
-                <span className="tabular-nums text-success">{fmt(entry.netSalary ?? 0)}</span>
+          {/* Campos derivados ficam readonly e recalculam no frontend imediatamente. */}
+          {groupedRubrics.derivadas.length > 0 && (
+            <section className="border rounded-lg bg-card p-3 space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Campos derivados (readonly)</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {groupedRubrics.derivadas.map((rubric) => (
+                  <NumericRubricInput
+                    key={rubric.id}
+                    rubric={rubric}
+                    value={spreadsheetPreview.valuesByRubricId[rubric.id] || 0}
+                    disabled
+                    onChange={() => {}}
+                  />
+                ))}
               </div>
             </section>
           )}
+
+          <section className="border rounded-lg bg-card p-3 space-y-1">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prévia (em edição)</h4>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Total Proventos</span>
+              <span className="font-semibold tabular-nums">{fmt(spreadsheetPreview.earningsTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Total Descontos</span>
+              <span className="font-semibold tabular-nums text-destructive">{fmt(spreadsheetPreview.deductionsTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm font-bold">
+              <span>Líquido (prévia)</span>
+              <span className="tabular-nums text-success">{fmt(spreadsheetPreview.netSalary)}</span>
+            </div>
+          </section>
 
           <section className="border rounded-lg bg-card p-3 space-y-2">
             <Label htmlFor="payroll-notes" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Observação</Label>
@@ -400,7 +320,6 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             />
           </section>
         </div>
-
       </SheetContent>
     </Sheet>
   );

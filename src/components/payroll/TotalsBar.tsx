@@ -1,11 +1,12 @@
 import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
+import { computeSpreadsheetEntry, getEntryManualValues } from "@/lib/payrollSpreadsheet";
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 const TotalsBar: React.FC = () => {
-  const { payrollEntries } = usePayroll();
+  const { payrollEntries, rubrics } = usePayroll();
 
   const totals = React.useMemo(() => {
     let gross = 0;
@@ -14,20 +15,18 @@ const TotalsBar: React.FC = () => {
     let net = 0;
 
     payrollEntries.forEach((entry) => {
-      // Ajuste do bloco 3: UI não deve recalcular resultado final.
-      // Fallback mínimo seguro: zero quando ainda não houver materialização backend.
-      const earningsTotal = entry.earningsTotal ?? 0;
-      const deductionsTotal = entry.deductionsTotal ?? 0;
-      const inss = entry.inssAmount ?? 0;
-      const netSalary = entry.netSalary ?? 0;
-      gross += earningsTotal;
-      totalDeductions += deductionsTotal;
-      totalInss += inss;
-      net += netSalary;
+      const computed = computeSpreadsheetEntry({
+        rubrics,
+        manualValues: getEntryManualValues(entry, rubrics),
+      });
+      gross += computed.earningsTotal;
+      totalDeductions += computed.deductionsTotal;
+      totalInss += computed.inssAmount;
+      net += computed.netSalary;
     });
 
     return { gross, deductions: totalDeductions, inss: totalInss, net, count: payrollEntries.length };
-  }, [payrollEntries]);
+  }, [payrollEntries, rubrics]);
 
   return (
     <div className="bg-card border rounded-lg p-4 flex items-center gap-8 mb-4">
