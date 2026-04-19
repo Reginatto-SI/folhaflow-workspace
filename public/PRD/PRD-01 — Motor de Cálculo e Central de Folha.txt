@@ -6,25 +6,25 @@
 
 Definir o funcionamento do motor de cálculo da folha de pagamento, garantindo:
 
-- cálculo determinístico
-- ausência de heurísticas
-- rastreabilidade total dos valores
-- consistência entre folha, recibos e relatórios
+- cálculo determinístico  
+- ausência de heurísticas  
+- rastreabilidade total dos valores  
+- consistência entre folha, recibos e relatórios  
 
-O motor é responsável por transformar rubricas operacionais em valores finais da folha, respeitando regras explícitas e ordem de execução definida.
+O motor é responsável por transformar os valores informados pelo usuário (rubricas operacionais) em resultados finais da folha, respeitando regras explícitas e previsíveis.
 
 ---
 
 ## 2. Princípios obrigatórios
 
-- Nenhuma regra implícita
-- Zero heurística baseada em nome
-- Ordem de cálculo obrigatória e respeitada
-- Separação entre cálculo e exibição
-- Separação entre base fiscal e base gerencial
-- Campos derivados não são entrada do sistema
-- O motor é a única fonte de verdade dos valores calculados
-- O sistema deve ser auditável
+- Nenhuma regra implícita  
+- Zero heurística baseada em nome  
+- Separação entre cálculo e exibição  
+- Campos derivados não são entrada do sistema  
+- O motor é a única fonte de verdade dos valores calculados  
+- O sistema deve ser auditável  
+- O motor NÃO pode sobrescrever valores informados manualmente  
+- O sistema deve refletir a operação real da empresa  
 
 ---
 
@@ -32,135 +32,102 @@ O motor é responsável por transformar rubricas operacionais em valores finais 
 
 O motor de cálculo é responsável por:
 
-- processar rubricas operacionais
-- gerar valores derivados
-- consolidar totais da folha
-- alimentar recibos e relatórios
+- consolidar valores da folha  
+- calcular totais e resultados finais  
+- aplicar regras matemáticas simples  
+- garantir consistência dos dados  
 
 O motor NÃO é responsável por:
 
-- interface do usuário
-- classificação de rubricas
-- regras fiscais externas complexas (v1)
-- persistência de dados históricos (tratado em outro módulo)
+- interface do usuário  
+- criação de valores automaticamente sem entrada do usuário  
+- sobrescrever valores manuais  
+- impor regras fiscais complexas nesta versão  
+- calcular encargos automaticamente (ex: INSS)  
 
 ---
 
 ## 4. Modelo estrutural da folha
 
-O sistema opera com três camadas distintas:
+O sistema trabalha com dois tipos de dados:
 
 ---
 
-### 4.1 Base Fiscal (Oficial)
+### 4.1 Rubricas Operacionais (INPUT)
 
-Representa os valores reconhecidos legalmente.
+São os valores informados manualmente pelo usuário.
 
 Exemplos:
 
-- salario_ctps
-- salario_fiscal
+- salario_ctps  
+- salario_g  
+- outros_rendimentos  
+- horas_extras  
+- salario_familia  
+- ferias_terco  
+- insalubridade  
+- inss  
+- emprestimos  
+- vales  
+- faltas  
 
 Características:
 
-- utilizada para cálculo de encargos
-- deve ser consistente com registros oficiais
-- não sofre influência de ajustes gerenciais
-- é obrigatória para cálculo de INSS
+- são editáveis  
+- possuem classificação  
+- são persistidas no sistema  
+- são a única fonte de entrada da folha  
+- podem ser alteradas a qualquer momento  
 
 ---
 
-### 4.2 Base Gerencial (Operacional)
+### 4.2 Campos Derivados (OUTPUT DO MOTOR)
 
-Representa os valores reais pagos ao funcionário.
+São valores calculados automaticamente pelo sistema.
 
 Exemplos:
 
-- salario_g
-- outros_rendimentos
-- horas_extras
-- salario_familia
-- ferias_terco
-- insalubridade
+- salario_real  
+- salario_ajustado  
+- salario_liquido  
 
 Características:
 
-- utilizada para controle interno
-- pode divergir da base fiscal
-- representa o custo real do funcionário
+- não são editáveis  
+- não possuem classificação  
+- são resultado do processamento do motor  
+- devem ser reproduzíveis a qualquer momento  
 
 ---
 
-### 4.3 Campos Derivados (Resultado do Motor)
+## 5. Regra CRÍTICA — INSS (ATUALIZAÇÃO)
 
-São valores calculados automaticamente.
+- INSS é uma rubrica operacional do tipo desconto  
+- INSS deve ser informado manualmente pelo usuário  
+- O motor NÃO deve calcular INSS automaticamente  
+- O motor NÃO pode sobrescrever o valor informado  
 
-Exemplos:
+Motivação:
 
-- salario_real
-- salario_g2_complemento
-- salario_liquido
-
-Características:
-
-- não são input
-- não são editáveis
-- não possuem classificação
-- são resultado do processamento
+> O sistema deve refletir a operação real da empresa, onde o INSS é controlado manualmente.
 
 ---
 
-## 5. Ordem de execução do motor
+## 6. Ordem de execução do motor
 
 A ordem abaixo é obrigatória e não pode ser alterada.
 
 ---
 
-### ETAPA 1 — Consolidação da Base Fiscal
+### ETAPA 1 — Consolidação dos Proventos
 
 Entradas:
 
-- salario_ctps
-- salario_fiscal (quando informado)
+- todas as rubricas do tipo provento  
 
 Saída:
 
-- base_fiscal
-
-Regra:
-
-- se salario_fiscal existir → usar salario_fiscal
-- senão → usar salario_ctps
-
----
-
-### ETAPA 2 — Cálculo de Encargos
-
-Entradas:
-
-- base_fiscal
-
-Saídas:
-
-- inss
-- demais encargos (futuro)
-
-Regra:
-
-- sempre baseado na base fiscal
-- nunca usar valores gerenciais
-
----
-
-### ETAPA 3 — Consolidação da Base Gerencial
-
-Entradas:
-
-- todas as rubricas operacionais do tipo provento
-
-Saída:
-
-- salario_real
+- salario_real  
 
 Fórmula:
 
@@ -168,50 +135,56 @@ salario_real = soma de todos os proventos operacionais
 
 ---
 
-### ETAPA 4 — Aplicação de Descontos
+### ETAPA 2 — Consolidação dos Descontos
 
 Entradas:
 
-- todas as rubricas operacionais do tipo desconto
+- todas as rubricas do tipo desconto  
 
 Saída:
 
-- total_descontos
+- total_descontos  
+
+Fórmula:
+
+total_descontos = soma de todos os descontos operacionais
+
+Inclui:
+
+- INSS (manual)  
+- vales  
+- empréstimos  
+- faltas  
 
 ---
 
-### ETAPA 5 — Ajuste Gerencial (G2)
+### ETAPA 3 — Ajuste Gerencial (G2)
 
 Entradas:
 
-- salario_real
-- g2_complemento (quando existir)
+- salario_real  
+- g2_complemento (quando existir)  
 
 Saída:
 
-- salario_ajustado
+- salario_ajustado  
 
 Fórmula:
 
 salario_ajustado = salario_real + g2_complemento
 
-Regras:
-
-- não impacta base fiscal
-- não altera encargos
-
 ---
 
-### ETAPA 6 — Cálculo do Salário Líquido
+### ETAPA 4 — Cálculo do Salário Líquido
 
 Entradas:
 
-- salario_ajustado
-- total_descontos
+- salario_ajustado  
+- total_descontos  
 
 Saída:
 
-- salario_liquido
+- salario_liquido  
 
 Fórmula:
 
@@ -219,100 +192,105 @@ salario_liquido = salario_ajustado - total_descontos
 
 ---
 
-## 6. Regras críticas do motor
+## 7. Regras críticas do motor
 
-- não misturar base fiscal com base gerencial
-- encargos sempre baseados na base fiscal
-- valores pagos baseados na base gerencial
-- não permitir dependência circular
-- não recalcular valores fora da ordem
-- não inferir comportamento
-- não usar nome de rubrica como lógica
-
----
-
-## 7. Integração com rubricas (PRD-02)
-
-- rubricas base alimentam o motor
-- rubricas calculadas são geradas pelo motor
-- classificação não interfere no cálculo
-- classificação é usada apenas para exibição
+- não sobrescrever valores manuais  
+- não calcular rubricas operacionais automaticamente  
+- não inferir comportamento baseado em nome  
+- não misturar input com output  
+- não criar dependência circular  
+- não aplicar lógica invisível ao usuário  
+- não recalcular fora da ordem definida  
 
 ---
 
-## 8. Persistência de dados
+## 8. Integração com rubricas (PRD-02)
 
-- valores de entrada devem ser persistidos
-- valores derivados podem ser recalculados
-- não armazenar lógica duplicada
-- manter consistência entre execuções
+- rubricas operacionais alimentam o motor  
+- classificação NÃO interfere no cálculo  
+- classificação é usada apenas para exibição  
+- rubricas derivadas NÃO participam da classificação  
 
 ---
 
-## 9. Auditoria
+## 9. Persistência de dados
+
+- valores de entrada devem ser sempre persistidos  
+- valores derivados podem ser recalculados  
+- o sistema não deve armazenar lógica duplicada  
+- o estado deve ser reproduzível a qualquer momento  
+
+---
+
+## 10. Auditoria
 
 O sistema deve permitir:
 
-- rastrear cada valor calculado
-- identificar origem de cada rubrica
-- reproduzir cálculo a qualquer momento
+- rastrear cada valor informado  
+- identificar origem de cada rubrica  
+- reproduzir o cálculo completo  
+- validar resultados com transparência  
 
 ---
 
-## 10. Segurança
+## 11. Segurança
 
-- cálculo não pode depender da interface
-- validação deve ocorrer no backend
-- não permitir manipulação indevida
-
----
-
-## 11. Performance
-
-- cálculo deve ser rápido (< 200ms por funcionário)
-- permitir processamento em lote
-- evitar recomputação desnecessária
+- cálculo não pode depender da interface  
+- backend é responsável pela consistência  
+- não permitir manipulação indevida de valores derivados  
 
 ---
 
-## 12. Estados do cálculo
+## 12. Performance
+
+- cálculo deve ser rápido (< 200ms por funcionário)  
+- permitir processamento em lote  
+- evitar recomputação desnecessária  
+
+---
+
+## 13. Estados do cálculo
 
 ### Sucesso
-- cálculo completo sem inconsistência
+- cálculo completo e consistente  
 
 ### Incompleto
-- rubricas obrigatórias ausentes
+- ausência de dados necessários  
 
 ### Erro
-- dependência circular
-- dados inválidos
+- inconsistência estrutural  
 
 ---
 
-## 13. Estratégia de implementação
+## 14. Estratégia de implementação
 
-1. Garantir rubricas válidas
-2. Implementar ordem de execução
-3. Validar cada etapa isoladamente
-4. Consolidar cálculo completo
-5. Validar com dados reais
-
----
-
-## 14. Fora do escopo
-
-- cálculo de impostos avançados
-- múltiplos regimes tributários
-- integração com governo
-- regras complexas de convenção coletiva
+1. receber rubricas operacionais  
+2. consolidar proventos  
+3. consolidar descontos  
+4. aplicar ajustes  
+5. calcular salário líquido  
+6. retornar resultado  
 
 ---
 
-## 15. Critérios de sucesso
+## 15. Fora do escopo (IMPORTANTE)
 
-- cálculo consistente
-- valores auditáveis
-- relatórios batem com folha
-- recibos batem com folha
-- ausência de heurística
-- sistema confiável para uso real
+- cálculo automático de INSS  
+- cálculo automático de impostos  
+- regras trabalhistas avançadas  
+- integração com governo  
+- validações fiscais complexas  
+
+---
+
+## 16. Critérios de sucesso
+
+- usuário controla todos os valores da folha  
+- sistema não altera valores digitados  
+- cálculo é simples e previsível  
+- resultados são auditáveis  
+- recibos batem com a folha  
+- ausência de heurística  
+- confiança total no sistema  
+
+---
