@@ -127,6 +127,12 @@ const Index = () => {
         deductions: {},
         notes: "",
       });
+      // PRD-01: dispara recálculo backend para que totais reflitam o novo entry imediatamente.
+      try {
+        await recalculatePayrollBatch();
+      } catch {
+        // Falha silenciosa — usuário pode recalcular manualmente.
+      }
       toast.success("Lançamento criado com sucesso.");
       setNewEntryOpen(false);
       setNewEmployeeId("");
