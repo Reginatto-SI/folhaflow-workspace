@@ -12,8 +12,10 @@ A Central de Folha também deve permitir a criação de novas folhas, incluindo 
 
 ## 2. Princípios obrigatórios
 
-- UI não executa cálculo
+- UI não deve conter lógica de cálculo distribuída
+- Cálculo operacional deve ser centralizado em função única reutilizável (PRD-01)
 - Toda regra vem do motor
+- A interface pode acionar e consumir o cálculo centralizado
 - Edição manual controlada
 - Feedback imediato ao usuário
 - Alta performance
@@ -148,8 +150,9 @@ Deve conter:
 
 ## 12. Regras críticas
 
-- UI nunca calcula
-- UI não valida lógica financeira
+- UI não deve espalhar cálculo entre componentes
+- UI pode acionar o cálculo centralizado definido no PRD-01
+- UI não valida lógica financeira fora das regras definidas
 - duplicação não deve mascarar necessidade de revisão
 - não permitir edição fora do fluxo esperado
 - não duplicar automaticamente dados perigosos sem escolha do usuário
@@ -178,6 +181,8 @@ Deve conter:
 - PRD-02 (rubricas)
 - PRD-04 (funcionários)
 - PRD-09 (duplicação)
+- PRD-11 (modo de visualização)
+- PRD-12 (rubricas canônicas)
 
 ---
 
