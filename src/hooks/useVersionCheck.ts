@@ -1,5 +1,8 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { RefreshCw } from "lucide-react";
+import { createElement } from "react";
+import { Button } from "@/components/ui/button";
 
 // Intervalo de polling do version.json em ms.
 const POLL_INTERVAL_MS = 60_000;
