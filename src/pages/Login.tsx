@@ -44,7 +44,7 @@ const Login: React.FC = () => {
             alt="FolhaFlow"
             className="h-14 w-auto"
           />
-          <p className="text-sm text-slate-600">Acesse sua conta do sistema interno</p>
+          <p className="text-sm text-slate-600">Acesse o sistema de folha de pagamento</p>
         </div>
 
         {/* Espaçamentos, inputs e botão refinados mantendo os componentes e tokens já existentes. */}
@@ -83,7 +83,11 @@ const Login: React.FC = () => {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-slate-500">Uso interno • Grupo Delicious Fish</p>
+        {/* Rodapé institucional discreto com crédito de desenvolvimento */}
+        <p className="mt-6 text-center text-[11px] leading-relaxed text-slate-400">
+          Uso interno — Grupo Delicious Fish
+          <span className="mt-1 block">Desenvolvido por Edimar Reginato</span>
+        </p>
       </div>
     </div>
   );
