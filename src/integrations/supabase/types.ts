@@ -539,6 +539,15 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      payroll_eval_formula_expression: {
+        Args: { p_context: string; p_expression: string; p_values: Json }
+        Returns: number
+      }
+      payroll_extract_payload_value: {
+        Args: { p_payload: Json; p_rubrica_code: string; p_rubrica_id: string }
+        Returns: number
+      }
+      payroll_parse_jsonb_numeric: { Args: { p_value: Json }; Returns: number }
       recalculate_payroll_batch: {
         Args: { p_batch_id: string }
         Returns: {
