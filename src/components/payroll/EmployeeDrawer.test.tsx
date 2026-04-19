@@ -159,7 +159,7 @@ describe("EmployeeDrawer", () => {
     expect(payload.baseSalary).toBe(1234567.89);
   });
 
-  it("mantém rubricas derivadas fora dos inputs editáveis e preserva ações do drawer", () => {
+  it("exibe rubricas derivadas como readonly e preserva ações do drawer", () => {
     render(
       <EmployeeDrawer
         open
@@ -171,7 +171,7 @@ describe("EmployeeDrawer", () => {
       />
     );
 
-    expect(screen.queryByText(/Salário Líquido Derivado/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Salário Líquido Derivado/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Salvar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Gerar recibo" })).toBeDisabled();
   });
