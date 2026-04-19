@@ -309,6 +309,8 @@ Ela é definida no:
 
 ## Regra adicional
 
+- Classificação é a única fonte de agregação para rubricas operacionais
+- Campos derivados canônicos são uma exceção explícita e devem ser tratados separadamente, sendo obtidos diretamente do motor de cálculo
 - Campos derivados canônicos `salario_real`, `g2_complemento` e `salario_liquido`
 - NÃO devem ser agrupados por classificação
 - Devem ser obtidos diretamente do resultado do motor de cálculo (PRD-01)

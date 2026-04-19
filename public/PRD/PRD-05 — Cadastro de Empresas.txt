@@ -235,9 +235,3 @@ Este módulo deve deixar claro que:
 - Nenhuma complexidade desnecessária introduzida
 - Sistema mantém consistência cadastral
 - Tela continua leve, rápida e fácil de usar
-
----
-
-## Observação de alinhamento documental
-
-Este módulo deve manter compatibilidade com o PRD-12 para consumo das rubricas canônicas (`salario_real`, `g2_complemento`, `salario_liquido`) quando aplicável ao fluxo do módulo.

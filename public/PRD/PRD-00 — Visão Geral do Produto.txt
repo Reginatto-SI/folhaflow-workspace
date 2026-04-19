@@ -75,9 +75,11 @@ Porém, apresenta limitações estruturais relevantes:
 
 O sistema deve evoluir para:
 
-> Um motor de processamento de folha determinístico, desacoplado da interface, com uma experiência operacional rápida e confiável.
-
-A interface deve atuar como camada de operação, acionando e consumindo o cálculo centralizado, sem lógica distribuída entre componentes.
+> O motor de cálculo é centralizado em uma função única reutilizável,
+> executada no frontend para garantir resposta imediata estilo planilha.
+>
+> A interface não deve conter lógica distribuída,
+> apenas acionar e consumir esse cálculo centralizado.
 
 ---
 
