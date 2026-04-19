@@ -7,11 +7,12 @@
 Definir o funcionamento do motor de cálculo da folha de pagamento, garantindo:
 
 - cálculo determinístico  
+- execução baseada em fórmulas configuradas  
 - ausência de heurísticas  
 - rastreabilidade total dos valores  
 - consistência entre folha, recibos e relatórios  
 
-O motor é responsável por transformar os valores informados pelo usuário (rubricas operacionais) em resultados finais da folha, respeitando regras explícitas e previsíveis.
+O motor é responsável por transformar os valores informados pelo usuário (rubricas operacionais) em resultados finais da folha, respeitando exclusivamente regras explícitas e configuráveis.
 
 ---
 
@@ -20,11 +21,13 @@ O motor é responsável por transformar os valores informados pelo usuário (rub
 - Nenhuma regra implícita  
 - Zero heurística baseada em nome  
 - Separação entre cálculo e exibição  
-- Campos derivados não são entrada do sistema  
+- Campos derivados não são entrada manual  
 - O motor é a única fonte de verdade dos valores calculados  
 - O sistema deve ser auditável  
 - O motor NÃO pode sobrescrever valores informados manualmente  
 - O sistema deve refletir a operação real da empresa  
+- O cálculo deve ser definido por fórmulas configuradas  
+- O sistema deve ser totalmente extensível sem alteração de código  
 
 ---
 
@@ -32,18 +35,20 @@ O motor é responsável por transformar os valores informados pelo usuário (rub
 
 O motor de cálculo é responsável por:
 
+- executar fórmulas configuradas nas rubricas  
+- resolver dependências entre rubricas  
 - consolidar valores da folha  
-- calcular totais e resultados finais  
-- aplicar regras matemáticas simples  
-- garantir consistência dos dados  
+- calcular resultados finais de forma determinística  
+- garantir consistência entre todos os módulos  
 
 O motor NÃO é responsável por:
 
 - interface do usuário  
-- criação de valores automaticamente sem entrada do usuário  
+- definir regras fixas de cálculo  
+- criar valores automaticamente sem configuração  
 - sobrescrever valores manuais  
-- impor regras fiscais complexas nesta versão  
-- calcular encargos automaticamente (ex: INSS)  
+- impor lógica baseada em nome de rubrica  
+- aplicar regras invisíveis ao usuário  
 
 ---
 
@@ -81,26 +86,27 @@ Características:
 
 ---
 
-### 4.2 Campos Derivados (OUTPUT DO MOTOR)
+### 4.2 Rubricas Calculadas (OUTPUT DO MOTOR)
 
-São valores calculados automaticamente pelo sistema.
+São valores gerados automaticamente pelo sistema com base em fórmulas configuradas.
 
 Exemplos:
 
 - salario_real  
-- salario_ajustado  
+- g2_complemento  
 - salario_liquido  
 
 Características:
 
-- não são editáveis  
+- não são editáveis diretamente  
 - não possuem classificação  
-- são resultado do processamento do motor  
-- devem ser reproduzíveis a qualquer momento  
+- são resultado da execução de fórmulas  
+- dependem de outras rubricas  
+- são reproduzíveis a qualquer momento  
 
 ---
 
-## 5. Regra CRÍTICA — INSS (ATUALIZAÇÃO)
+## 5. Regra CRÍTICA — INSS
 
 - INSS é uma rubrica operacional do tipo desconto  
 - INSS deve ser informado manualmente pelo usuário  
@@ -109,116 +115,109 @@ Características:
 
 Motivação:
 
-> O sistema deve refletir a operação real da empresa, onde o INSS é controlado manualmente.
+> O sistema deve refletir a operação real da empresa.
 
 ---
 
-## 6. Ordem de execução do motor
-
-A ordem abaixo é obrigatória e não pode ser alterada.
+## 6. Execução do motor de cálculo
 
 ---
 
-### ETAPA 1 — Consolidação dos Proventos
+### 6.1 Regra estrutural — Execução por Fórmula
 
-Entradas:
-
-- todas as rubricas do tipo provento  
-
-Saída:
-
-- salario_real  
-
-Fórmula:
-
-salario_real = soma de todos os proventos operacionais
+O motor deve operar como um **executor de fórmulas configuradas**, e não como um conjunto de regras fixas.
 
 ---
 
-### ETAPA 2 — Consolidação dos Descontos
+### Princípio central
 
-Entradas:
-
-- todas as rubricas do tipo desconto  
-
-Saída:
-
-- total_descontos  
-
-Fórmula:
-
-total_descontos = soma de todos os descontos operacionais
-
-Inclui:
-
-- INSS (manual)  
-- vales  
-- empréstimos  
-- faltas  
+> O sistema NÃO define como calcular valores derivados.  
+> O usuário define através das fórmulas cadastradas.
 
 ---
 
-### ETAPA 3 — Ajuste Gerencial (G2)
+### Fluxo de execução
 
-Entradas:
-
-- salario_real  
-- g2_complemento (quando existir)  
-
-Saída:
-
-- salario_ajustado  
-
-Fórmula:
-
-salario_ajustado = salario_real + g2_complemento
+1. Carregar todas as rubricas operacionais
+2. Identificar rubricas calculadas
+3. Ordenar cálculo com base em dependências
+4. Resolver dependências entre rubricas
+5. Executar fórmulas
+6. Gerar resultados finais
 
 ---
 
-### ETAPA 4 — Cálculo do Salário Líquido
+### 6.2 Execução de fórmulas
 
-Entradas:
+Para toda rubrica com:
 
-- salario_ajustado  
-- total_descontos  
+- natureza = `calculada`
+- método_calculo = `formula`
 
-Saída:
+O motor deve:
 
-- salario_liquido  
+- interpretar a fórmula cadastrada  
+- substituir referências por valores reais  
+- executar a expressão matemática  
+- retornar o resultado  
 
-Fórmula:
+---
 
-salario_liquido = salario_ajustado - total_descontos
+### 6.3 Dependência entre rubricas
+
+O sistema deve suportar:
+
+- uso de múltiplas rubricas em uma fórmula  
+- encadeamento de cálculos  
+- dependências entre rubricas calculadas  
+- ordem de cálculo dinâmica  
+
+---
+
+### 6.4 Ordem de cálculo
+
+A ordem deve ser definida por:
+
+- dependência entre rubricas  
+- não por ordem fixa manual  
+
+O sistema deve:
+
+- detectar dependências automaticamente  
+- impedir dependência circular  
+- garantir execução consistente  
 
 ---
 
 ## 7. Regras críticas do motor
 
 - não sobrescrever valores manuais  
-- não calcular rubricas operacionais automaticamente  
-- não inferir comportamento baseado em nome  
+- não ignorar fórmulas cadastradas  
+- não hardcodar regras de cálculo  
+- não inferir comportamento por nome  
 - não misturar input com output  
-- não criar dependência circular  
-- não aplicar lógica invisível ao usuário  
-- não recalcular fora da ordem definida  
+- não permitir dependência circular  
+- não aplicar lógica invisível  
+- não executar cálculos fora da ordem de dependência  
 
 ---
 
 ## 8. Integração com rubricas (PRD-02)
 
 - rubricas operacionais alimentam o motor  
+- rubricas calculadas são executadas via fórmula  
 - classificação NÃO interfere no cálculo  
-- classificação é usada apenas para exibição  
-- rubricas derivadas NÃO participam da classificação  
+- o motor NÃO deve criar rubricas automaticamente  
+- o motor NÃO deve alterar valores operacionais  
 
 ---
 
 ## 9. Persistência de dados
 
-- valores de entrada devem ser sempre persistidos  
-- valores derivados podem ser recalculados  
-- o sistema não deve armazenar lógica duplicada  
-- o estado deve ser reproduzível a qualquer momento  
+- valores de entrada devem ser persistidos  
+- fórmulas devem ser persistidas  
+- valores calculados podem ser recalculados  
+- o sistema deve permitir reprocessamento completo  
 
 ---
 
@@ -228,7 +227,8 @@ O sistema deve permitir:
 
 - rastrear cada valor informado  
 - identificar origem de cada rubrica  
-- reproduzir o cálculo completo  
+- visualizar fórmula aplicada  
+- reproduzir cálculo completo  
 - validar resultados com transparência  
 
 ---
@@ -236,16 +236,18 @@ O sistema deve permitir:
 ## 11. Segurança
 
 - cálculo não pode depender da interface  
-- backend é responsável pela consistência  
-- não permitir manipulação indevida de valores derivados  
+- backend é responsável pela execução das fórmulas  
+- não permitir manipulação manual de valores calculados  
+- validação de fórmulas deve ser obrigatória  
 
 ---
 
 ## 12. Performance
 
 - cálculo deve ser rápido (< 200ms por funcionário)  
-- permitir processamento em lote  
+- permitir execução em lote  
 - evitar recomputação desnecessária  
+- otimizar resolução de dependências  
 
 ---
 
@@ -258,39 +260,40 @@ O sistema deve permitir:
 - ausência de dados necessários  
 
 ### Erro
-- inconsistência estrutural  
+- fórmula inválida  
+- dependência circular  
+- referência inexistente  
 
 ---
 
 ## 14. Estratégia de implementação
 
 1. receber rubricas operacionais  
-2. consolidar proventos  
-3. consolidar descontos  
-4. aplicar ajustes  
-5. calcular salário líquido  
-6. retornar resultado  
+2. carregar fórmulas configuradas  
+3. montar grafo de dependências  
+4. ordenar execução  
+5. executar fórmulas  
+6. gerar resultados finais  
+7. retornar valores  
 
 ---
 
-## 15. Fora do escopo (IMPORTANTE)
+## 15. Fora do escopo
 
-- cálculo automático de INSS  
 - cálculo automático de impostos  
-- regras trabalhistas avançadas  
+- regras trabalhistas complexas  
 - integração com governo  
-- validações fiscais complexas  
+- validações fiscais avançadas  
+- múltiplos motores paralelos  
 
 ---
 
 ## 16. Critérios de sucesso
 
-- usuário controla todos os valores da folha  
-- sistema não altera valores digitados  
-- cálculo é simples e previsível  
-- resultados são auditáveis  
-- recibos batem com a folha  
-- ausência de heurística  
+- usuário controla totalmente as regras de cálculo  
+- sistema não depende de lógica hardcoded  
+- novas regras podem ser criadas sem desenvolvimento  
+- cálculo é consistente e previsível  
+- resultados batem com o sistema atual da empresa  
+- ausência total de heurística  
 - confiança total no sistema  
-
----
