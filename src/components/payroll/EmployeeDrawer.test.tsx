@@ -108,6 +108,38 @@ const resultSalarioLiquidoRubric: Rubric = {
   ],
 };
 
+const legacyNameSalarioRealRubric: Rubric = {
+  ...resultSalarioRealRubric,
+  id: "rub-salario-real-legacy",
+  code: "legacy_sal_real",
+};
+
+const legacyNameG2ComplementoRubric: Rubric = {
+  ...resultG2ComplementoRubric,
+  id: "rub-g2-legacy",
+  code: "legacy_g2_comp",
+  formulaItems: [
+    { id: "item-g2-l-1", operation: "add", sourceRubricId: legacyNameSalarioRealRubric.id, order: 1 },
+    { id: "item-g2-l-2", operation: "subtract", sourceRubricId: baseRubric.id, order: 2 },
+  ],
+};
+
+const legacyNameSalarioLiquidoRubric: Rubric = {
+  ...resultSalarioLiquidoRubric,
+  id: "rub-salario-liquido-legacy",
+  code: "legacy_sal_liq",
+  formulaItems: [
+    { id: "item-sl-l-1", operation: "add", sourceRubricId: legacyNameSalarioRealRubric.id, order: 1 },
+    { id: "item-sl-l-2", operation: "subtract", sourceRubricId: deductionRubric.id, order: 2 },
+  ],
+};
+
+const duplicateCodeSalarioRealRubric: Rubric = {
+  ...resultSalarioRealRubric,
+  id: "rub-salario-real-duplicate-code",
+  name: "Salário Real Duplicado",
+};
+
 const noDerivedRubric: Rubric = {
   id: "rub-no-derived",
   name: "Resultado Técnico",
@@ -275,7 +307,7 @@ describe("EmployeeDrawer", () => {
     expect(within(resultadosSection).getByText(/R\$\s*1\.200,00/)).toBeInTheDocument();
   });
 
-  it("não renderiza o card de resultados quando não houver rubricas derivadas ativas", () => {
+  it("renderiza aviso de ausência canônica mesmo sem rubricas derivadas ativas", () => {
     render(
       <EmployeeDrawer
         open
@@ -287,6 +319,70 @@ describe("EmployeeDrawer", () => {
       />
     );
 
-    expect(screen.queryByText("Resultados")).not.toBeInTheDocument();
+    expect(screen.getByText("Resultados")).toBeInTheDocument();
+    expect(screen.getByText("Rubricas canônicas obrigatórias não foram encontradas. Revise o cadastro.")).toBeInTheDocument();
+  });
+
+  it("usa fallback legado no drawer sem divergir da resolução compartilhada", () => {
+    render(
+      <EmployeeDrawer
+        open
+        onOpenChange={() => {}}
+        entry={entry}
+        employee={employee}
+        rubrics={[
+          baseRubric,
+          earningRubric,
+          deductionRubric,
+          legacyNameSalarioRealRubric,
+          legacyNameG2ComplementoRubric,
+          legacyNameSalarioLiquidoRubric,
+        ]}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    expect(screen.getByText("Rubricas canônicas em compatibilidade legada. Revise o cadastro.")).toBeInTheDocument();
+    expect(screen.getByText("Salário Real")).toBeInTheDocument();
+    expect(screen.getByText("G2 Complemento")).toBeInTheDocument();
+    expect(screen.getByText("Salário Líquido")).toBeInTheDocument();
+  });
+
+  it("mostra mensagem de ausência quando rubricas canônicas obrigatórias não existem", () => {
+    render(
+      <EmployeeDrawer
+        open
+        onOpenChange={() => {}}
+        entry={entry}
+        employee={employee}
+        rubrics={[baseRubric, earningRubric, deductionRubric]}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    expect(screen.getByText("Rubricas canônicas obrigatórias não foram encontradas. Revise o cadastro.")).toBeInTheDocument();
+  });
+
+  it("mostra mensagem de conflito quando houver ambiguidade canônica", () => {
+    render(
+      <EmployeeDrawer
+        open
+        onOpenChange={() => {}}
+        entry={entry}
+        employee={employee}
+        rubrics={[
+          baseRubric,
+          earningRubric,
+          deductionRubric,
+          resultSalarioRealRubric,
+          duplicateCodeSalarioRealRubric,
+          resultG2ComplementoRubric,
+          resultSalarioLiquidoRubric,
+        ]}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    expect(screen.getByText("Há conflito no cadastro das rubricas canônicas. Revise o cadastro.")).toBeInTheDocument();
   });
 });
