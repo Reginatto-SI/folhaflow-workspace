@@ -75,9 +75,11 @@ Porém, apresenta limitações estruturais relevantes:
 
 O sistema deve evoluir para:
 
-> Um motor de processamento de folha determinístico, desacoplado da interface, com uma experiência operacional rápida e confiável.
-
-A interface deve atuar apenas como camada de operação, nunca como responsável pelas regras de cálculo.
+> O motor de cálculo é centralizado em uma função única reutilizável,
+> executada no frontend para garantir resposta imediata estilo planilha.
+>
+> A interface não deve conter lógica distribuída,
+> apenas acionar e consumir esse cálculo centralizado.
 
 ---
 
@@ -170,6 +172,18 @@ A interface não deve conter regras de negócio.
 ### 7.6 Relatórios / Recibos
 - Geração de saída operacional
 - Visualização de resultados
+
+---
+
+### 7.7 Modo de Visualização (Clássico vs Avançado)
+- Fidelidade ao modo clássico no drawer
+- Tabela gerencial compacta permitida sem divergência de valores
+
+---
+
+### 7.8 Rubricas Canônicas
+- Rubricas estruturais definidas no PRD-12
+- Consumo transversal por Central, Totais, Recibos e Relatórios
 
 ---
 

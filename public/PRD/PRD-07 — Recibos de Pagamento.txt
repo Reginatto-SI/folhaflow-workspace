@@ -176,3 +176,9 @@ Este módulo deve deixar claro que:
 - geração individual funcionando
 - geração em lote funcionando
 - consistência total com relatórios
+
+---
+
+## Observação de alinhamento documental
+
+Este módulo deve manter compatibilidade com o PRD-12 para consumo das rubricas canônicas (`salario_real`, `g2_complemento`, `salario_liquido`) quando aplicável ao fluxo do módulo.
