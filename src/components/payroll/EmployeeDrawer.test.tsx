@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import EmployeeDrawer from "@/components/payroll/EmployeeDrawer";
 import { Employee, PayrollEntry, Rubric } from "@/types/payroll";
 
@@ -57,16 +57,67 @@ const deductionRubric: Rubric = {
   formulaItems: [],
 };
 
-const derivedRubric: Rubric = {
-  id: "rub-derived",
-  name: "Salário Líquido Derivado",
-  code: "SAL_LIQ",
+const resultSalarioRealRubric: Rubric = {
+  id: "rub-salario-real",
+  name: "Salário Real",
+  code: "salario_real",
   type: "provento",
   nature: "calculada",
   calculationMethod: "formula",
   classification: null,
   order: 4,
   isActive: true,
+  allowManualOverride: false,
+  formulaItems: [
+    { id: "item-sr-1", operation: "add", sourceRubricId: baseRubric.id, order: 1 },
+    { id: "item-sr-2", operation: "add", sourceRubricId: earningRubric.id, order: 2 },
+  ],
+};
+
+const resultG2ComplementoRubric: Rubric = {
+  id: "rub-g2",
+  name: "G2 Complemento",
+  code: "g2_complemento",
+  type: "provento",
+  nature: "calculada",
+  calculationMethod: "formula",
+  classification: null,
+  order: 5,
+  isActive: true,
+  allowManualOverride: false,
+  formulaItems: [
+    { id: "item-g2-1", operation: "add", sourceRubricId: resultSalarioRealRubric.id, order: 1 },
+    { id: "item-g2-2", operation: "subtract", sourceRubricId: baseRubric.id, order: 2 },
+  ],
+};
+
+const resultSalarioLiquidoRubric: Rubric = {
+  id: "rub-salario-liquido",
+  name: "Salário Líquido",
+  code: "salario_liquido",
+  type: "provento",
+  nature: "calculada",
+  calculationMethod: "formula",
+  classification: null,
+  order: 6,
+  isActive: true,
+  allowManualOverride: false,
+  formulaItems: [
+    { id: "item-sl-1", operation: "add", sourceRubricId: resultSalarioRealRubric.id, order: 1 },
+    { id: "item-sl-2", operation: "subtract", sourceRubricId: deductionRubric.id, order: 2 },
+  ],
+};
+
+const noDerivedRubric: Rubric = {
+  id: "rub-no-derived",
+  name: "Resultado Técnico",
+  code: "resultado_tecnico",
+  type: "provento",
+  nature: "calculada",
+  calculationMethod: "formula",
+  classification: null,
+  order: 6,
+  isActive: false,
   allowManualOverride: false,
   formulaItems: [],
 };
@@ -130,7 +181,7 @@ describe("EmployeeDrawer", () => {
       />
     );
 
-    expect((salaryInput as HTMLInputElement).value).toBe("1500.00");
+    expect((salaryInput as HTMLInputElement).value).toBe("R$ 1.500,00");
   });
 
   it("parseia valor pt-BR com milhar e decimal sem zerar indevidamente", async () => {
@@ -166,7 +217,7 @@ describe("EmployeeDrawer", () => {
         onOpenChange={() => {}}
         entry={entry}
         employee={employee}
-        rubrics={[baseRubric, derivedRubric]}
+        rubrics={[baseRubric, resultSalarioLiquidoRubric]}
         onSave={vi.fn().mockResolvedValue(undefined)}
       />
     );
@@ -175,5 +226,67 @@ describe("EmployeeDrawer", () => {
     expect(screen.getByText(/^Salário Líquido$/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Salvar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Gerar recibo" })).toBeDisabled();
+  });
+
+  it("recalcula resultados em tempo real no preview local sem depender de salvar", () => {
+    render(
+      <EmployeeDrawer
+        open
+        onOpenChange={() => {}}
+        entry={entry}
+        employee={employee}
+        rubrics={[
+          baseRubric,
+          earningRubric,
+          deductionRubric,
+          resultSalarioRealRubric,
+          resultG2ComplementoRubric,
+          resultSalarioLiquidoRubric,
+        ]}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    const salaryBaseInput = screen.getByTitle("SAL_BASE — Salário Base").closest("div")?.querySelector("input") as HTMLInputElement;
+    const horasExtrasInput = screen.getByTitle("HEX — Horas Extras").closest("div")?.querySelector("input") as HTMLInputElement;
+    const descontoInput = screen.getByTitle("VAL — Vale").closest("div")?.querySelector("input") as HTMLInputElement;
+
+    fireEvent.change(salaryBaseInput, { target: { value: "1000,00" } });
+    fireEvent.blur(salaryBaseInput);
+    fireEvent.change(horasExtrasInput, { target: { value: "200,00" } });
+    fireEvent.blur(horasExtrasInput);
+    fireEvent.change(descontoInput, { target: { value: "100,00" } });
+    fireEvent.blur(descontoInput);
+
+    const resultadosSection = screen.getByText("Resultados").closest("section") as HTMLElement;
+    expect(within(resultadosSection).getByText("Salário Real")).toBeInTheDocument();
+    expect(within(resultadosSection).getByText("G2 Complemento")).toBeInTheDocument();
+    expect(within(resultadosSection).getByText("Salário Líquido")).toBeInTheDocument();
+    expect(within(resultadosSection).getByText(/R\$\s*1\.200,00/)).toBeInTheDocument();
+    expect(within(resultadosSection).getByText(/R\$\s*200,00/)).toBeInTheDocument();
+    expect(within(resultadosSection).getByText(/R\$\s*1\.100,00/)).toBeInTheDocument();
+
+    // Prova de recálculo local em tempo real: ao editar input manual, resultado muda sem salvar.
+    fireEvent.change(horasExtrasInput, { target: { value: "300,00" } });
+    fireEvent.blur(horasExtrasInput);
+
+    expect(within(resultadosSection).getByText(/R\$\s*1\.300,00/)).toBeInTheDocument();
+    expect(within(resultadosSection).getByText(/R\$\s*300,00/)).toBeInTheDocument();
+    expect(within(resultadosSection).getByText(/R\$\s*1\.200,00/)).toBeInTheDocument();
+  });
+
+  it("não renderiza o card de resultados quando não houver rubricas derivadas ativas", () => {
+    render(
+      <EmployeeDrawer
+        open
+        onOpenChange={() => {}}
+        entry={entry}
+        employee={employee}
+        rubrics={[baseRubric, earningRubric, deductionRubric, noDerivedRubric]}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    expect(screen.queryByText("Resultados")).not.toBeInTheDocument();
   });
 });
