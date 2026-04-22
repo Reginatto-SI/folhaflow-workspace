@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { Rubric } from "@/types/payroll";
+import { PayrollEntry, Rubric } from "@/types/payroll";
 import {
+  calculatePayrollFromEntry,
+  calculatePayrollTotals,
   diagnoseCanonicalDerivedRubrics,
   hasCanonicalRubricInconsistency,
   resolveCanonicalDerivedRubricIds,
@@ -13,11 +15,28 @@ const makeDerivedRubric = (overrides: Partial<Rubric>): Rubric => ({
   type: overrides.type || "provento",
   nature: "calculada",
   calculationMethod: overrides.calculationMethod || "formula",
-  classification: null,
+  classification: overrides.classification ?? null,
+  fixedValue: overrides.fixedValue ?? null,
+  percentageValue: overrides.percentageValue ?? null,
+  percentageBaseRubricId: overrides.percentageBaseRubricId ?? null,
+  order: overrides.order ?? 1,
+  isActive: overrides.isActive ?? true,
+  formulaItems: overrides.formulaItems ?? [],
+  allowManualOverride: overrides.allowManualOverride ?? false,
+});
+
+const makeBaseRubric = (overrides: Partial<Rubric>): Rubric => ({
+  id: overrides.id || "base-id",
+  name: overrides.name || "Rubrica Base",
+  code: overrides.code || "base_code",
+  type: overrides.type || "provento",
+  nature: "base",
+  calculationMethod: "manual",
+  classification: overrides.classification ?? null,
   order: overrides.order ?? 1,
   isActive: overrides.isActive ?? true,
   formulaItems: [],
-  allowManualOverride: false,
+  allowManualOverride: true,
 });
 
 describe("resolveCanonicalDerivedRubricIds", () => {
@@ -115,5 +134,104 @@ describe("resolveCanonicalDerivedRubricIds", () => {
     expect(diagnosis.g2_complemento.status).toBe("resolved_by_legacy_name");
     expect(diagnosis.salario_liquido.status).toBe("ambiguous_name");
     expect(hasCanonicalRubricInconsistency(diagnosis)).toBe(true);
+  });
+});
+
+describe("calculatePayrollFromEntry / calculatePayrollTotals", () => {
+  it("retorna derivados canônicos e totais de proventos/descontos pela função única", () => {
+    const rubrics: Rubric[] = [
+      makeBaseRubric({ id: "base", code: "salario_base", type: "provento", order: 1 }),
+      makeBaseRubric({ id: "desconto", code: "falta", type: "desconto", order: 2 }),
+      makeDerivedRubric({
+        id: "sal-real",
+        code: "salario_real",
+        name: "Salário Real",
+        calculationMethod: "formula",
+        order: 3,
+        formulaItems: [{ id: "f1", operation: "add", sourceRubricId: "base", order: 1 }],
+      }),
+      makeDerivedRubric({
+        id: "g2",
+        code: "g2_complemento",
+        name: "G2 Complemento",
+        calculationMethod: "valor_fixo",
+        fixedValue: 200,
+        order: 4,
+      }),
+      makeDerivedRubric({
+        id: "liq",
+        code: "salario_liquido",
+        name: "Salário Líquido",
+        calculationMethod: "formula",
+        order: 5,
+        formulaItems: [
+          { id: "f2", operation: "add", sourceRubricId: "sal-real", order: 1 },
+          { id: "f3", operation: "add", sourceRubricId: "g2", order: 2 },
+          { id: "f4", operation: "subtract", sourceRubricId: "desconto", order: 3 },
+        ],
+      }),
+    ];
+
+    const entry: PayrollEntry = {
+      id: "e1",
+      employeeId: "emp1",
+      companyId: "c1",
+      month: 4,
+      year: 2026,
+      baseSalary: 0,
+      earnings: { base: 1000 },
+      deductions: { desconto: 100 },
+      notes: "",
+    };
+
+    const result = calculatePayrollFromEntry({ entry, rubrics });
+
+    expect(result.earningsTotal).toBe(3300);
+    expect(result.deductionsTotal).toBe(100);
+    expect(result.salarioReal).toBe(1000);
+    expect(result.g2Complemento).toBe(200);
+    expect(result.salarioLiquido).toBe(1100);
+  });
+
+  it("agrega cards de totais com a mesma função única da linha", () => {
+    const rubrics: Rubric[] = [
+      makeBaseRubric({ id: "base", code: "salario_base", type: "provento", order: 1 }),
+      makeDerivedRubric({
+        id: "sal-real",
+        code: "salario_real",
+        calculationMethod: "formula",
+        formulaItems: [{ id: "f1", operation: "add", sourceRubricId: "base", order: 1 }],
+        order: 2,
+      }),
+      makeDerivedRubric({
+        id: "g2",
+        code: "g2_complemento",
+        calculationMethod: "valor_fixo",
+        fixedValue: 100,
+        order: 3,
+      }),
+      makeDerivedRubric({
+        id: "liq",
+        code: "salario_liquido",
+        calculationMethod: "formula",
+        formulaItems: [
+          { id: "f2", operation: "add", sourceRubricId: "sal-real", order: 1 },
+          { id: "f3", operation: "add", sourceRubricId: "g2", order: 2 },
+        ],
+        order: 4,
+      }),
+    ];
+
+    const entries: PayrollEntry[] = [
+      { id: "a", employeeId: "1", companyId: "c", month: 4, year: 2026, baseSalary: 0, earnings: { base: 1000 }, deductions: {}, notes: "" },
+      { id: "b", employeeId: "2", companyId: "c", month: 4, year: 2026, baseSalary: 0, earnings: { base: 500 }, deductions: {}, notes: "" },
+    ];
+
+    const totals = calculatePayrollTotals({ entries, rubrics });
+
+    expect(totals.count).toBe(2);
+    expect(totals.salarioReal).toBe(1500);
+    expect(totals.g2Complemento).toBe(200);
+    expect(totals.salarioLiquido).toBe(1700);
   });
 });
