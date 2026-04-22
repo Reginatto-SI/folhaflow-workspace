@@ -1,7 +1,7 @@
 import React from "react";
 import { PayrollEntry, Employee, Department, JobRole, Rubric } from "@/types/payroll";
 import { cn } from "@/lib/utils";
-import { computeSpreadsheetEntry, getEntryManualValues, resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
+import { calculatePayrollFromEntry } from "@/lib/payrollSpreadsheet";
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -19,10 +19,6 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
   entries = [], allEmployees = [], allDepartments = [], allJobRoles = [], rubrics = [], onRowClick,
 }) => {
   const getEmployee = (id: string) => allEmployees.find((e) => e.id === id);
-  // Comentário: divergência anterior acontecia quando grade/totais dependiam só de `code`.
-  // Usamos o mesmo resolvedor de derivados da Central (code canônico + fallback legado explícito)
-  // para manter linha + drawer + totais sincronizados sem lógica paralela.
-  const derivedRubricIds = React.useMemo(() => resolveCanonicalDerivedRubricIds(rubrics), [rubrics]);
   const getDeptName = (emp?: Employee) => {
     if (!emp?.departmentId) return emp?.department || "—";
     return allDepartments.find((d) => d.id === emp.departmentId)?.name || emp.department || "—";
@@ -57,12 +53,8 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
           <tbody>
             {entries.map((entry) => {
               const emp = getEmployee(entry.employeeId);
-              // A tabela agora usa o mesmo cálculo local centralizado da Central,
-              // evitando dependência do recálculo backend para feedback imediato.
-              const localComputed = computeSpreadsheetEntry({
-                rubrics,
-                manualValues: getEntryManualValues(entry, rubrics),
-              });
+              // Comentário: tabela usa a função única da Central para evitar cálculo paralelo.
+              const localComputed = calculatePayrollFromEntry({ entry, rubrics });
 
               return (
                 <tr
@@ -78,13 +70,13 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
                   <td className="px-3 py-1.5 text-sm text-muted-foreground">{getRoleName(emp)}</td>
                   {/* Comentário: leitura das colunas pelos mesmos derivados do drawer (valuesByRubricId). */}
                   <td className="px-3 py-1.5 text-right tabular-nums font-medium">
-                    {fmt(derivedRubricIds.salarioRealId ? (localComputed.valuesByRubricId[derivedRubricIds.salarioRealId] || 0) : 0)}
+                    {fmt(localComputed.salarioReal)}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums font-medium">
-                    {fmt(derivedRubricIds.g2ComplementoId ? (localComputed.valuesByRubricId[derivedRubricIds.g2ComplementoId] || 0) : 0)}
+                    {fmt(localComputed.g2Complemento)}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums font-semibold bg-muted/30">
-                    {fmt(derivedRubricIds.salarioLiquidoId ? (localComputed.valuesByRubricId[derivedRubricIds.salarioLiquidoId] || 0) : 0)}
+                    {fmt(localComputed.salarioLiquido)}
                   </td>
                 </tr>
               );

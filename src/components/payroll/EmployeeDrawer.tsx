@@ -10,11 +10,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { toast } from "sonner";
 import { FileText, Save } from "lucide-react";
 import {
-  computeSpreadsheetEntry,
+  calculatePayroll,
   diagnoseCanonicalDerivedRubrics,
   getEntryManualValues,
   hasCanonicalRubricInconsistency,
-  resolveCanonicalDerivedRubricIds,
 } from "@/lib/payrollSpreadsheet";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -163,14 +162,11 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
   // Cálculo único da tela: usado para prévia, derivados readonly e totais persistidos.
   const spreadsheetPreview = useMemo(
-    () => computeSpreadsheetEntry({ rubrics: activeRubricsOrdered, manualValues: rubricValues }),
+    () => calculatePayroll({ rubrics: activeRubricsOrdered, manualValues: rubricValues }),
     [activeRubricsOrdered, rubricValues]
   );
 
-  const canonicalDerivedRubricIds = useMemo(
-    () => resolveCanonicalDerivedRubricIds(activeRubricsOrdered),
-    [activeRubricsOrdered]
-  );
+  const canonicalDerivedRubricIds = spreadsheetPreview.canonicalDerivedRubricIds;
   const canonicalDiagnosis = useMemo(
     () => diagnoseCanonicalDerivedRubrics(activeRubricsOrdered),
     [activeRubricsOrdered]

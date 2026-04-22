@@ -9,6 +9,13 @@ export type SpreadsheetComputedEntry = {
   baseSalary: number;
 };
 
+export type PayrollCalculationResult = SpreadsheetComputedEntry & {
+  salarioReal: number;
+  g2Complemento: number;
+  salarioLiquido: number;
+  canonicalDerivedRubricIds: CanonicalDerivedRubricIds;
+};
+
 export type CanonicalDerivedRubricIds = {
   salarioRealId: string | null;
   g2ComplementoId: string | null;
@@ -296,3 +303,62 @@ export const getEntryManualValues = (entry: PayrollEntry | null, rubrics: Rubric
     return acc;
   }, {});
 };
+
+// Comentário: função única de cálculo da Central.
+// Todas as visões (drawer, tabela, totais) devem consumir esta saída consolidada.
+export const calculatePayroll = ({
+  rubrics,
+  manualValues,
+}: {
+  rubrics: Rubric[];
+  manualValues: Record<string, number>;
+}): PayrollCalculationResult => {
+  const computed = computeSpreadsheetEntry({ rubrics, manualValues });
+  const canonicalDerivedRubricIds = resolveCanonicalDerivedRubricIds(rubrics);
+
+  return {
+    ...computed,
+    salarioReal: canonicalDerivedRubricIds.salarioRealId ? (computed.valuesByRubricId[canonicalDerivedRubricIds.salarioRealId] || 0) : 0,
+    g2Complemento: canonicalDerivedRubricIds.g2ComplementoId ? (computed.valuesByRubricId[canonicalDerivedRubricIds.g2ComplementoId] || 0) : 0,
+    salarioLiquido: canonicalDerivedRubricIds.salarioLiquidoId ? (computed.valuesByRubricId[canonicalDerivedRubricIds.salarioLiquidoId] || 0) : 0,
+    canonicalDerivedRubricIds,
+  };
+};
+
+export const calculatePayrollFromEntry = ({
+  entry,
+  rubrics,
+}: {
+  entry: PayrollEntry | null;
+  rubrics: Rubric[];
+}): PayrollCalculationResult => calculatePayroll({
+  rubrics,
+  manualValues: getEntryManualValues(entry, rubrics),
+});
+
+export const calculatePayrollTotals = ({
+  entries,
+  rubrics,
+}: {
+  entries: PayrollEntry[];
+  rubrics: Rubric[];
+}) =>
+  entries.reduce(
+    (acc, entry) => {
+      const result = calculatePayrollFromEntry({ entry, rubrics });
+      acc.salarioReal += result.salarioReal;
+      acc.g2Complemento += result.g2Complemento;
+      acc.salarioLiquido += result.salarioLiquido;
+      acc.totalProventos += result.earningsTotal;
+      acc.totalDescontos += result.deductionsTotal;
+      return acc;
+    },
+    {
+      salarioReal: 0,
+      g2Complemento: 0,
+      salarioLiquido: 0,
+      totalProventos: 0,
+      totalDescontos: 0,
+      count: entries.length,
+    }
+  );

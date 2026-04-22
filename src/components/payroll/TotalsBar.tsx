@@ -1,39 +1,15 @@
 import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
-import { computeSpreadsheetEntry, getEntryManualValues, resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
+import { calculatePayrollTotals } from "@/lib/payrollSpreadsheet";
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 const TotalsBar: React.FC = () => {
   const { payrollEntries, rubrics } = usePayroll();
-  // Comentário: evita cálculo paralelo ao drawer.
-  // Fonte única: resolvedor canônico de derivados (code oficial) com fallback legado rastreável.
-  const derivedRubricIds = React.useMemo(() => resolveCanonicalDerivedRubricIds(rubrics), [rubrics]);
 
-  const totals = React.useMemo(() => {
-    let totalSalarioReal = 0;
-    let totalG2Complemento = 0;
-    let totalSalarioLiquido = 0;
-
-    payrollEntries.forEach((entry) => {
-      const computed = computeSpreadsheetEntry({
-        rubrics,
-        manualValues: getEntryManualValues(entry, rubrics),
-      });
-
-      totalSalarioReal += derivedRubricIds.salarioRealId ? (computed.valuesByRubricId[derivedRubricIds.salarioRealId] || 0) : 0;
-      totalG2Complemento += derivedRubricIds.g2ComplementoId ? (computed.valuesByRubricId[derivedRubricIds.g2ComplementoId] || 0) : 0;
-      totalSalarioLiquido += derivedRubricIds.salarioLiquidoId ? (computed.valuesByRubricId[derivedRubricIds.salarioLiquidoId] || 0) : 0;
-    });
-
-    return {
-      salarioReal: totalSalarioReal,
-      g2Complemento: totalG2Complemento,
-      salarioLiquido: totalSalarioLiquido,
-      count: payrollEntries.length,
-    };
-  }, [derivedRubricIds.g2ComplementoId, derivedRubricIds.salarioLiquidoId, derivedRubricIds.salarioRealId, payrollEntries, rubrics]);
+  // Comentário: cards de totais também consomem a função única da Central.
+  const totals = React.useMemo(() => calculatePayrollTotals({ entries: payrollEntries, rubrics }), [payrollEntries, rubrics]);
 
   return (
     <div className="bg-card border rounded-md p-3 flex items-center gap-6 mb-3">
