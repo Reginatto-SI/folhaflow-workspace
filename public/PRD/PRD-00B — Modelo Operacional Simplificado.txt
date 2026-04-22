@@ -1,0 +1,20 @@
+# PRD-00B — Modelo Operacional Simplificado
+
+## Modelo obrigatório do Folha App
+
+O Folha App funciona como uma planilha controlada.
+
+Regras obrigatórias:
+- O cálculo acontece automaticamente em tempo real no frontend.
+- Não existe botão de recalcular.
+- O usuário não executa ação para calcular.
+- Ao digitar um valor, o sistema já calcula e atualiza a tela.
+- O backend apenas persiste e carrega dados.
+- Não existe lógica complexa.
+- Não existe múltiplas fontes de verdade.
+- Não existe comportamento implícito.
+- Tudo deve ser previsível.
+
+## Regra de ouro
+
+Se uma regra não existiria em uma planilha operacional de Excel, ela não deve existir no sistema.
