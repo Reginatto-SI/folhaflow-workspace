@@ -1,215 +1,26 @@
 # PRD-03 — Central de Folha
 
----
+## Objetivo
 
-## 1. Objetivo
+Ser a tela principal de edição da folha no formato planilha.
 
-Fornecer uma interface operacional eficiente para processamento da folha de pagamento, permitindo visualização, edição e controle dos valores por funcionário, utilizando exclusivamente o motor de cálculo definido no PRD-01.
+## Regras obrigatórias
 
-A Central de Folha também deve permitir a criação de novas folhas, incluindo duplicação controlada de folhas existentes.
+- Edição direta na tela.
+- Cálculo automático ao digitar.
+- Resultado imediato.
+- Não existe botão "Recalcular".
+- Não existe fluxo manual para cálculo.
+- Não precisa salvar para ver resultado.
 
----
+## Ações principais
 
-## 2. Princípios obrigatórios
+- Salvar
+- Criar nova folha
+- Gerar documentos
 
-- UI não deve conter lógica de cálculo distribuída
-- Cálculo operacional deve ser centralizado em função única reutilizável (PRD-01)
-- Toda regra vem do motor
-- A interface pode acionar e consumir o cálculo centralizado
-- Edição manual controlada
-- Feedback imediato ao usuário
-- Alta performance
-- Experiência estilo planilha
-- Operação contínua sem quebra de contexto
-- Criação de folha deve ser simples e rápida
+## Integração
 
----
-
-## 3. Papel da Central no sistema
-
-(sem alteração estrutural)
-
----
-
-## 4. Estrutura da tela
-
-### Header
-- empresa
-- competência
-- status da folha
-
-### Ações principais
-- salvar
-- recalcular
-- criar nova folha
-- gerar documentos
-
----
-
-## 5. Criação de nova folha
-
-A Central deve permitir dois fluxos:
-
----
-
-### 5.1 Nova folha (vazia)
-
-- usuário cria folha do zero
-- folha nasce sem dados
-
----
-
-### 5.2 Duplicar folha (NOVO)
-
-Fluxo principal:
-
-1. usuário seleciona “Criar nova folha”
-2. sistema exibe modal de duplicação
-3. usuário escolhe:
-   - empresa base
-   - mês base
-   - competência destino
-   - grupos de dados
-4. usuário confirma
-5. sistema cria nova folha
-6. usuário é redirecionado para a nova folha
-
----
-
-## 6. Modal de duplicação
-
-Deve conter:
-
-- empresa base
-- mês base
-- competência destino
-- seleção de grupos de dados
-
-### Grupos de dados (checkbox)
-
-- salário CTPS
-- salário G
-- salário fiscal
-- outros rendimentos
-- salário família
-- 1/3 férias
-- insalubridade
-- horas extras
-- INSS
-- adiantamentos
-- vales/descontos
-- faltas/descontos
-
-Rubricas derivadas não devem ser apresentadas como opções de duplicação.
-
-Esses valores são sempre calculados pelo motor (PRD-01) e não fazem parte da base operacional duplicável.
-
-A duplicação deve considerar apenas dados manuais e operacionais.
-
----
-
-## 7. Regras da duplicação na UI
-
-- não permitir duplicar para competência existente
-- nova folha sempre abre em rascunho
-- permitir revisão antes de salvar
-- não executar cálculo automático sem ação do usuário
-
----
-
-## 8. Comportamento após duplicação
-
-- carregar funcionários automaticamente
-- carregar valores conforme seleção
-- permitir edição imediata
-- permitir recálculo manual
-
----
-
-## 9. Ações principais
-
-### Salvar
-(sem alteração)
-
-### Recalcular
-(sem alteração)
-
-### Gerar documentos
-(sem alteração)
-
----
-
-## 10. Drawer do funcionário
-
-(sem alteração)
-
----
-
-## 11. Estados da tela
-
-(sem alteração)
-
----
-
-## 12. Regras críticas
-
-- UI não deve espalhar cálculo entre componentes
-- UI pode acionar o cálculo centralizado definido no PRD-01
-- UI não valida lógica financeira fora das regras definidas
-- duplicação não deve mascarar necessidade de revisão
-- não permitir edição fora do fluxo esperado
-- não duplicar automaticamente dados perigosos sem escolha do usuário
-
----
-
-## 13. Performance
-
-- duplicação deve ser rápida (< 2s)
-- carregamento imediato da nova folha
-
----
-
-## 14. Experiência do usuário
-
-- fluxo simples
-- poucos cliques
-- sem complexidade desnecessária
-- comportamento previsível
-
----
-
-## 15. Integração
-
-- PRD-01 (motor)
-- PRD-02 (rubricas)
-- PRD-04 (funcionários)
-- PRD-09 (duplicação)
-- PRD-11 (modo de visualização)
-- PRD-12 (rubricas canônicas)
-
----
-
-## 16. Estratégia de transição
-
-- manter criação manual existente
-- introduzir duplicação como melhoria
-- não quebrar fluxo atual
-
----
-
-## 17. Fora do escopo
-
-- duplicação automática
-- duplicação em lote
-- comparação entre folhas
-- automação mensal
-
----
-
-## 18. Critérios de sucesso
-
-- usuário cria nova folha rapidamente
-- duplicação reduz esforço operacional
-- nova folha nasce corretamente
-- dados podem ser revisados e recalculados
-- sistema permanece simples e previsível
+- Usa cálculo do PRD-01.
+- Usa rubricas do PRD-02.
+- Mantém comportamento previsível e estilo Excel.

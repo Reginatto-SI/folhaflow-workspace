@@ -1,62 +1,15 @@
-# PRD-11 — Modo de Visualização da Folha (Clássico vs Avançado)
+# PRD-11 — Modo de Visualização da Folha
 
----
+## Objetivo
 
-## 1. Objetivo
+Permitir visualizações diferentes sem mudar os valores.
 
-Definir as regras de visualização da Central de Folha em dois modos de interface (Clássico e Avançado), garantindo fidelidade operacional ao sistema atual da empresa e consistência total de valores entre as visões.
+## Regras obrigatórias
 
----
+- Modo clássico e avançado mostram os mesmos números.
+- Diferença apenas visual.
+- Cálculo continua único no frontend (PRD-01).
 
-## 2. Princípios obrigatórios
+## Diretriz
 
-- O modo clássico deve ser fiel ao sistema atual da empresa
-- O drawer do funcionário no modo clássico é referência de fidelidade
-- A tabela da Central pode ser mais compacta e gerencial no modo avançado
-- A simplificação no modo avançado é apenas visual, nunca lógica
-- Não pode haver divergência de cálculo entre modos
-- Os valores exibidos nos dois modos devem ser exatamente os mesmos
-
----
-
-## 3. Regras de consistência
-
-- Ambos os modos consomem o mesmo resultado do cálculo centralizado (PRD-01)
-- Nenhum modo pode aplicar regra paralela de cálculo
-- Qualquer diferença entre modos deve estar limitada a layout, densidade e organização visual
-
----
-
-## 4. Modo Clássico
-
-- Prioriza aderência ao legado da empresa
-- Mantém campos, ordem e detalhamento esperados pelo usuário atual
-- Deve preservar o comportamento do drawer como fonte de conferência operacional
-
----
-
-## 5. Modo Avançado
-
-- Permite tabela mais enxuta e gerencial
-- Pode reduzir densidade de colunas e blocos visuais
-- Não pode ocultar inconsistências de valor
-- Deve oferecer acesso ao mesmo detalhamento via drawer
-
----
-
-## 6. Integração
-
-- PRD-01 (motor de cálculo)
-- PRD-03 (Central de Folha)
-- PRD-07 (Recibos)
-- PRD-08 (Relatórios)
-- PRD-12 (Rubricas Canônicas)
-
----
-
-## 7. Critérios de sucesso
-
-- Usuário pode alternar entre modos sem diferença de valores
-- Drawer clássico permanece fiel ao sistema atual
-- Tabela avançada aumenta legibilidade sem alterar regra de negócio
-- Não há divergência entre Central, Recibos e Relatórios
+Nenhum modo pode criar cálculo próprio.

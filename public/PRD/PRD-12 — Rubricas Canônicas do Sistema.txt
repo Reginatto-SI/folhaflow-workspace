@@ -1,61 +1,21 @@
 # PRD-12 — Rubricas Canônicas do Sistema
 
----
+## Objetivo
 
-## 1. Objetivo
+Definir rubricas finais padrão usadas em toda a folha.
 
-Definir rubricas canônicas estruturais do Folha App, que não são tratadas como rubricas operacionais comuns e servem como base transversal para Central, Totais, Recibos e Relatórios.
+## Rubricas canônicas
 
----
+- salario_real
+- g2_complemento
+- salario_liquido
 
-## 2. Papel deste PRD
+## Regras obrigatórias
 
-- Complementa o PRD-02 (Cadastro de Rubricas)
-- Não substitui o PRD-02
-- Estabelece restrições arquiteturais para rubricas estruturais
+- Valores vêm do cálculo do frontend (PRD-01).
+- Devem ser consistentes em Central, Recibos e Relatórios.
+- Não criar lógica paralela para esses totais.
 
----
+## Diretriz
 
-## 3. Rubricas canônicas estruturais
-
-As rubricas abaixo são obrigatórias no modelo lógico do sistema:
-
-- `salario_real`
-- `g2_complemento`
-- `salario_liquido`
-
----
-
-## 4. Regras obrigatórias
-
-- fazem parte da arquitetura do sistema
-- não devem ser tratadas como rubricas operacionais comuns
-- não devem ser usadas para agrupamento por classificação
-- devem ser calculadas/obtidas a partir do resultado do motor (PRD-01)
-- devem permanecer consistentes entre Central, Totais, Recibos e Relatórios
-
----
-
-## 5. Relação com PRD-02
-
-- o cadastro de rubricas continua no PRD-02
-- qualquer configuração de rubrica deve respeitar as restrições deste PRD
-- mudanças no cadastro não podem descaracterizar as rubricas canônicas
-
----
-
-## 6. Consumo por módulo
-
-- PRD-03 Central de Folha: exibição e sincronização de totais
-- PRD-07 Recibos: exibição de totais finais
-- PRD-08 Relatórios: consumo de totais finais sem agregação por classificação
-- PRD-11 Modo de Visualização: mesmos valores em clássico e avançado
-
----
-
-## 7. Critérios de sucesso
-
-- Rubricas canônicas identificadas de forma inequívoca
-- Sem auto-referência incorreta entre PRDs
-- Compatibilidade mantida com PRD-02 e PRD-01
-- Consistência de valores em todos os módulos consumidores
+Rubricas canônicas devem manter o sistema previsível e consistente.
