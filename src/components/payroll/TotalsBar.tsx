@@ -1,15 +1,17 @@
 import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { calculatePayrollTotals } from "@/lib/payrollSpreadsheet";
+import { PayrollEntry } from "@/types/payroll";
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const TotalsBar: React.FC = () => {
+const TotalsBar: React.FC<{ entriesOverride?: PayrollEntry[] }> = ({ entriesOverride }) => {
   const { payrollEntries, rubrics } = usePayroll();
+  const entries = entriesOverride || payrollEntries;
 
   // Comentário: cards de totais também consomem a função única da Central.
-  const totals = React.useMemo(() => calculatePayrollTotals({ entries: payrollEntries, rubrics }), [payrollEntries, rubrics]);
+  const totals = React.useMemo(() => calculatePayrollTotals({ entries, rubrics }), [entries, rubrics]);
 
   return (
     <div className="bg-card border rounded-md p-3 flex items-center gap-6 mb-3">

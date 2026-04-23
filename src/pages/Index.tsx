@@ -1,16 +1,17 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import PayrollHeader from "@/components/payroll/PayrollHeader";
 import TotalsBar from "@/components/payroll/TotalsBar";
 import PayrollFilters from "@/components/payroll/PayrollFilters";
 import PayrollTable from "@/components/payroll/PayrollTable";
 import EmployeeDrawer from "@/components/payroll/EmployeeDrawer";
-import { PayrollEntry, Employee } from "@/types/payroll";
+import { PayrollEntry, Employee, Rubric } from "@/types/payroll";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { calculatePayrollFromEntry } from "@/lib/payrollSpreadsheet";
 
 const Index = () => {
   const {
@@ -37,14 +38,23 @@ const Index = () => {
   const [newEntryOpen, setNewEntryOpen] = useState(false);
   const [newEmployeeId, setNewEmployeeId] = useState("");
   const [isSavingNewEntry, setIsSavingNewEntry] = useState(false);
+  const [inlineOverrides, setInlineOverrides] = useState<Record<string, PayrollEntry>>({});
+  const [inlineSaveStateByEntryId, setInlineSaveStateByEntryId] = useState<Record<string, "saving" | "error">>({});
+  const persistTimersRef = useRef<Record<string, number>>({});
+  const persistVersionRef = useRef<Record<string, number>>({});
 
   const competenceLabel = useMemo(
     () => new Date(selectedMonth.year, selectedMonth.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
     [selectedMonth.month, selectedMonth.year]
   );
 
+  const mergedEntries = useMemo(() => {
+    if (!Object.keys(inlineOverrides).length) return payrollEntries;
+    return payrollEntries.map((entry) => inlineOverrides[entry.id] || entry);
+  }, [inlineOverrides, payrollEntries]);
+
   const filteredEntries = useMemo(() => {
-    return payrollEntries.filter((entry) => {
+    return mergedEntries.filter((entry) => {
       const emp = allEmployees.find((e) => e.id === entry.employeeId);
       if (!emp) return false;
 
@@ -60,7 +70,11 @@ const Index = () => {
 
       return true;
     });
-  }, [payrollEntries, allEmployees, search, filterDept, filterRole]);
+  }, [mergedEntries, allEmployees, search, filterDept, filterRole]);
+
+  React.useEffect(() => () => {
+    Object.values(persistTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+  }, []);
 
   const handleRowClick = useCallback((entry: PayrollEntry) => {
     setDrawerMode("edit");
@@ -76,6 +90,76 @@ const Index = () => {
     },
     [updatePayrollEntry]
   );
+
+  const persistInlineEntry = useCallback(async (entryId: string, nextEntry: PayrollEntry, version: number) => {
+    const earningsPayload: Record<string, number> = {};
+    const deductionsPayload: Record<string, number> = {};
+
+    rubrics
+      .filter((rubric) => rubric.isActive && rubric.nature !== "calculada")
+      .forEach((rubric) => {
+        if (rubric.type === "desconto") {
+          deductionsPayload[rubric.id] = nextEntry.deductions?.[rubric.id] || 0;
+        } else {
+          earningsPayload[rubric.id] = nextEntry.earnings?.[rubric.id] || 0;
+        }
+      });
+
+    try {
+      // Comentário: feedback discreto para sinalizar gravação assíncrona sem bloquear a edição.
+      setInlineSaveStateByEntryId((prev) => ({ ...prev, [entryId]: "saving" }));
+      await updatePayrollEntry(entryId, {
+        baseSalary: nextEntry.baseSalary,
+        earnings: earningsPayload,
+        deductions: deductionsPayload,
+      });
+      // Comentário: proteção contra corrida entre timers/respostas antigas.
+      // Apenas a versão mais recente pode limpar override/estado visual.
+      if ((persistVersionRef.current[entryId] || 0) !== version) return;
+      setInlineOverrides((prev) => {
+        const { [entryId]: _, ...rest } = prev;
+        return rest;
+      });
+      setInlineSaveStateByEntryId((prev) => {
+        const { [entryId]: _, ...rest } = prev;
+        return rest;
+      });
+    } catch {
+      if ((persistVersionRef.current[entryId] || 0) !== version) return;
+      setInlineSaveStateByEntryId((prev) => ({ ...prev, [entryId]: "error" }));
+      toast.error("Não foi possível salvar alteração inline.");
+    }
+  }, [rubrics, updatePayrollEntry]);
+
+  const handleInlineEntryChange = useCallback((entryId: string, rubric: Rubric, value: number, commit = false) => {
+    const sourceEntry = inlineOverrides[entryId] || mergedEntries.find((item) => item.id === entryId) || payrollEntries.find((item) => item.id === entryId);
+    if (!sourceEntry) return;
+
+    const nextEntry: PayrollEntry = {
+      ...sourceEntry,
+      earnings: rubric.type === "desconto" ? sourceEntry.earnings : { ...(sourceEntry.earnings || {}), [rubric.id]: value },
+      deductions: rubric.type === "desconto" ? { ...(sourceEntry.deductions || {}), [rubric.id]: value } : sourceEntry.deductions,
+    };
+    nextEntry.baseSalary = calculatePayrollFromEntry({ entry: nextEntry, rubrics }).baseSalary;
+
+    setInlineOverrides((prev) => ({ ...prev, [entryId]: nextEntry }));
+    setInlineSaveStateByEntryId((prev) => ({ ...prev, [entryId]: "saving" }));
+
+    const existingTimer = persistTimersRef.current[entryId];
+    if (existingTimer) window.clearTimeout(existingTimer);
+    const version = (persistVersionRef.current[entryId] || 0) + 1;
+    persistVersionRef.current[entryId] = version;
+
+    if (commit) {
+      void persistInlineEntry(entryId, nextEntry, version);
+      return;
+    }
+
+    persistTimersRef.current[entryId] = window.setTimeout(() => {
+      void persistInlineEntry(entryId, nextEntry, version);
+      delete persistTimersRef.current[entryId];
+    }, 300);
+  }, [inlineOverrides, mergedEntries, payrollEntries, persistInlineEntry, rubrics]);
 
   const availableEmployeesForEntry = useMemo(() => {
     const alreadyInPayroll = new Set(payrollEntries.map((entry) => entry.employeeId));
@@ -162,7 +246,7 @@ const Index = () => {
       </div>
 
       <PayrollHeader onNewEntry={handleOpenNewEntry} />
-      <TotalsBar />
+      <TotalsBar entriesOverride={mergedEntries} />
       <PayrollFilters
         search={search}
         onSearchChange={setSearch}
@@ -181,6 +265,8 @@ const Index = () => {
         allJobRoles={allJobRoles}
         onRowClick={handleRowClick}
         rubrics={rubrics}
+        onInlineEntryChange={handleInlineEntryChange}
+        inlineSaveStateByEntryId={inlineSaveStateByEntryId}
       />
       <EmployeeDrawer
         open={drawerOpen}
