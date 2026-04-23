@@ -10,6 +10,7 @@ interface PayrollContextType {
   setSelectedCompany: (company: Company) => void;
   selectedMonth: PayrollMonth;
   setSelectedMonth: (month: PayrollMonth) => void;
+  availableCompetences: PayrollMonth[];
   employees: Employee[];
   allEmployees: Employee[];
   departments: Department[];
@@ -20,6 +21,7 @@ interface PayrollContextType {
   payrollEntries: PayrollEntry[];
   // PRD-03 §4: status da folha (batch) é parte do contexto operacional da Central.
   currentBatch: PayrollBatch | null;
+  updateCurrentBatchStatus: (status: PayrollBatch["status"]) => Promise<void>;
   payrollCatalogErrors: { departments?: string; jobRoles?: string; payrollEntries?: string };
   isLoading: boolean;
   loadError: string | null;
@@ -677,6 +679,16 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     );
   }, [allPayrollBatches, selectedCompany, selectedMonth.month, selectedMonth.year]);
 
+  const availableCompetences = React.useMemo(() => {
+    if (!selectedCompany) return [];
+    // Comentário: fonte de verdade da competência visível é a folha formal (payroll_batches).
+    // Não listamos meses "vazios" sem batch cadastrado para a empresa selecionada.
+    return allPayrollBatches
+      .filter((batch) => batch.companyId === selectedCompany.id)
+      .map((batch) => ({ month: batch.month, year: batch.year }))
+      .sort((a, b) => (b.year - a.year) || (b.month - a.month));
+  }, [allPayrollBatches, selectedCompany]);
+
   const lastAutoReprocessedScopeRef = useRef<string | null>(null);
 
   const ensureCurrentBatch = useCallback(async (): Promise<PayrollBatch | null> => {
@@ -692,7 +704,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
           company_id: selectedCompany.id,
           month: selectedMonth.month,
           year: selectedMonth.year,
-          status: "draft",
+          status: "em_edicao",
         },
         { onConflict: "company_id,month,year" }
       )
@@ -714,11 +726,6 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
     return mapped;
   }, [canOperatePayroll, currentBatch, selectedCompany, selectedMonth.month, selectedMonth.year]);
-
-  useEffect(() => {
-    if (!canOperatePayroll || !selectedCompany) return;
-    void ensureCurrentBatch();
-  }, [canOperatePayroll, ensureCurrentBatch, selectedCompany]);
 
   const payrollEntries = React.useMemo(() => {
     if (!selectedCompany) return [];
@@ -847,6 +854,20 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     },
     [ensureCurrentBatch]
   );
+
+  const updateCurrentBatchStatus = useCallback(async (status: PayrollBatch["status"]) => {
+    if (!currentBatch) throw new Error("Nenhuma folha selecionada para atualizar status.");
+    const { data, error } = await supabase
+      .from("payroll_batches")
+      .update({ status })
+      .eq("id", currentBatch.id)
+      .select("id, company_id, month, year, status")
+      .single();
+    if (error || !data) throw error;
+
+    const mapped = mapPayrollBatchRowToModel(data);
+    setAllPayrollBatches((prev) => prev.map((batch) => (batch.id === mapped.id ? mapped : batch)));
+  }, [currentBatch]);
 
   useEffect(() => {
     if (!canOperatePayroll || !selectedCompany || !currentBatch) return;
@@ -1170,6 +1191,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setSelectedCompany,
         selectedMonth,
         setSelectedMonth,
+        availableCompetences,
         employees,
         allEmployees,
         departments,
@@ -1179,6 +1201,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         rubrics,
         payrollEntries,
         currentBatch,
+        updateCurrentBatchStatus,
         payrollCatalogErrors,
         isLoading,
         loadError,

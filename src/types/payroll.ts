@@ -138,5 +138,6 @@ export interface PayrollBatch {
   companyId: string;
   month: number;
   year: number;
-  status: "draft";
+  // Comentário: status operacional simples da folha na Central.
+  status: "em_edicao" | "em_revisao" | "finalizado";
 }

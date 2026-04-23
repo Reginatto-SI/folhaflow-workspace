@@ -12,6 +12,9 @@ Ser a tela principal de edição da folha no formato planilha.
 - Não existe botão "Recalcular".
 - Não existe fluxo manual para cálculo.
 - Não precisa salvar para ver resultado.
+- Seletor de competência mostra apenas competências com folha existente (`payroll_batches`) para a empresa selecionada.
+- Competências devem ser exibidas da mais recente para a mais antiga.
+- O status operacional da folha é editável na própria Central com estados: `em_edicao`, `em_revisao`, `finalizado`.
 
 ## Ações principais
 

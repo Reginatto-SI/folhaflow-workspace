@@ -8,7 +8,7 @@ Criar nova folha a partir de uma folha base com fluxo direto.
 
 - Copiar estrutura da folha.
 - Copiar valores básicos manuais.
-- Nova folha nasce em rascunho.
+- Nova folha nasce em `em_edicao` (equivalente ao antigo rascunho).
 - Sem estratégias A/B.
 - Sem decisões complexas.
 
