@@ -4,26 +4,46 @@ import { cn } from "@/lib/utils";
 interface EditableCellProps {
   value: number;
   onChange: (value: number) => void;
+  onCommit?: (value: number) => void;
   rowIndex: number;
   colIndex: number;
   onNavigate: (row: number, col: number) => void;
   isActive: boolean;
   setActive: () => void;
+  className?: string;
 }
 
 const EditableCell: React.FC<EditableCellProps> = ({
   value,
   onChange,
+  onCommit,
   rowIndex,
   colIndex,
   onNavigate,
   isActive,
   setActive,
+  className,
 }) => {
   const [editing, setEditing] = useState(false);
-  const [tempValue, setTempValue] = useState(String(value));
+  const [tempValue, setTempValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const cellRef = useRef<HTMLTableCellElement>(null);
+
+  const formatCurrency = (num: number) =>
+    num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Comentário: no modo edição não aplicamos máscara monetária (sem símbolo/agrupamento),
+  // para preservar experiência de digitação livre estilo Excel.
+  const formatEditable = (num: number) => `${Number.isFinite(num) ? num : 0}`.replace(".", ",");
+
+  const parseCurrency = (raw: string) => {
+    const normalized = raw.trim();
+    if (!normalized) return 0;
+    const keepsNumericTokens = normalized.replace(/[^\d,.-]/g, "");
+    const withoutThousands = keepsNumericTokens.replace(/\./g, "");
+    const decimalNormalized = withoutThousands.replace(/,/g, ".");
+    const parsed = Number(decimalNormalized);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+  };
 
   useEffect(() => {
     if (isActive && !editing) {
@@ -33,21 +53,28 @@ const EditableCell: React.FC<EditableCellProps> = ({
 
   useEffect(() => {
     if (editing) {
-      setTempValue(String(value));
+      setTempValue(formatEditable(value));
       inputRef.current?.focus();
       inputRef.current?.select();
     }
   }, [editing, value]);
 
   const commit = () => {
-    const num = parseFloat(tempValue) || 0;
+    const num = parseCurrency(tempValue);
     onChange(num);
+    onCommit?.(num);
     setEditing(false);
+    setTempValue(formatCurrency(num));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!editing) {
-      if (e.key === "Enter" || e.key === "F2") {
+      const isDirectTypingKey = /^[0-9,.-]$/.test(e.key);
+      if (isDirectTypingKey) {
+        e.preventDefault();
+        setEditing(true);
+        setTempValue(e.key);
+      } else if (e.key === "Enter" || e.key === "F2") {
         e.preventDefault();
         setEditing(true);
       } else if (e.key === "ArrowDown") {
@@ -86,7 +113,8 @@ const EditableCell: React.FC<EditableCellProps> = ({
     <td
       ref={cellRef}
       tabIndex={0}
-      onClick={() => {
+      onClick={(event) => {
+        event.stopPropagation();
         setActive();
         setEditing(true);
       }}
@@ -103,13 +131,19 @@ const EditableCell: React.FC<EditableCellProps> = ({
           ref={inputRef}
           type="text"
           value={tempValue}
-          onChange={(e) => setTempValue(e.target.value)}
+          onChange={(e) => {
+            const nextText = e.target.value;
+            setTempValue(nextText);
+            onChange(parseCurrency(nextText));
+          }}
           onBlur={commit}
           onKeyDown={handleKeyDown}
+          onClick={(event) => event.stopPropagation()}
+          autoComplete="off"
           className="w-full h-full px-3 py-2 text-right tabular-nums bg-secondary/10 outline-none border-2 border-secondary rounded-sm text-sm"
         />
       ) : (
-        <span className="text-sm">{formatted}</span>
+        <span className={cn("text-sm", className)}>{formatted}</span>
       )}
     </td>
   );
