@@ -186,11 +186,46 @@ describe("calculatePayrollFromEntry / calculatePayrollTotals", () => {
 
     const result = calculatePayrollFromEntry({ entry, rubrics });
 
-    expect(result.earningsTotal).toBe(3300);
+    // Rubricas derivadas/canônicas não entram nos totais operacionais para evitar dupla contagem.
+    expect(result.earningsTotal).toBe(1000);
     expect(result.deductionsTotal).toBe(100);
     expect(result.salarioReal).toBe(1000);
     expect(result.g2Complemento).toBe(200);
     expect(result.salarioLiquido).toBe(1100);
+  });
+
+
+  it("não duplica rubrica derivada nos totais operacionais", () => {
+    const rubrics: Rubric[] = [
+      makeBaseRubric({ id: "base", code: "salario_base", type: "provento", order: 1 }),
+      makeDerivedRubric({
+        id: "sal-real",
+        code: "salario_real",
+        name: "Salário Real",
+        type: "provento",
+        calculationMethod: "formula",
+        order: 2,
+        formulaItems: [{ id: "f1", operation: "add", sourceRubricId: "base", order: 1 }],
+      }),
+    ];
+
+    const entry: PayrollEntry = {
+      id: "e-dup",
+      employeeId: "emp",
+      companyId: "c",
+      month: 4,
+      year: 2026,
+      baseSalary: 0,
+      earnings: { base: 1000 },
+      deductions: {},
+      notes: "",
+    };
+
+    const result = calculatePayrollFromEntry({ entry, rubrics });
+
+    expect(result.salarioReal).toBe(1000);
+    expect(result.earningsTotal).toBe(1000);
+    expect(result.netSalary).toBe(1000);
   });
 
   it("agrega cards de totais com a mesma função única da linha", () => {
