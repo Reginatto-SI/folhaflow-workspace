@@ -147,7 +147,11 @@ const diagnoseCanonicalRubric = (
   };
 };
 
-const isCanonicalResolutionConsistent = (status: CanonicalDerivedResolutionStatus) => status === "resolved_by_code";
+const isCanonicalResolutionConsistent = (status: CanonicalDerivedResolutionStatus) =>
+  // Comentário: fallback legado por nome ainda identifica uma única rubrica calculada.
+  // O alerta visual deve ficar restrito a ausência/ambiguidade que impeça a Central
+  // de identificar com segurança os resultados canônicos.
+  status === "resolved_by_code" || status === "resolved_by_legacy_name";
 
 export const diagnoseCanonicalDerivedRubrics = (rubrics: Rubric[]): CanonicalDerivedRubricsDiagnosis => {
   const derivedRubrics = rubrics.filter((rubric) => rubric.isActive && rubric.nature === "calculada");
