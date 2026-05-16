@@ -10,6 +10,7 @@ import { BriefcaseBusiness, Building2, Check, ChevronDown, ChevronUp, Download, 
 import { JobRole } from "@/types/payroll";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 
 const normalizeText = (value: string) => value.trim().replace(/\s+/g, " ");
 
@@ -59,6 +60,13 @@ const JobRoles: React.FC = () => {
   }, [jobRoles]);
 
   const hasActiveFilters = Boolean(filters.search || filters.status || filters.companyId);
+
+  const { page, pageSize, total, paginatedItems: pagedJobRoles, setPage, setPageSize, resetToFirstPage } =
+    usePagination(filteredJobRoles);
+
+  React.useEffect(() => {
+    resetToFirstPage();
+  }, [filters, resetToFirstPage]);
 
   const openNew = () => {
     setEditing(null);
@@ -384,7 +392,7 @@ const JobRoles: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredJobRoles.map((jobRole) => (
+              {pagedJobRoles.map((jobRole) => (
                 <tr key={jobRole.id} className="border-b transition-colors hover:bg-muted/30">
                   <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">{jobRole.name}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{companyNameMap[jobRole.companyId] || "-"}</td>
@@ -434,6 +442,16 @@ const JobRoles: React.FC = () => {
               )}
             </tbody>
           </table>
+          {filteredJobRoles.length > 0 && (
+            <TablePagination
+              total={total}
+              page={page}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              itemLabel="funções/cargos"
+            />
+          )}
         </div>
       )}
     </div>
