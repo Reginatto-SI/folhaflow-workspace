@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +70,7 @@ interface EmployeeDrawerProps {
   onSave: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   canDelete?: boolean;
+  onPreviewChange?: (entry: PayrollEntry | null) => void;
 }
 
 const NumericRubricInput: React.FC<{
@@ -170,6 +171,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   onSave,
   onDelete,
   canDelete = true,
+  onPreviewChange,
 }) => {
   const isCreateMode = mode === "create";
   const [rubricValues, setRubricValues] = useState<Record<string, number>>({});
@@ -276,18 +278,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     return [...canonicalRubrics, ...nonCanonicalRubrics];
   }, [canonicalDerivedRubricIds.g2ComplementoId, canonicalDerivedRubricIds.salarioLiquidoId, canonicalDerivedRubricIds.salarioRealId, groupedRubrics.resultados]);
 
-  const updateRubricValue = ({ rubricId, value }: RubricValueInput) => {
-    setRubricValues((prev) => ({ ...prev, [rubricId]: value }));
-  };
-
-  const canEditValues = isCreateMode ? !!selectedEmployeeId : true;
-
-  const handleSave = async () => {
-    if (!entry) {
-      toast.error("Lançamento não encontrado para salvar.");
-      return;
-    }
-
+  const buildPayrollEntryDraft = useCallback((): Partial<PayrollEntry> => {
     const earningsPayload: Record<string, number> = {};
     const deductionsPayload: Record<string, number> = {};
 
@@ -301,19 +292,48 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       earningsPayload[rubric.id] = value;
     });
 
+    return {
+      baseSalary: spreadsheetPreview.baseSalary,
+      earnings: earningsPayload,
+      deductions: deductionsPayload,
+      notes,
+      // Comentário: salario_real, g2_complemento e salario_liquido são rubricas canônicas.
+      // Drawer, tabela da Central e totalizadores devem consumir esta mesma prévia/mesma
+      // função de cálculo frontend; não deve existir cálculo paralelo para esses campos.
+      earningsTotal: spreadsheetPreview.earningsTotal,
+      deductionsTotal: spreadsheetPreview.deductionsTotal,
+      inssAmount: spreadsheetPreview.inssAmount,
+      netSalary: canonicalDerivedRubricIds.salarioLiquidoId ? spreadsheetPreview.salarioLiquido : spreadsheetPreview.netSalary,
+    };
+  }, [activeRubricsOrdered, canonicalDerivedRubricIds.salarioLiquidoId, notes, rubricValues, spreadsheetPreview]);
+
+  useEffect(() => {
+    if (!onPreviewChange) return;
+    if (!open || isCreateMode || !entry) {
+      onPreviewChange(null);
+      return;
+    }
+
+    onPreviewChange({
+      ...entry,
+      ...buildPayrollEntryDraft(),
+    });
+  }, [buildPayrollEntryDraft, entry, isCreateMode, onPreviewChange, open]);
+
+  const updateRubricValue = ({ rubricId, value }: RubricValueInput) => {
+    setRubricValues((prev) => ({ ...prev, [rubricId]: value }));
+  };
+
+  const canEditValues = isCreateMode ? !!selectedEmployeeId : true;
+
+  const handleSave = async () => {
+    if (!entry) {
+      toast.error("Lançamento não encontrado para salvar.");
+      return;
+    }
+
     try {
-      await onSave(entry.id, {
-        baseSalary: spreadsheetPreview.baseSalary,
-        earnings: earningsPayload,
-        deductions: deductionsPayload,
-        notes,
-        // PRD-00/01: compatibilidade dos campos persistidos sem recálculo backend.
-        // A saída gravada reflete exatamente a prévia calculada no frontend.
-        earningsTotal: spreadsheetPreview.earningsTotal,
-        deductionsTotal: spreadsheetPreview.deductionsTotal,
-        inssAmount: spreadsheetPreview.inssAmount,
-        netSalary: canonicalDerivedRubricIds.salarioLiquidoId ? spreadsheetPreview.salarioLiquido : spreadsheetPreview.netSalary,
-      });
+      await onSave(entry.id, buildPayrollEntryDraft());
       toast.success("Valores salvos com sucesso.");
       onOpenChange(false);
     } catch {
@@ -342,8 +362,8 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-3xl lg:max-w-5xl overflow-hidden px-0">
-        <SheetHeader className="px-4 pb-2.5 border-b">
+      <SheetContent className="w-full sm:max-w-2xl lg:max-w-4xl overflow-hidden px-0">
+        <SheetHeader className="px-3.5 pb-2 border-b">
           <div className="min-w-0">
             <SheetTitle className="text-lg">{isCreateMode ? "Novo lançamento" : employee?.name}</SheetTitle>
             <SheetDescription className="text-xs">
@@ -374,9 +394,9 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
           </div>
         </SheetHeader>
 
-        <div className="h-[calc(100vh-162px)] overflow-y-auto px-4 py-3 space-y-3">
-          {/* Drawer mais largo e grids responsivos: os cards operacionais usam mais colunas
-              em telas grandes e retornam para 1/2 colunas em telas menores. */}
+        <div className="h-[calc(100vh-154px)] overflow-y-auto px-3.5 py-2.5 space-y-2.5">
+          {/* Layout compactado: largura/gaps menores mantêm 4 colunas em telas largas
+              sem deixar o drawer visualmente exagerado, com quebra responsiva segura. */}
           {isCreateMode && (
             <div className="space-y-1 border rounded-md p-2.5 bg-card">
               <Label className="text-xs">Funcionário</Label>
