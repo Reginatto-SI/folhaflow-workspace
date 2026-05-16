@@ -68,6 +68,8 @@ interface EmployeeDrawerProps {
   companyName?: string;
   competenceLabel?: string;
   onSave: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
+  canDelete?: boolean;
 }
 
 const NumericRubricInput: React.FC<{
