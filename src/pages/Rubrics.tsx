@@ -145,6 +145,11 @@ const getTypeBadgeProps = (type: Rubric["type"]) =>
     ? { variant: "outline" as const, className: "border-success/30 bg-success/10 text-success", label: "Provento" }
     : { variant: "outline" as const, className: "border-destructive/30 bg-destructive/10 text-destructive", label: "Desconto" };
 
+const CANONICAL_SYSTEM_RUBRIC_CODES = new Set(["salario_real", "g2_complemento", "salario_liquido"]);
+const normalizeRubricCode = (value: string) => value.trim().toLowerCase();
+const isCanonicalSystemRubric = (rubric: Pick<Rubric, "code">) =>
+  CANONICAL_SYSTEM_RUBRIC_CODES.has(normalizeRubricCode(rubric.code));
+
 const normalizeText = (value: string) => value.trim().replace(/\s+/g, " ");
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) return error.message;
@@ -158,6 +163,7 @@ const Rubrics: React.FC = () => {
   const [form, setForm] = useState<RubricFormState>(getInitialForm());
   const [filters, setFilters] = useState<RubricFilterState>(getInitialFilters());
   const [activeTab, setActiveTab] = useState<RubricTab>("dados");
+  const editingCanonicalSystemRubric = !!editing && isCanonicalSystemRubric(editing);
 
   // Comentário: seletor de rubrica de origem (fórmula/percentual) — exclui a própria rubrica em edição.
   const rubricItems = useMemo(
@@ -328,6 +334,12 @@ const Rubrics: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (editingCanonicalSystemRubric) {
+      // PRD-12: canônicas são contrato da Central; a UI comum só visualiza para não quebrar os totais.
+      toast.info("Rubrica do sistema não pode ser editada pela interface comum.");
+      return;
+    }
+
     const normalizedForm: RubricFormState = {
       ...form,
       name: normalizeText(form.name),
@@ -370,6 +382,11 @@ const Rubrics: React.FC = () => {
   const handleToggleActive = async (id: string) => {
     try {
       const current = rubrics.find((rubric) => rubric.id === id);
+      if (current && isCanonicalSystemRubric(current)) {
+        // PRD-12: canônicas não podem ser inativadas pelo cadastro comum; a Central depende delas.
+        toast.info("Rubrica do sistema não pode ser inativada pela interface comum.");
+        return;
+      }
       await deleteRubric(id);
       toast.success(current?.isActive ? "Rubrica inativada." : "Rubrica ativada.");
     } catch (error) {
@@ -456,15 +473,31 @@ const Rubrics: React.FC = () => {
               <DialogHeader className="border-b pb-3">
                 <DialogTitle className="text-xl">
                   {editing
-                    ? editing.nature === "calculada"
-                      ? "Visualizar rubrica derivada"
-                      : "Editar rubrica"
+                    ? editingCanonicalSystemRubric
+                      ? "Visualizar rubrica do sistema"
+                      : editing.nature === "calculada"
+                        ? "Visualizar rubrica derivada"
+                        : "Editar rubrica"
                     : "Nova rubrica"}
                 </DialogTitle>
                 <p className="text-sm text-muted-foreground">
                   Cadastro estruturado conforme PRD-02 — dados, método de cálculo e classificação técnica.
                 </p>
               </DialogHeader>
+
+              {/* PRD-12: canônicas são resultados finais do sistema e ficam protegidas na UI comum. */}
+              {editingCanonicalSystemRubric && (
+                <div className="mt-3 flex items-start gap-2 rounded-md border border-primary/30 bg-primary/10 p-3 text-sm">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" />
+                  <div>
+                    <p className="font-medium text-foreground">Rubrica do sistema</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Esta rubrica canônica é usada pela Central de Folha, Recibos e Relatórios.
+                      Ela fica somente leitura para evitar quebra dos resultados oficiais.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* PRD-02: aviso visual sempre que estamos lidando com rubrica derivada (criação ou edição). */}
               {form.nature === "calculada" && (
@@ -510,6 +543,7 @@ const Rubrics: React.FC = () => {
                         <Label>Nome da rubrica *</Label>
                         <Input
                           value={form.name}
+                          disabled={editingCanonicalSystemRubric}
                           onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
                         />
                       </div>
@@ -517,6 +551,7 @@ const Rubrics: React.FC = () => {
                         <Label>Código *</Label>
                         <Input
                           value={form.code}
+                          disabled={editingCanonicalSystemRubric}
                           onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
                         />
                       </div>
@@ -524,6 +559,7 @@ const Rubrics: React.FC = () => {
                         <Label>Tipo *</Label>
                         <Select
                           value={form.type}
+                          disabled={editingCanonicalSystemRubric}
                           onValueChange={(value) =>
                             setForm((prev) => ({
                               ...prev,
@@ -550,7 +586,7 @@ const Rubrics: React.FC = () => {
                               <div>
                                 <Select
                                   value={form.nature}
-                                  disabled={editing !== null}
+                                  disabled={editing !== null || editingCanonicalSystemRubric}
                                   onValueChange={(value) =>
                                     setForm((prev) => ({
                                       ...prev,
@@ -588,6 +624,7 @@ const Rubrics: React.FC = () => {
                         <Input
                           type="number"
                           min={0}
+                          disabled={editingCanonicalSystemRubric}
                           value={form.order}
                           onChange={(event) =>
                             setForm((prev) => ({ ...prev, order: Number(event.target.value || 0) }))
@@ -598,6 +635,7 @@ const Rubrics: React.FC = () => {
                         <Label>Status</Label>
                         <Select
                           value={form.isActive ? "active" : "inactive"}
+                          disabled={editingCanonicalSystemRubric}
                           onValueChange={(value) =>
                             setForm((prev) => ({ ...prev, isActive: value === "active" }))
                           }
@@ -623,6 +661,7 @@ const Rubrics: React.FC = () => {
                         <Label>Método de cálculo *</Label>
                         <Select
                           value={form.calculationMethod}
+                          disabled={editingCanonicalSystemRubric}
                           onValueChange={(value) =>
                             setForm((prev) => ({
                               ...prev,
@@ -856,7 +895,7 @@ const Rubrics: React.FC = () => {
                 <Button variant="outline" onClick={() => setOpen(false)}>
                   <X className="mr-1 h-4 w-4" /> Cancelar
                 </Button>
-                <Button onClick={() => void handleSave()}>
+                <Button onClick={() => void handleSave()} disabled={editingCanonicalSystemRubric}>
                   <Save className="mr-1 h-4 w-4" /> Salvar
                 </Button>
               </div>
@@ -1045,7 +1084,16 @@ const Rubrics: React.FC = () => {
                   const statusBadge = getStatusBadgeProps(rubric.isActive);
                   return (
                     <tr key={rubric.id} className="border-b transition-colors hover:bg-muted/30">
-                      <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">{rubric.name}</td>
+                      <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">
+                        <span className="inline-flex items-center gap-2">
+                          {rubric.name}
+                          {isCanonicalSystemRubric(rubric) && (
+                            <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
+                              Rubrica do sistema
+                            </Badge>
+                          )}
+                        </span>
+                      </td>
                       <td className="px-4 py-2 leading-tight whitespace-nowrap">{rubric.code}</td>
                       <td className="px-4 py-2 leading-tight whitespace-nowrap">
                         {rubric.classification ? (
@@ -1102,6 +1150,7 @@ const Rubrics: React.FC = () => {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive"
+                                disabled={isCanonicalSystemRubric(rubric)}
                                 onClick={() => void handleToggleActive(rubric.id)}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" /> {rubric.isActive ? "Inativar" : "Ativar"}

@@ -186,18 +186,15 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     // Objetivo: orientar operação com texto curto, sem expor detalhes técnicos.
     // A correção definitiva continua no cadastro das rubricas (origem dos dados).
     if (hasAmbiguity) {
-      if (hasMissing || hasLegacyFallback) {
-        return "Há inconsistências no cadastro das rubricas canônicas. Revise o cadastro.";
-      }
-      return "Há conflito no cadastro das rubricas canônicas. Revise o cadastro.";
+      return "Configuração canônica incompleta: verifique salario_real, g2_complemento e salario_liquido.";
     }
     if (hasMissing) {
-      if (hasLegacyFallback) {
-        return "Há inconsistências no cadastro das rubricas canônicas. Revise o cadastro.";
-      }
-      return "Rubricas canônicas obrigatórias não foram encontradas. Revise o cadastro.";
+      return "Alguns resultados do sistema precisam ser revisados na configuração de rubricas. Consulte o responsável pelo sistema.";
     }
-    return "Rubricas canônicas em compatibilidade legada. Revise o cadastro.";
+    if (hasLegacyFallback) {
+      return "Resultados do sistema usando configuração legada de rubricas. Consulte o responsável pelo sistema.";
+    }
+    return "Alguns resultados do sistema precisam ser revisados na configuração de rubricas. Consulte o responsável pelo sistema.";
   }, [canonicalDiagnosis, hasCanonicalInconsistency]);
 
   const orderedDerivedRubrics = useMemo(() => {
@@ -251,6 +248,12 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
         earnings: earningsPayload,
         deductions: deductionsPayload,
         notes,
+        // PRD-00/01: compatibilidade dos campos persistidos sem recálculo backend.
+        // A saída gravada reflete exatamente a prévia calculada no frontend.
+        earningsTotal: spreadsheetPreview.earningsTotal,
+        deductionsTotal: spreadsheetPreview.deductionsTotal,
+        inssAmount: spreadsheetPreview.inssAmount,
+        netSalary: canonicalDerivedRubricIds.salarioLiquidoId ? spreadsheetPreview.salarioLiquido : spreadsheetPreview.netSalary,
       });
       toast.success("Valores salvos com sucesso.");
       onOpenChange(false);

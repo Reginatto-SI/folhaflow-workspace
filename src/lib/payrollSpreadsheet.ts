@@ -263,12 +263,16 @@ export const computeSpreadsheetEntry = ({
     if (!changed) break;
   }
 
-  const earningsTotal = activeRubrics.reduce((sum, rubric) => {
+  // PRD-01/12: rubricas calculadas são saídas readonly.
+  // Totais operacionais somam apenas rubricas-base para não duplicar derivados/canônicas.
+  const baseRubrics = activeRubrics.filter((rubric) => rubric.nature !== "calculada");
+
+  const earningsTotal = baseRubrics.reduce((sum, rubric) => {
     if (rubric.type !== "provento") return sum;
     return sum + toSafeNumber(valuesByRubricId[rubric.id]);
   }, 0);
 
-  const deductionsTotal = activeRubrics.reduce((sum, rubric) => {
+  const deductionsTotal = baseRubrics.reduce((sum, rubric) => {
     if (rubric.type !== "desconto") return sum;
     return sum + toSafeNumber(valuesByRubricId[rubric.id]);
   }, 0);
@@ -278,7 +282,7 @@ export const computeSpreadsheetEntry = ({
     return sum + toSafeNumber(valuesByRubricId[rubric.id]);
   }, 0);
 
-  const baseSalary = activeRubrics.reduce((sum, rubric) => {
+  const baseSalary = baseRubrics.reduce((sum, rubric) => {
     if (rubric.nature !== "base" || rubric.type !== "provento") return sum;
     return sum + toSafeNumber(valuesByRubricId[rubric.id]);
   }, 0);

@@ -193,6 +193,9 @@ describe("EmployeeDrawer", () => {
     const payload = onSave.mock.calls[0][1] as Partial<PayrollEntry>;
     expect(payload.baseSalary).toBe(1500);
     expect(payload.earnings?.[baseRubric.id]).toBe(1500);
+    expect(payload.earningsTotal).toBe(1500);
+    expect(payload.deductionsTotal).toBe(0);
+    expect(payload.netSalary).toBe(1500);
 
     const persistedEntry: PayrollEntry = {
       ...entry,
@@ -242,6 +245,46 @@ describe("EmployeeDrawer", () => {
     expect(payload.baseSalary).toBe(1234567.89);
   });
 
+  it("renderiza rubrica manual ativa nova no drawer e salva por tipo", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const newManualRubric: Rubric = {
+      id: "rub-new-manual",
+      name: "Bônus manual",
+      code: "BONUS",
+      type: "provento",
+      nature: "base",
+      calculationMethod: "manual",
+      classification: "outros_rendimentos",
+      order: 9,
+      isActive: true,
+      allowManualOverride: true,
+      formulaItems: [],
+    };
+
+    render(
+      <EmployeeDrawer
+        open
+        onOpenChange={() => {}}
+        entry={entry}
+        employee={employee}
+        rubrics={[baseRubric, newManualRubric]}
+        onSave={onSave}
+      />
+    );
+
+    const bonusInput = screen.getByTitle("BONUS — Bônus manual").closest("div")?.querySelector("input") as HTMLInputElement;
+    fireEvent.change(bonusInput, { target: { value: "250,00" } });
+    fireEvent.blur(bonusInput);
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+
+    const payload = onSave.mock.calls[0][1] as Partial<PayrollEntry>;
+    expect(payload.earnings?.[newManualRubric.id]).toBe(250);
+    expect(payload.deductions?.[newManualRubric.id]).toBeUndefined();
+    expect(payload.earningsTotal).toBe(250);
+  });
+
   it("não exibe bloco técnico de derivados e preserva ações do drawer", () => {
     render(
       <EmployeeDrawer
@@ -256,6 +299,7 @@ describe("EmployeeDrawer", () => {
 
     expect(screen.queryByText(/Campos derivados \(readonly\)/i)).not.toBeInTheDocument();
     expect(screen.getByText(/^Salário Líquido$/i)).toBeInTheDocument();
+    expect(screen.queryByTitle("salario_liquido — Salário Líquido")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Salvar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Gerar recibo" })).toBeDisabled();
   });
@@ -320,7 +364,7 @@ describe("EmployeeDrawer", () => {
     );
 
     expect(screen.getByText("Resultados")).toBeInTheDocument();
-    expect(screen.getByText("Rubricas canônicas obrigatórias não foram encontradas. Revise o cadastro.")).toBeInTheDocument();
+    expect(screen.getByText("Alguns resultados do sistema precisam ser revisados na configuração de rubricas. Consulte o responsável pelo sistema.")).toBeInTheDocument();
   });
 
   it("usa fallback legado no drawer sem divergir da resolução compartilhada", () => {
@@ -342,7 +386,7 @@ describe("EmployeeDrawer", () => {
       />
     );
 
-    expect(screen.getByText("Rubricas canônicas em compatibilidade legada. Revise o cadastro.")).toBeInTheDocument();
+    expect(screen.getByText("Resultados do sistema usando configuração legada de rubricas. Consulte o responsável pelo sistema.")).toBeInTheDocument();
     expect(screen.getByText("Salário Real")).toBeInTheDocument();
     expect(screen.getByText("G2 Complemento")).toBeInTheDocument();
     expect(screen.getByText("Salário Líquido")).toBeInTheDocument();
@@ -360,7 +404,7 @@ describe("EmployeeDrawer", () => {
       />
     );
 
-    expect(screen.getByText("Rubricas canônicas obrigatórias não foram encontradas. Revise o cadastro.")).toBeInTheDocument();
+    expect(screen.getByText("Alguns resultados do sistema precisam ser revisados na configuração de rubricas. Consulte o responsável pelo sistema.")).toBeInTheDocument();
   });
 
   it("mostra mensagem de conflito quando houver ambiguidade canônica", () => {
@@ -383,6 +427,6 @@ describe("EmployeeDrawer", () => {
       />
     );
 
-    expect(screen.getByText("Há conflito no cadastro das rubricas canônicas. Revise o cadastro.")).toBeInTheDocument();
+    expect(screen.getByText("Configuração canônica incompleta: verifique salario_real, g2_complemento e salario_liquido.")).toBeInTheDocument();
   });
 });
