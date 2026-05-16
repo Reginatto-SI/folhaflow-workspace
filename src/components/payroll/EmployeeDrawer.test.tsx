@@ -219,6 +219,37 @@ describe("EmployeeDrawer", () => {
     expect((salaryInput as HTMLInputElement).value).toBe("R$ 1.500,00");
   });
 
+  it("emite prévia operacional para sincronizar tabela e totalizadores antes de salvar", async () => {
+    const onPreviewChange = vi.fn();
+
+    render(
+      <EmployeeDrawer
+        open
+        onOpenChange={() => {}}
+        entry={entry}
+        employee={employee}
+        rubrics={[baseRubric, earningRubric, deductionRubric, resultSalarioRealRubric, resultG2ComplementoRubric, resultSalarioLiquidoRubric]}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        onPreviewChange={onPreviewChange}
+      />
+    );
+
+    const salaryInput = screen.getByTitle("SAL_BASE — Salário Base").closest("div")?.querySelector("input");
+    const earningInput = screen.getByTitle("HEX — Horas Extras").closest("div")?.querySelector("input");
+
+    fireEvent.change(salaryInput as HTMLInputElement, { target: { value: "1000,00" } });
+    fireEvent.blur(salaryInput as HTMLInputElement);
+    fireEvent.change(earningInput as HTMLInputElement, { target: { value: "250,00" } });
+    fireEvent.blur(earningInput as HTMLInputElement);
+
+    await waitFor(() => {
+      const lastPreview = onPreviewChange.mock.calls.at(-1)?.[0] as PayrollEntry | null;
+      expect(lastPreview?.earnings[baseRubric.id]).toBe(1000);
+      expect(lastPreview?.earnings[earningRubric.id]).toBe(250);
+      expect(lastPreview?.netSalary).toBe(1250);
+    });
+  });
+
   it("parseia valor pt-BR com milhar e decimal sem zerar indevidamente", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
 

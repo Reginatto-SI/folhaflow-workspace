@@ -33,6 +33,7 @@ const Index = () => {
   const [filterDept, setFilterDept] = useState("");
   const [filterRole, setFilterRole] = useState("");
   const [selectedEntry, setSelectedEntry] = useState<PayrollEntry | null>(null);
+  const [livePreviewEntry, setLivePreviewEntry] = useState<PayrollEntry | null>(null);
   const [drawerMode, setDrawerMode] = useState<"edit" | "create">("edit");
   const [createEmployeeId, setCreateEmployeeId] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -45,8 +46,17 @@ const Index = () => {
     [selectedMonth.month, selectedMonth.year]
   );
 
+  const centralEntries = useMemo(() => {
+    if (!livePreviewEntry) return payrollEntries;
+
+    // Comentário: salario_real, g2_complemento e salario_liquido são rubricas canônicas.
+    // A Central, o drawer e os totalizadores usam a mesma entrada operacional derivada
+    // pela prévia do drawer e a mesma função de cálculo, sem cálculo paralelo.
+    return payrollEntries.map((entry) => (entry.id === livePreviewEntry.id ? livePreviewEntry : entry));
+  }, [livePreviewEntry, payrollEntries]);
+
   const filteredEntries = useMemo(() => {
-    return payrollEntries.filter((entry) => {
+    return centralEntries.filter((entry) => {
       const emp = allEmployees.find((e) => e.id === entry.employeeId);
       if (!emp) return false;
 
@@ -62,11 +72,12 @@ const Index = () => {
 
       return true;
     });
-  }, [payrollEntries, allEmployees, search, filterDept, filterRole]);
+  }, [centralEntries, allEmployees, search, filterDept, filterRole]);
 
   const handleRowClick = useCallback((entry: PayrollEntry) => {
     setDrawerMode("edit");
     setCreateEmployeeId("");
+    setLivePreviewEntry(null);
     setSelectedEntry(entry);
     setDrawerOpen(true);
   }, []);
@@ -92,6 +103,15 @@ const Index = () => {
     // Na operação de folha, o funcionário pode participar de qualquer empresa do grupo.
     return allEmployees.filter((employee) => employee.isActive && !alreadyInPayroll.has(employee.id));
   }, [allEmployees, payrollEntries]);
+
+  const handleDrawerOpenChange = useCallback((open: boolean) => {
+    setDrawerOpen(open);
+    if (!open) setLivePreviewEntry(null);
+  }, []);
+
+  const handlePreviewChange = useCallback((entry: PayrollEntry | null) => {
+    setLivePreviewEntry(entry);
+  }, []);
 
   const handleOpenNewEntry = useCallback(() => {
     setNewEmployeeId("");
@@ -171,7 +191,7 @@ const Index = () => {
       </div>
 
       <PayrollHeader onNewEntry={handleOpenNewEntry} />
-      <TotalsBar entriesOverride={payrollEntries} />
+      <TotalsBar entriesOverride={centralEntries} />
       <PayrollFilters
         search={search}
         onSearchChange={setSearch}
@@ -193,7 +213,7 @@ const Index = () => {
       />
       <EmployeeDrawer
         open={drawerOpen}
-        onOpenChange={setDrawerOpen}
+        onOpenChange={handleDrawerOpenChange}
         mode={drawerMode}
         entry={selectedEntry}
         employee={drawerEmployee}
@@ -206,6 +226,7 @@ const Index = () => {
         onSave={handleSave}
         onDelete={handleDeleteEntry}
         canDelete={currentBatch?.status !== "finalizado"}
+        onPreviewChange={handlePreviewChange}
       />
       <Dialog open={newEntryOpen} onOpenChange={setNewEntryOpen}>
         <DialogContent className="sm:max-w-md">
