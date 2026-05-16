@@ -77,6 +77,10 @@ const normalizeRubricKey = (value?: string) =>
   (value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    // Comentário: remove pontuação trivial (pontos, hífens) e colapsa espaços para
+    // que abreviações cadastradas como "Salário G2 complem." casem com aliases canônicos.
+    .replace(/[.\-_/]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
 
