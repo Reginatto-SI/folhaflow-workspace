@@ -77,6 +77,10 @@ const normalizeRubricKey = (value?: string) =>
   (value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    // Comentário: remove pontuação trivial (pontos, hífens) e colapsa espaços para
+    // que abreviações cadastradas como "Salário G2 complem." casem com aliases canônicos.
+    .replace(/[.\-_/]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
 
@@ -90,7 +94,15 @@ const canonicalLegacyCodeAliases: Record<CanonicalDerivedCode, string[]> = {
 
 const canonicalLegacyNameAliases: Record<CanonicalDerivedCode, string[]> = {
   salario_real: ["salario real"],
-  g2_complemento: ["g2 complemento"],
+  // Comentário: cobre cadastros legados ("Salário G2 complem.", "Salário G2 complemento", etc.).
+  // A regra oficial continua sendo identificação por code canônico (PRD-12); estes aliases
+  // são fallback explícito para o cadastro atual do grupo.
+  g2_complemento: [
+    "g2 complemento",
+    "salario g2 complemento",
+    "salario g2 complem",
+    "salario g2",
+  ],
   salario_liquido: ["salario liquido"],
 };
 

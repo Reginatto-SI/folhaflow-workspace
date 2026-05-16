@@ -1,76 +1,75 @@
+## Causa-raiz confirmada
 
+Consultando o cadastro de rubricas calculadas no backend:
 
-## Diagnóstico — Central de Folha vs PRDs
+```
+code | name                 | nature
+-----+----------------------+-----------
+14   | Salário Real         | calculada
+15   | Salário G2 complem.  | calculada
+16   | Salário Líquido      | calculada
+```
 
-### Status geral: **parcialmente aderente**
-A base estrutural está sólida (RLS `folha.operar`, `payroll_batches`, recálculo backend). Existem **5 inconsistências reais** que justificam ajustes pontuais — nenhuma exige reestruturação.
+A função única `resolveCanonicalDerivedRubricIds` em `src/lib/payrollSpreadsheet.ts` tenta resolver cada rubrica canônica por:
 
-### Pontos corretos (não tocar)
-- RLS `folha.operar` em batches/entries (PRD-10).
-- Cálculo final é backend-first via `recalculate_payroll_batch` (PRD-01).
-- `PayrollTable` e `TotalsBar` consomem `earningsTotal/deductionsTotal/inssAmount/netSalary` do backend, sem fallback de cálculo local.
-- `EmployeeDrawer` já filtra `nature=calculada` das seções operacionais (PRD-02).
-- Criação automática de batch via `ensureCurrentBatch` (PRD-03 §16, transição preservada).
-- Permissão checada em `PermissionRoute` antes de montar a tela.
+1. `code` exato (`salario_real`, `g2_complemento`, `salario_liquido`) — falha (códigos são `14/15/16`);
+2. `code` legado (`salario_g2_complemento` p/ G2) — falha;
+3. `name` legado normalizado contra aliases:
+   - `salario real` → casa com "Salário Real" ✓
+   - `salario liquido` → casa com "Salário Líquido" ✓
+   - `g2 complemento` → **NÃO casa** com "Salário G2 complem." (normaliza para `salario g2 complem.`) ✗
 
-### Problemas reais encontrados
+Como `g2ComplementoId` fica `null`, `calculatePayroll` retorna `g2Complemento = 0`. Por isso:
 
-| # | Problema | Impacto | PRD violado |
-|---|---|---|---|
-| 1 | Após salvar no `EmployeeDrawer`, **não há recálculo automático** — totais da tabela ficam desatualizados até clicar "Recalcular" | UX: usuário vê dados velhos sem aviso, contradiz "feedback imediato" | PRD-03 §2 |
-| 2 | `EmployeeDrawer` exibe `Líquido = gross − deductionTotal` calculado **na UI**, divergente do backend (que aplica INSS sobre base fiscal) | Divergência de cálculo entre drawer e tabela. UI calculando = violação direta | PRD-01 §10, PRD-03 §2.1 |
-| 3 | Header da Central **não exibe status da folha** (draft) — PRD-03 §4 exige | Falta de contexto operacional | PRD-03 §4 |
-| 4 | `EmployeeRowExpansion.tsx` é **código morto** (nenhum import o usa) e ainda calcula valores localmente | Risco de regressão futura, ruído | Higiene de código |
-| 5 | Botão "Gerar relatório" no header está `disabled` sem tooltip explicando — confunde usuário | UX confuso | PRD-03 §14 |
+- **Drawer** mostra o valor correto: ele itera **todas** as rubricas derivadas e lê `valuesByRubricId[rubric.id]` — o cálculo da fórmula (15.000) aparece independentemente do mapeamento canônico.
+- **Tabela** e **TotalsBar** consomem `result.g2Complemento` (que depende do mapeamento canônico) → `R$ 0,00`.
+- **Ordem do card Resultados no drawer** fica errada porque a G2 cai no bucket "nonCanonical" (vai pro fim), exibindo: Real → Líquido → G2.
 
-### Ajustes propostos (mínimos, cirúrgicos)
+## Correção mínima
 
-**1. Recálculo automático após salvar lançamento** (`src/pages/Index.tsx`)
-- Em `handleSave`, após `updatePayrollEntry` retornar, chamar `recalculatePayrollBatch()` silenciosamente. Toast já existe no drawer; backend vira fonte única de totais sem clique extra.
-- Também aplicar em `handleCreatePayrollEntry` após criar.
+Fonte única já existe (`resolveCanonicalDerivedRubricIds`). Não há cálculo paralelo a criar nem refator. A correção é ampliar o reconhecimento por nome dessa função única para que drawer, tabela e cards usem a mesma resolução.
 
-**2. Drawer mostra resumo do backend (não calcula)** (`src/components/payroll/EmployeeDrawer.tsx`)
-- Manter `totals.gross`/`totals.deductionTotal` apenas como **prévia local em tempo real durante edição** (necessário para UX planilha — sem isso o usuário digita às cegas).
-- **Adicionar** abaixo do "Resumo" um bloco "Valores calculados (após salvar)" exibindo `entry.earningsTotal`, `entry.deductionsTotal`, `entry.inssAmount`, `entry.netSalary` quando existirem.
-- Renomear "Líquido" da prévia para "Líquido (prévia, sem encargos)" para não enganar.
+### 1. `src/lib/payrollSpreadsheet.ts`
 
-**3. Badge dinâmica de status no header** (`src/components/payroll/PayrollHeader.tsx`)
-- Hoje está hardcoded `<Badge>Em edição</Badge>`. Trocar por leitura de `currentBatch?.status` via `usePayroll()`. Como hoje só existe `draft`, mantém "Em edição" mas vira reativo (preparação para futuros status sem refactor).
-- Expor `currentBatch` no contexto (já calculado, só falta exportar).
+- Endurecer `normalizeRubricKey` para remover pontuação trivial (pontos, hífens), tratando "Salário G2 complem." e "Salário G2 complem" igualmente.
+- Expandir `canonicalLegacyNameAliases.g2_complemento` para cobrir as variantes legadas reais cadastradas:
+  - `"g2 complemento"`
+  - `"salario g2 complemento"`
+  - `"salario g2 complem"` (forma abreviada do cadastro atual)
+  - `"salario g2"`
+- Manter `salario_real` e `salario_liquido` como estão (já casam), apenas adicionando variantes equivalentes (`"salario real liquido"` não se aplica — manter o que existe).
 
-**4. Remover código morto**
-- Deletar `src/components/payroll/EmployeeRowExpansion.tsx`. Não é importado em lugar nenhum.
+Isso mantém:
+- regra oficial PRD-12 (resolução por `code` canônico é prioritária);
+- fallback legado explícito, rastreável e determinístico;
+- warning em DEV quando cai em fallback legado, sinalizando que o cadastro deve ser corrigido.
 
-**5. Tooltip nos botões disabled** (`PayrollHeader.tsx`)
-- Envolver "Gerar relatório" e "Gerar recibo" (drawer) em tooltip "Disponível em sprint futura (PRD-07/PRD-08)".
+### 2. `src/components/payroll/EmployeeDrawer.tsx` — ordem visual do card "Resultados"
 
-### Ajustes do contexto necessários
-- `PayrollContext.tsx`: expor `currentBatch` no tipo público (já existe internamente). Não muda comportamento.
+Não há mudança de fórmula. `orderedDerivedRubrics` já posiciona canônicas na ordem `[salarioReal, g2Complemento, salarioLiquido]` quando todas resolvem. Com a correção #1, `g2ComplementoId` passa a resolver e a ordem visual passa a ser automaticamente:
 
-### O que NÃO será feito (com justificativa)
-- **Duplicação de folha (PRD-03 §5.2 / PRD-09)**: usuário pediu explicitamente "não implementar duplicação". Será listado em "ajustes sugeridos" do relatório.
-- **Mexer em `payroll_batches` / `recalculate_payroll_batch`**: explicitamente proibido.
-- **Tocar agrupamento por classification**: depende do motor (sprint futura).
-- **Remover `getLegacyValue` do drawer**: ainda há entries antigas no banco com chaves legadas; remoção causaria perda de dados na leitura.
+1. Salário Real
+2. Salário G2 complem.
+3. Salário Líquido
 
-### Arquivos alterados
+Nenhuma alteração de código adicional no drawer é necessária para a ordem. (Caso o usuário queira forçar a ordem mesmo se algum canônico não resolver, podemos garantir a ordem fixa após a correção — verifico ao implementar.)
 
-| Arquivo | Mudança |
-|---|---|
-| `src/pages/Index.tsx` | Chamar `recalculatePayrollBatch` após save/create (silencioso) |
-| `src/components/payroll/EmployeeDrawer.tsx` | Renomear "Líquido" → "Líquido (prévia)", adicionar bloco "Valores calculados (backend)", tooltip no "Gerar recibo" |
-| `src/components/payroll/PayrollHeader.tsx` | Badge reativa via `currentBatch.status`, tooltip no "Gerar relatório" |
-| `src/contexts/PayrollContext.tsx` | Expor `currentBatch` no tipo público (~3 linhas) |
-| `src/components/payroll/EmployeeRowExpansion.tsx` | **Deletar** (código morto) |
-| `public/Analises/analise-7-revisao-central-folha.md` | Relatório completo conforme estrutura pedida |
+## Validação
 
-### Resultado esperado
-- **PRD-01**: UI deixa de competir com backend como fonte de verdade (drawer separa prévia × calculado).
-- **PRD-03 §2**: feedback imediato — totais da tabela atualizam após cada save sem clique manual.
-- **PRD-03 §4**: status da folha visível no header.
-- **PRD-10**: nada muda (já correto).
-- Higiene: -77 linhas de código morto.
+1. `/central-de-folha` → empresa COND GRUPO → competência março/2026.
+2. Drawer do funcionário Edimar Reginato:
+   - Card Resultados na ordem: Salário Real → Salário G2 complem. → Salário Líquido.
+   - Salário G2 complem. = R$ 15.000,00.
+3. Coluna **G2 Complemento** da tabela: R$ 15.000,00 (mesma fonte).
+4. Card superior **G2 Complemento**: R$ 15.000,00 (`TotalsBar` consome a mesma função).
+5. Alterar um valor base no drawer e confirmar atualização imediata em tabela e cards (sem botão recalcular).
+6. Salvar, recarregar a página e confirmar que os três pontos continuam consistentes.
+7. Conferir no console (DEV) o warning de "resolved by legacy name" para `g2_complemento`, sinalizando que o cadastro deve ser corrigido para `code = g2_complemento` na origem.
 
-### Critério final
-Central fica **pronta para uso operacional diário**. Pendências para sprints futuras: duplicação (PRD-09), motor real de rubricas com classification (PRD-01 etapas 3-6), recibos (PRD-07), relatórios (PRD-08).
+## Restrições respeitadas
 
+- Sem novo motor de cálculo.
+- Sem botão de recalcular.
+- Sem cálculo paralelo.
+- Sem alteração em recibos, relatórios, autenticação ou cadastros.
+- Alteração isolada em 1 arquivo (`payrollSpreadsheet.ts`); drawer só recebe ajuste se a ordem precisar de blindagem extra.
