@@ -280,6 +280,23 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     }
   };
 
+  const handleConfirmDelete = async () => {
+    if (!entry || !onDelete) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(entry.id);
+      toast.success("Lançamento excluído com sucesso.");
+      setConfirmDeleteOpen(false);
+      onOpenChange(false);
+    } catch {
+      toast.error("Não foi possível excluir o lançamento.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const showDeleteButton = !isCreateMode && !!entry && !!onDelete;
+
   if (!isCreateMode && (!entry || !employee)) return null;
 
   return (
