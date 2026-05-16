@@ -28,6 +28,7 @@ interface PayrollContextType {
   reloadData: () => Promise<void>;
   updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
   addPayrollEntry: (entry: Omit<PayrollEntry, "id">) => Promise<void>;
+  deletePayrollEntry: (id: string) => Promise<void>;
   addCompany: (company: Omit<Company, "id">) => Promise<void>;
   updateCompany: (id: string, updates: Partial<Company>) => Promise<void>;
   setCompanyActive: (id: string, isActive: boolean) => Promise<void>;
