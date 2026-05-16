@@ -79,6 +79,13 @@ const Index = () => {
     [updatePayrollEntry]
   );
 
+  const handleDeleteEntry = useCallback(
+    async (id: string) => {
+      await deletePayrollEntry(id);
+    },
+    [deletePayrollEntry]
+  );
+
   const availableEmployeesForEntry = useMemo(() => {
     const alreadyInPayroll = new Set(payrollEntries.map((entry) => entry.employeeId));
     // Comentário: empresa registrante é referência cadastral.
