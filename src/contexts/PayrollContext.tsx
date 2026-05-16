@@ -1152,6 +1152,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         reloadData: loadData,
         addPayrollEntry,
         updatePayrollEntry,
+        deletePayrollEntry,
         addCompany,
         updateCompany,
         setCompanyActive,
