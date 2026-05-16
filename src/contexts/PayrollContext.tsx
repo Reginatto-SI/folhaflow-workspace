@@ -799,6 +799,15 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [ensureCurrentBatch]
   );
 
+  const deletePayrollEntry = useCallback(
+    async (id: string) => {
+      const { error } = await supabase.from("payroll_entries").delete().eq("id", id);
+      if (error) throw error;
+      setAllPayrollEntries((prev) => prev.filter((entry) => entry.id !== id));
+    },
+    []
+  );
+
   const updateCurrentBatchStatus = useCallback(async (status: PayrollBatch["status"]) => {
     if (!currentBatch) throw new Error("Nenhuma folha selecionada para atualizar status.");
     const { data, error } = await supabase
