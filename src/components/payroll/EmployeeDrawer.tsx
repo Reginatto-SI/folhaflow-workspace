@@ -131,10 +131,14 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   companyName,
   competenceLabel,
   onSave,
+  onDelete,
+  canDelete = true,
 }) => {
   const isCreateMode = mode === "create";
   const [rubricValues, setRubricValues] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState("");
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const activeRubricsOrdered = useMemo(
     () => [...rubrics].filter((rubric) => rubric.isActive).sort((a, b) => a.order - b.order),
