@@ -28,6 +28,7 @@ interface PayrollContextType {
   reloadData: () => Promise<void>;
   updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
   addPayrollEntry: (entry: Omit<PayrollEntry, "id">) => Promise<void>;
+  deletePayrollEntry: (id: string) => Promise<void>;
   addCompany: (company: Omit<Company, "id">) => Promise<void>;
   updateCompany: (id: string, updates: Partial<Company>) => Promise<void>;
   setCompanyActive: (id: string, isActive: boolean) => Promise<void>;
@@ -798,6 +799,15 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [ensureCurrentBatch]
   );
 
+  const deletePayrollEntry = useCallback(
+    async (id: string) => {
+      const { error } = await supabase.from("payroll_entries").delete().eq("id", id);
+      if (error) throw error;
+      setAllPayrollEntries((prev) => prev.filter((entry) => entry.id !== id));
+    },
+    []
+  );
+
   const updateCurrentBatchStatus = useCallback(async (status: PayrollBatch["status"]) => {
     if (!currentBatch) throw new Error("Nenhuma folha selecionada para atualizar status.");
     const { data, error } = await supabase
@@ -1142,6 +1152,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         reloadData: loadData,
         addPayrollEntry,
         updatePayrollEntry,
+        deletePayrollEntry,
         addCompany,
         updateCompany,
         setCompanyActive,

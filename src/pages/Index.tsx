@@ -23,8 +23,10 @@ const Index = () => {
     rubrics,
     updatePayrollEntry,
     addPayrollEntry,
+    deletePayrollEntry,
     selectedCompany,
     selectedMonth,
+    currentBatch,
   } = usePayroll();
 
   const [search, setSearch] = useState("");
@@ -75,6 +77,13 @@ const Index = () => {
       await updatePayrollEntry(id, updates);
     },
     [updatePayrollEntry]
+  );
+
+  const handleDeleteEntry = useCallback(
+    async (id: string) => {
+      await deletePayrollEntry(id);
+    },
+    [deletePayrollEntry]
   );
 
   const availableEmployeesForEntry = useMemo(() => {
@@ -195,6 +204,8 @@ const Index = () => {
         companyName={selectedCompany?.name}
         competenceLabel={competenceLabel}
         onSave={handleSave}
+        onDelete={handleDeleteEntry}
+        canDelete={currentBatch?.status !== "finalizado"}
       />
       <Dialog open={newEntryOpen} onOpenChange={setNewEntryOpen}>
         <DialogContent className="sm:max-w-md">

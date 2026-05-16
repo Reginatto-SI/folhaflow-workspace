@@ -8,7 +8,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { FileText, Save } from "lucide-react";
+import { FileText, Save, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   calculatePayroll,
   diagnoseCanonicalDerivedRubrics,
@@ -56,6 +68,8 @@ interface EmployeeDrawerProps {
   companyName?: string;
   competenceLabel?: string;
   onSave: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
+  canDelete?: boolean;
 }
 
 const NumericRubricInput: React.FC<{
@@ -117,10 +131,14 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   companyName,
   competenceLabel,
   onSave,
+  onDelete,
+  canDelete = true,
 }) => {
   const isCreateMode = mode === "create";
   const [rubricValues, setRubricValues] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState("");
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const activeRubricsOrdered = useMemo(
     () => [...rubrics].filter((rubric) => rubric.isActive).sort((a, b) => a.order - b.order),
@@ -262,6 +280,23 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     }
   };
 
+  const handleConfirmDelete = async () => {
+    if (!entry || !onDelete) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(entry.id);
+      toast.success("Lançamento excluído com sucesso.");
+      setConfirmDeleteOpen(false);
+      onOpenChange(false);
+    } catch {
+      toast.error("Não foi possível excluir o lançamento.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const showDeleteButton = !isCreateMode && !!entry && !!onDelete;
+
   if (!isCreateMode && (!entry || !employee)) return null;
 
   return (
@@ -392,8 +427,68 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
               disabled={!canEditValues}
             />
           </section>
+
+          {showDeleteButton && (
+            <section className="pt-1">
+              <div className="flex items-center justify-between border-t pt-3">
+                <p className="text-[11px] text-muted-foreground">
+                  Remove apenas os valores deste funcionário nesta competência.
+                </p>
+                {canDelete ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setConfirmDeleteOpen(true)}
+                  >
+                    <Trash2 className="mr-1 h-4 w-4" />
+                    Excluir lançamento
+                  </Button>
+                ) : (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button variant="ghost" size="sm" disabled className="h-8 text-destructive">
+                            <Trash2 className="mr-1 h-4 w-4" />
+                            Excluir lançamento
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Folha finalizada não permite exclusão de lançamentos.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
+            </section>
+          )}
         </div>
       </SheetContent>
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lançamento da folha?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação removerá os valores lançados para este funcionário nesta competência. O cadastro do funcionário não será excluído.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeleting}
+              onClick={(event) => {
+                event.preventDefault();
+                handleConfirmDelete();
+              }}
+              className={cn(buttonVariants({ variant: "destructive" }))}
+            >
+              Excluir lançamento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   );
 };
