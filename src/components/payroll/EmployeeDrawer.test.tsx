@@ -335,7 +335,7 @@ describe("EmployeeDrawer", () => {
     expect(within(salariosBaseSection).getByTitle("SAL_CTPS — Salário CTPS")).toBeInTheDocument();
     expect(within(salariosBaseSection).getByTitle("SAL_G — Salário G")).toBeInTheDocument();
     expect(within(salariosBaseSection).getByTitle("SAL_FISCAL — Salário Fiscal")).toBeInTheDocument();
-    expect(salariosBaseSection.querySelector(".grid")?.classList.contains("lg:grid-cols-3")).toBe(true);
+    expect(salariosBaseSection.querySelector(".grid")?.classList.contains("lg:grid-cols-4")).toBe(true);
 
     const proventosSection = screen.getByText("Proventos").closest("section") as HTMLElement;
     expect(within(proventosSection).getByTitle("OUTROS — Outros Rendimentos")).toBeInTheDocument();

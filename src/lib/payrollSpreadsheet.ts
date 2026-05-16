@@ -25,6 +25,7 @@ export type CanonicalDerivedRubricIds = {
 type CanonicalDerivedCode = "salario_real" | "g2_complemento" | "salario_liquido";
 type CanonicalDerivedResolutionStatus =
   | "resolved_by_code"
+  | "resolved_by_legacy_code"
   | "resolved_by_legacy_name"
   | "missing"
   | "ambiguous_code"
@@ -79,6 +80,14 @@ const normalizeRubricKey = (value?: string) =>
     .trim()
     .toLowerCase();
 
+const canonicalLegacyCodeAliases: Record<CanonicalDerivedCode, string[]> = {
+  salario_real: [],
+  // Compatibilidade com cadastro técnico legado que nomeava a rubrica como “salário G2”.
+  // A resolução continua por code, não por label livre da UI.
+  g2_complemento: ["salario_g2_complemento"],
+  salario_liquido: [],
+};
+
 const canonicalLegacyNameAliases: Record<CanonicalDerivedCode, string[]> = {
   salario_real: ["salario real"],
   g2_complemento: ["g2 complemento"],
@@ -113,6 +122,25 @@ const diagnoseCanonicalRubric = (
       status: "resolved_by_code",
       resolvedRubricId: codeMatches[0].id,
       candidateRubricIds: codeMatches.map((rubric) => rubric.id),
+    };
+  }
+
+  const legacyCodeAliases = canonicalLegacyCodeAliases[canonicalCode];
+  const legacyCodeMatches = derivedRubrics.filter((rubric) => legacyCodeAliases.includes(normalizeRubricKey(rubric.code)));
+  if (legacyCodeMatches.length > 1) {
+    return {
+      code: canonicalCode,
+      status: "ambiguous_code",
+      resolvedRubricId: null,
+      candidateRubricIds: legacyCodeMatches.map((rubric) => rubric.id),
+    };
+  }
+  if (legacyCodeMatches.length === 1) {
+    return {
+      code: canonicalCode,
+      status: "resolved_by_legacy_code",
+      resolvedRubricId: legacyCodeMatches[0].id,
+      candidateRubricIds: legacyCodeMatches.map((rubric) => rubric.id),
     };
   }
 
@@ -151,7 +179,7 @@ const isCanonicalResolutionConsistent = (status: CanonicalDerivedResolutionStatu
   // Comentário: fallback legado por nome ainda identifica uma única rubrica calculada.
   // O alerta visual deve ficar restrito a ausência/ambiguidade que impeça a Central
   // de identificar com segurança os resultados canônicos.
-  status === "resolved_by_code" || status === "resolved_by_legacy_name";
+  status === "resolved_by_code" || status === "resolved_by_legacy_code" || status === "resolved_by_legacy_name";
 
 export const diagnoseCanonicalDerivedRubrics = (rubrics: Rubric[]): CanonicalDerivedRubricsDiagnosis => {
   const derivedRubrics = rubrics.filter((rubric) => rubric.isActive && rubric.nature === "calculada");
@@ -189,6 +217,13 @@ export const resolveCanonicalDerivedRubricIds = (rubrics: Rubric[]): CanonicalDe
         { rubricIds: item.candidateRubricIds, aliases: canonicalLegacyNameAliases[canonicalCode] }
       );
       return;
+    }
+    if (item.status === "resolved_by_legacy_code") {
+      warnCanonicalResolution(
+        `legacy-code-fallback:${canonicalCode}`,
+        `Rubrica canônica "${canonicalCode}" resolvida por code legado. Atualize para o code canônico quando possível.`,
+        { rubricId: item.resolvedRubricId, canonicalCode }
+      );
     }
     if (item.status === "resolved_by_legacy_name") {
       warnCanonicalResolution(
@@ -313,7 +348,8 @@ export const getEntryManualValues = (entry: PayrollEntry | null, rubrics: Rubric
 };
 
 // Comentário: função única de cálculo da Central.
-// Todas as visões (drawer, tabela, totais) devem consumir esta saída consolidada.
+// salario_real, g2_complemento e salario_liquido são rubricas canônicas: drawer,
+// tabela e resumo devem consumir estes mesmos campos resolvidos, sem cálculo paralelo.
 export const calculatePayroll = ({
   rubrics,
   manualValues,
