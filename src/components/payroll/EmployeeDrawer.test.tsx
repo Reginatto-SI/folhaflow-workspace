@@ -386,10 +386,123 @@ describe("EmployeeDrawer", () => {
       />
     );
 
-    expect(screen.getByText("Resultados do sistema usando configuração legada de rubricas. Consulte o responsável pelo sistema.")).toBeInTheDocument();
+    expect(screen.queryByText("Resultados do sistema usando configuração legada de rubricas. Consulte o responsável pelo sistema.")).not.toBeInTheDocument();
     expect(screen.getByText("Salário Real")).toBeInTheDocument();
     expect(screen.getByText("G2 Complemento")).toBeInTheDocument();
     expect(screen.getByText("Salário Líquido")).toBeInTheDocument();
+  });
+
+
+  it("não exibe alerta nos valores validados do legado quando os três resultados canônicos foram calculados", () => {
+    const salarioCtpsRubric: Rubric = {
+      ...baseRubric,
+      id: "rub-salario-ctps",
+      name: "Salário CTPS",
+      code: "SAL_CTPS",
+      classification: "salario_ctps",
+      order: 1,
+    };
+    const salarioGRubric: Rubric = {
+      ...earningRubric,
+      id: "rub-salario-g",
+      name: "Salário G",
+      code: "SAL_G",
+      classification: "salario_g",
+      order: 2,
+    };
+    const salarioFiscalRubric: Rubric = {
+      ...earningRubric,
+      id: "rub-salario-fiscal",
+      name: "Salário Fiscal",
+      code: "SAL_FISCAL",
+      classification: "outros_rendimentos",
+      order: 3,
+    };
+    const inssRubric: Rubric = {
+      ...deductionRubric,
+      id: "rub-inss",
+      name: "INSS",
+      code: "INSS",
+      classification: "inss",
+      order: 4,
+    };
+    const emprestimoRubric: Rubric = {
+      ...deductionRubric,
+      id: "rub-emprestimo",
+      name: "Empréstimo consignado",
+      code: "EMPRESTIMO",
+      classification: "emprestimos",
+      order: 5,
+    };
+    const valesRubric: Rubric = {
+      ...deductionRubric,
+      id: "rub-vales",
+      name: "Vales / Descontos",
+      code: "VALES",
+      classification: "vales",
+      order: 6,
+    };
+    const salarioRealRubric: Rubric = {
+      ...resultSalarioRealRubric,
+      calculationMethod: "valor_fixo",
+      fixedValue: 6553.22,
+      formulaItems: [],
+      order: 7,
+    };
+    const g2ComplementoRubric: Rubric = {
+      ...resultG2ComplementoRubric,
+      calculationMethod: "valor_fixo",
+      fixedValue: -1769.17,
+      formulaItems: [],
+      order: 8,
+    };
+    const salarioLiquidoRubric: Rubric = {
+      ...resultSalarioLiquidoRubric,
+      calculationMethod: "valor_fixo",
+      fixedValue: 1514.9,
+      formulaItems: [],
+      order: 9,
+    };
+
+    render(
+      <EmployeeDrawer
+        open
+        onOpenChange={() => {}}
+        entry={entry}
+        employee={employee}
+        rubrics={[
+          salarioCtpsRubric,
+          salarioGRubric,
+          salarioFiscalRubric,
+          inssRubric,
+          emprestimoRubric,
+          valesRubric,
+          salarioRealRubric,
+          g2ComplementoRubric,
+          salarioLiquidoRubric,
+        ]}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    const changeValue = (title: string, value: string) => {
+      const input = screen.getByTitle(title).closest("div")?.querySelector("input") as HTMLInputElement;
+      fireEvent.change(input, { target: { value } });
+      fireEvent.blur(input);
+    };
+
+    changeValue("SAL_CTPS — Salário CTPS", "3000");
+    changeValue("SAL_G — Salário G", "7000");
+    changeValue("SAL_FISCAL — Salário Fiscal", "3284,07");
+    changeValue("INSS — INSS", "446,78");
+    changeValue("EMPRESTIMO — Empréstimo consignado", "878,32");
+    changeValue("VALES — Vales / Descontos", "4160");
+
+    const resultadosSection = screen.getByText("Resultados").closest("section") as HTMLElement;
+    expect(within(resultadosSection).queryByText(/precisam ser revisados|Configuração canônica incompleta|configuração legada/i)).not.toBeInTheDocument();
+    expect(within(resultadosSection).getByText(/R\$\s*6\.553,22/)).toBeInTheDocument();
+    expect(within(resultadosSection).getByText(/-R\$\s*1\.769,17/)).toBeInTheDocument();
+    expect(within(resultadosSection).getByText(/R\$\s*1\.514,90/)).toBeInTheDocument();
   });
 
   it("mostra mensagem de ausência quando rubricas canônicas obrigatórias não existem", () => {
