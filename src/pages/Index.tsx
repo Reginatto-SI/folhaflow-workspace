@@ -23,8 +23,10 @@ const Index = () => {
     rubrics,
     updatePayrollEntry,
     addPayrollEntry,
+    deletePayrollEntry,
     selectedCompany,
     selectedMonth,
+    currentBatch,
   } = usePayroll();
 
   const [search, setSearch] = useState("");
