@@ -65,6 +65,22 @@ describe("resolveCanonicalDerivedRubricIds", () => {
     });
   });
 
+  it("resolve G2 por code técnico legado sem depender de label", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const rubrics: Rubric[] = [
+      makeDerivedRubric({ id: "r1", code: "salario_real", name: "Outro" }),
+      makeDerivedRubric({ id: "g2-legacy", code: "salario_g2_complemento", name: "Salário G2 Complemento" }),
+      makeDerivedRubric({ id: "r3", code: "salario_liquido", name: "Outro" }),
+    ];
+
+    const diagnosis = diagnoseCanonicalDerivedRubrics(rubrics);
+    const resolved = resolveCanonicalDerivedRubricIds(rubrics);
+
+    expect(diagnosis.g2_complemento.status).toBe("resolved_by_legacy_code");
+    expect(resolved.g2ComplementoId).toBe("g2-legacy");
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
   it("usa fallback legado por name quando code canônico não existe", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const rubrics: Rubric[] = [

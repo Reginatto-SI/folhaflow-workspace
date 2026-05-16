@@ -85,7 +85,8 @@ const NumericRubricInput: React.FC<{
   const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
-    setText(isFocused ? formatEditCurrency(value) : formatCurrencyDisplay(value));
+    if (isFocused) return;
+    setText(formatCurrencyDisplay(value));
   }, [isFocused, value]);
 
   const selectEditableValue = (input: HTMLInputElement) => {
@@ -113,7 +114,11 @@ const NumericRubricInput: React.FC<{
         className={`h-8 text-right tabular-nums text-sm font-medium ${inputClassName || ""}`}
         value={text}
         disabled={disabled}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          const nextText = event.target.value;
+          setText(nextText);
+          onChange({ rubricId: rubric.id, value: parseCurrency(nextText) });
+        }}
         onFocus={(event) => {
           setIsFocused(true);
           setText(formatEditCurrency(value));
@@ -362,8 +367,8 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-2xl lg:max-w-4xl overflow-hidden px-0">
-        <SheetHeader className="px-3.5 pb-2 border-b">
+      <SheetContent className="w-full sm:max-w-2xl lg:max-w-3xl overflow-hidden px-0">
+        <SheetHeader className="px-3 pb-2 border-b">
           <div className="min-w-0">
             <SheetTitle className="text-lg">{isCreateMode ? "Novo lançamento" : employee?.name}</SheetTitle>
             <SheetDescription className="text-xs">
@@ -373,8 +378,8 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             </SheetDescription>
           </div>
 
-          <div className="mt-1.5 flex w-full flex-wrap justify-end gap-2">
-            <Button onClick={handleSave} size="sm" className="h-8 rounded-md px-4" disabled={!canEditValues}>
+          <div className="mt-1.5 flex w-full flex-wrap justify-end gap-1.5">
+            <Button onClick={handleSave} size="sm" className="h-8 rounded-md px-3" disabled={!canEditValues}>
               <Save className="mr-1 h-4 w-4" />
               {isCreateMode ? "Criar" : "Salvar"}
             </Button>
@@ -382,7 +387,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span tabIndex={0}>
-                    <Button variant="outline" size="sm" disabled className="h-8 rounded-md px-4">
+                    <Button variant="outline" size="sm" disabled className="h-8 rounded-md px-3">
                       <FileText className="mr-1 h-4 w-4" />
                       Gerar recibo
                     </Button>
@@ -394,11 +399,11 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
           </div>
         </SheetHeader>
 
-        <div className="h-[calc(100vh-154px)] overflow-y-auto px-3.5 py-2.5 space-y-2.5">
-          {/* Layout compactado: largura/gaps menores mantêm 4 colunas em telas largas
-              sem deixar o drawer visualmente exagerado, com quebra responsiva segura. */}
+        <div className="h-[calc(100vh-148px)] overflow-y-auto px-3 py-2 space-y-2">
+          {/* Layout compactado: max-width/paddings/gaps menores preservam 4 colunas
+              em desktop sem ocupar largura excessiva da tela. */}
           {isCreateMode && (
-            <div className="space-y-1 border rounded-md p-2.5 bg-card">
+            <div className="space-y-1 border rounded-md p-2 bg-card">
               <Label className="text-xs">Funcionário</Label>
               <Select value={selectedEmployeeId} onValueChange={(value) => onSelectedEmployeeIdChange?.(value)}>
                 <SelectTrigger className="h-8">
@@ -416,9 +421,9 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
           )}
 
           {groupedRubrics.salariosBase.length > 0 && (
-            <section className="border rounded-md border-slate-200 bg-slate-50/70 p-2.5 space-y-1.5">
+            <section className="border rounded-md border-slate-200 bg-slate-50/70 p-2 space-y-1.5">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Salários Base</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
                 {groupedRubrics.salariosBase.map((rubric) => (
                   <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
                 ))}
@@ -427,7 +432,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
           )}
 
           {groupedRubrics.proventos.length > 0 && (
-            <section className="border rounded-md border-slate-200 bg-slate-50/70 p-2.5 space-y-1.5">
+            <section className="border rounded-md border-slate-200 bg-slate-50/70 p-2 space-y-1.5">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proventos</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
                 {groupedRubrics.proventos.map((rubric) => (
@@ -438,26 +443,26 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
           )}
 
           {groupedRubrics.descontos.length > 0 && (
-            <section className="border rounded-md border-red-100 bg-red-50/30 p-2.5 space-y-1.5">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-destructive">Descontos</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
-              {groupedRubrics.descontos.map((rubric) => (
-                <NumericRubricInput
-                  key={rubric.id}
-                  rubric={rubric}
-                  value={rubricValues[rubric.id] || 0}
-                  disabled={!canEditValues}
-                  labelClassName="text-destructive"
-                  onChange={updateRubricValue}
-                />
-              ))}
-            </div>
+            <section className="border rounded-md border-red-100 bg-red-50/30 p-2 space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-destructive">Descontos</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
+                {groupedRubrics.descontos.map((rubric) => (
+                  <NumericRubricInput
+                    key={rubric.id}
+                    rubric={rubric}
+                    value={rubricValues[rubric.id] || 0}
+                    disabled={!canEditValues}
+                    labelClassName="text-destructive"
+                    onChange={updateRubricValue}
+                  />
+                ))}
+              </div>
             </section>
           )}
 
           {/* Evita bloco vazio: resultados só aparecem quando há rubricas derivadas ativas carregadas. */}
           {(orderedDerivedRubrics.length > 0 || !!canonicalDiagnosticMessage) && (
-            <section className="border rounded-md bg-slate-100/80 p-2.5 space-y-1.5">
+            <section className="border rounded-md bg-slate-100/80 p-2 space-y-1.5">
               <div className="space-y-0.5">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resultados</h4>
                 {canonicalDiagnosticMessage && (
@@ -490,7 +495,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             </section>
           )}
 
-          <section className="border rounded-md bg-card p-2.5 space-y-1.5">
+          <section className="border rounded-md bg-card p-2 space-y-1.5">
             <Label htmlFor="payroll-notes" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Observação</Label>
             <Textarea
               id="payroll-notes"
