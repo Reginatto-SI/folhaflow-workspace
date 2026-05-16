@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 
 type EmployeeTab = "dados-funcionario" | "dados-funcionais" | "dados-bancarios" | "observacoes";
 
@@ -130,6 +131,13 @@ const Employees: React.FC = () => {
       return true;
     });
   }, [employees, filters]);
+
+  const { page, pageSize, total, paginatedItems: pagedEmployees, setPage, setPageSize, resetToFirstPage } =
+    usePagination(filteredEmployees);
+
+  useEffect(() => {
+    resetToFirstPage();
+  }, [filters, resetToFirstPage]);
 
   // Comentário: na transição gradual, filtros usam a empresa registrada do formulário (companyId),
   // garantindo catálogo correto por empresa mesmo que a empresa selecionada na listagem seja outra.
@@ -774,7 +782,7 @@ const Employees: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredEmployees.map((employee) => (
+              {pagedEmployees.map((employee) => (
                 <tr key={employee.id} className="border-b transition-colors hover:bg-muted/30">
                   <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">{employee.name}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{maskCpf(employee.cpf)}</td>
@@ -808,6 +816,16 @@ const Employees: React.FC = () => {
               )}
             </tbody>
           </table>
+          {filteredEmployees.length > 0 && (
+            <TablePagination
+              total={total}
+              page={page}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              itemLabel="funcionários"
+            />
+          )}
         </div>
       )}
     </div>
