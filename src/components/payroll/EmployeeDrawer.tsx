@@ -427,8 +427,68 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
               disabled={!canEditValues}
             />
           </section>
+
+          {showDeleteButton && (
+            <section className="pt-1">
+              <div className="flex items-center justify-between border-t pt-3">
+                <p className="text-[11px] text-muted-foreground">
+                  Remove apenas os valores deste funcionário nesta competência.
+                </p>
+                {canDelete ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setConfirmDeleteOpen(true)}
+                  >
+                    <Trash2 className="mr-1 h-4 w-4" />
+                    Excluir lançamento
+                  </Button>
+                ) : (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button variant="ghost" size="sm" disabled className="h-8 text-destructive">
+                            <Trash2 className="mr-1 h-4 w-4" />
+                            Excluir lançamento
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Folha finalizada não permite exclusão de lançamentos.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
+            </section>
+          )}
         </div>
       </SheetContent>
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lançamento da folha?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação removerá os valores lançados para este funcionário nesta competência. O cadastro do funcionário não será excluído.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeleting}
+              onClick={(event) => {
+                event.preventDefault();
+                handleConfirmDelete();
+              }}
+              className={cn(buttonVariants({ variant: "destructive" }))}
+            >
+              Excluir lançamento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   );
 };
