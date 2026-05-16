@@ -204,6 +204,8 @@ const Index = () => {
         companyName={selectedCompany?.name}
         competenceLabel={competenceLabel}
         onSave={handleSave}
+        onDelete={handleDeleteEntry}
+        canDelete={currentBatch?.status !== "finalizado"}
       />
       <Dialog open={newEntryOpen} onOpenChange={setNewEntryOpen}>
         <DialogContent className="sm:max-w-md">
