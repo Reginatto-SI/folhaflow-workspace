@@ -27,6 +27,7 @@ import {
 import { Department } from "@/types/payroll";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 
 const normalizeText = (value: string) => value.trim().replace(/\s+/g, " ");
 
@@ -86,6 +87,14 @@ const Departments: React.FC = () => {
   }, [departments]);
 
   const hasActiveFilters = Boolean(filters.search || filters.status || filters.companyId);
+
+  // Paginação client-side aplicada sobre o resultado já filtrado.
+  const { page, pageSize, total, paginatedItems: pagedDepartments, setPage, setPageSize, resetToFirstPage } =
+    usePagination(filteredDepartments);
+
+  React.useEffect(() => {
+    resetToFirstPage();
+  }, [filters, resetToFirstPage]);
 
   const openNew = () => {
     setEditing(null);
@@ -431,7 +440,7 @@ const Departments: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredDepartments.map((department) => (
+              {pagedDepartments.map((department) => (
                 <tr key={department.id} className="border-b transition-colors hover:bg-muted/30">
                   <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">{department.name}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{companyNameMap[department.companyId] || "-"}</td>
@@ -481,6 +490,16 @@ const Departments: React.FC = () => {
               )}
             </tbody>
           </table>
+          {filteredDepartments.length > 0 && (
+            <TablePagination
+              total={total}
+              page={page}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              itemLabel="setores"
+            />
+          )}
         </div>
       )}
     </div>

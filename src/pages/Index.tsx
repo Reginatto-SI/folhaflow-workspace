@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 
 const Index = () => {
   const {
@@ -73,6 +74,14 @@ const Index = () => {
       return true;
     });
   }, [centralEntries, allEmployees, search, filterDept, filterRole]);
+
+  // Paginação apenas visual: não altera totais (TotalsBar usa centralEntries) nem cálculos.
+  const { page, pageSize, total, paginatedItems: pagedEntries, setPage, setPageSize, resetToFirstPage } =
+    usePagination(filteredEntries);
+
+  React.useEffect(() => {
+    resetToFirstPage();
+  }, [search, filterDept, filterRole, selectedCompany?.id, selectedMonth.month, selectedMonth.year, resetToFirstPage]);
 
   const handleRowClick = useCallback((entry: PayrollEntry) => {
     setDrawerMode("edit");
@@ -204,13 +213,26 @@ const Index = () => {
         onClear={clearFilters}
       />
       <PayrollTable
-        entries={filteredEntries}
+        entries={pagedEntries}
         allEmployees={allEmployees}
         allDepartments={allDepartments}
         allJobRoles={allJobRoles}
         onRowClick={handleRowClick}
         rubrics={rubrics}
       />
+      {filteredEntries.length > 0 && (
+        <div className="mt-2 rounded-lg border bg-card">
+          <TablePagination
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            itemLabel="lançamentos"
+            className="border-t-0"
+          />
+        </div>
+      )}
       <EmployeeDrawer
         open={drawerOpen}
         onOpenChange={handleDrawerOpenChange}
