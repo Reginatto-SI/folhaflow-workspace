@@ -87,6 +87,19 @@ const NumericRubricInput: React.FC<{
     setText(isFocused ? formatEditCurrency(value) : formatCurrencyDisplay(value));
   }, [isFocused, value]);
 
+  const selectEditableValue = (input: HTMLInputElement) => {
+    if (disabled) return;
+
+    // Seleciona todo o conteúdo somente ao focar (TAB ou primeiro clique),
+    // permitindo substituir o valor sem impedir cliques posteriores para reposicionar o cursor.
+    const select = () => input.select();
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(select);
+      return;
+    }
+    window.setTimeout(select, 0);
+  };
+
   return (
     <div className="space-y-1">
       <Label
@@ -100,9 +113,10 @@ const NumericRubricInput: React.FC<{
         value={text}
         disabled={disabled}
         onChange={(event) => setText(event.target.value)}
-        onFocus={() => {
+        onFocus={(event) => {
           setIsFocused(true);
           setText(formatEditCurrency(value));
+          selectEditableValue(event.currentTarget);
         }}
         onBlur={() => {
           const parsed = parseCurrency(text);
@@ -118,6 +132,29 @@ const NumericRubricInput: React.FC<{
 // Regra operacional da Central simplificada: rubrica calculada (nature=calculada)
 // é tratada como campo derivado readonly na tela estilo planilha.
 const isDerivedRubric = (rubric: Rubric) => rubric.nature === "calculada";
+
+const normalizeRubricText = (value?: string | null) =>
+  (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const isBaseSalaryRubric = (rubric: Rubric) => {
+  const code = normalizeRubricText(rubric.code);
+  const name = normalizeRubricText(rubric.name);
+
+  // Separação apenas visual: mantém a mesma rubrica manual e só tira os salários
+  // base do card de Proventos para facilitar digitação no drawer.
+  return (
+    rubric.classification === "salario_ctps" ||
+    rubric.classification === "salario_g" ||
+    code.includes("salario_fiscal") ||
+    code.includes("sal_fiscal") ||
+    name.includes("salario fiscal")
+  );
+};
+
 const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   open,
   onOpenChange,
@@ -150,7 +187,10 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
     return {
       // Agrupamento guiado por metadado técnico da rubrica (type/nature), nunca por label.
-      proventos: editable.filter((rubric) => rubric.type === "provento"),
+      // A exceção abaixo é somente de apresentação: salários base ficam em card próprio,
+      // sem alterar cálculo, payload salvo ou regra das rubricas.
+      salariosBase: editable.filter((rubric) => rubric.type === "provento" && isBaseSalaryRubric(rubric)),
+      proventos: editable.filter((rubric) => rubric.type === "provento" && !isBaseSalaryRubric(rubric)),
       descontos: editable.filter((rubric) => rubric.type === "desconto"),
       resultados: activeRubricsOrdered.filter(isDerivedRubric),
     };
@@ -217,7 +257,8 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
   const orderedDerivedRubrics = useMemo(() => {
     // Comentário: drawer, tabela e totais precisam consumir a MESMA resolução canônica.
-    // Primeiro exibimos os 3 campos canônicos já resolvidos no helper compartilhado.
+    // A ordem visual do card Resultados é fixa: Salário Real, G2 Complemento e Salário Líquido.
+    // Isso altera apenas a apresentação; os valores continuam vindo da prévia calculada.
     const canonicalOrder = [
       canonicalDerivedRubricIds.salarioRealId,
       canonicalDerivedRubricIds.g2ComplementoId,
@@ -301,7 +342,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl overflow-hidden px-0">
+      <SheetContent className="w-full sm:max-w-3xl lg:max-w-5xl overflow-hidden px-0">
         <SheetHeader className="px-4 pb-2.5 border-b">
           <div className="min-w-0">
             <SheetTitle className="text-lg">{isCreateMode ? "Novo lançamento" : employee?.name}</SheetTitle>
@@ -334,6 +375,8 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
         </SheetHeader>
 
         <div className="h-[calc(100vh-162px)] overflow-y-auto px-4 py-3 space-y-3">
+          {/* Drawer mais largo e grids responsivos: os cards operacionais usam mais colunas
+              em telas grandes e retornam para 1/2 colunas em telas menores. */}
           {isCreateMode && (
             <div className="space-y-1 border rounded-md p-2.5 bg-card">
               <Label className="text-xs">Funcionário</Label>
@@ -352,10 +395,21 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             </div>
           )}
 
+          {groupedRubrics.salariosBase.length > 0 && (
+            <section className="border rounded-md border-slate-200 bg-slate-50/70 p-2.5 space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Salários Base</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                {groupedRubrics.salariosBase.map((rubric) => (
+                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
+                ))}
+              </div>
+            </section>
+          )}
+
           {groupedRubrics.proventos.length > 0 && (
             <section className="border rounded-md border-slate-200 bg-slate-50/70 p-2.5 space-y-1.5">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proventos</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
                 {groupedRubrics.proventos.map((rubric) => (
                   <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
                 ))}
@@ -366,7 +420,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
           {groupedRubrics.descontos.length > 0 && (
             <section className="border rounded-md border-red-100 bg-red-50/30 p-2.5 space-y-1.5">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-destructive">Descontos</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
               {groupedRubrics.descontos.map((rubric) => (
                 <NumericRubricInput
                   key={rubric.id}

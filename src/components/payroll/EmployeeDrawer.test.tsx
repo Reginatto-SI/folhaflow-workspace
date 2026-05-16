@@ -245,6 +245,113 @@ describe("EmployeeDrawer", () => {
     expect(payload.baseSalary).toBe(1234567.89);
   });
 
+
+  it("separa salários base dos proventos e mantém resultados na ordem operacional", () => {
+    const salarioCtpsRubric: Rubric = {
+      ...baseRubric,
+      id: "rub-salario-ctps-layout",
+      name: "Salário CTPS",
+      code: "SAL_CTPS",
+      classification: "salario_ctps",
+      order: 1,
+    };
+    const salarioGRubric: Rubric = {
+      ...earningRubric,
+      id: "rub-salario-g-layout",
+      name: "Salário G",
+      code: "SAL_G",
+      classification: "salario_g",
+      order: 2,
+    };
+    const salarioFiscalRubric: Rubric = {
+      ...earningRubric,
+      id: "rub-salario-fiscal-layout",
+      name: "Salário Fiscal",
+      code: "SAL_FISCAL",
+      classification: "outros_rendimentos",
+      order: 3,
+    };
+    const outrosRendimentosRubric: Rubric = {
+      ...earningRubric,
+      id: "rub-outros-rendimentos-layout",
+      name: "Outros Rendimentos",
+      code: "OUTROS",
+      classification: "outros_rendimentos",
+      order: 4,
+    };
+
+    render(
+      <EmployeeDrawer
+        open
+        onOpenChange={() => {}}
+        entry={entry}
+        employee={employee}
+        rubrics={[
+          salarioCtpsRubric,
+          salarioGRubric,
+          salarioFiscalRubric,
+          outrosRendimentosRubric,
+          deductionRubric,
+          resultSalarioRealRubric,
+          resultSalarioLiquidoRubric,
+          resultG2ComplementoRubric,
+        ]}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    const salariosBaseSection = screen.getByText("Salários Base").closest("section") as HTMLElement;
+    expect(within(salariosBaseSection).getByTitle("SAL_CTPS — Salário CTPS")).toBeInTheDocument();
+    expect(within(salariosBaseSection).getByTitle("SAL_G — Salário G")).toBeInTheDocument();
+    expect(within(salariosBaseSection).getByTitle("SAL_FISCAL — Salário Fiscal")).toBeInTheDocument();
+    expect(salariosBaseSection.querySelector(".grid")?.classList.contains("lg:grid-cols-3")).toBe(true);
+
+    const proventosSection = screen.getByText("Proventos").closest("section") as HTMLElement;
+    expect(within(proventosSection).getByTitle("OUTROS — Outros Rendimentos")).toBeInTheDocument();
+    expect(within(proventosSection).queryByTitle("SAL_CTPS — Salário CTPS")).not.toBeInTheDocument();
+    expect(proventosSection.querySelector(".grid")?.classList.contains("lg:grid-cols-4")).toBe(true);
+
+    const descontosSection = screen.getByText("Descontos").closest("section") as HTMLElement;
+    expect(descontosSection.querySelector(".grid")?.classList.contains("lg:grid-cols-4")).toBe(true);
+
+    const resultadosSection = screen.getByText("Resultados").closest("section") as HTMLElement;
+    const resultNames = within(resultadosSection)
+      .getAllByText(/Salário Real|G2 Complemento|Salário Líquido/)
+      .map((node) => node.textContent);
+    expect(resultNames).toEqual(["Salário Real", "G2 Complemento", "Salário Líquido"]);
+  });
+
+  it("seleciona todo o valor monetário editável ao receber foco sem reselecionar em clique posterior", async () => {
+    render(
+      <EmployeeDrawer
+        open
+        onOpenChange={() => {}}
+        entry={{
+          ...entry,
+          earnings: { [baseRubric.id]: 1500 },
+        }}
+        employee={employee}
+        rubrics={[baseRubric, earningRubric, deductionRubric]}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    const salaryInput = screen.getByTitle("SAL_BASE — Salário Base").closest("div")?.querySelector("input") as HTMLInputElement;
+
+    fireEvent.focus(salaryInput);
+
+    await waitFor(() => {
+      expect(salaryInput.selectionStart).toBe(0);
+      expect(salaryInput.selectionEnd).toBe(salaryInput.value.length);
+    });
+
+    salaryInput.setSelectionRange(3, 3);
+    fireEvent.click(salaryInput);
+
+    expect(salaryInput.selectionStart).toBe(3);
+    expect(salaryInput.selectionEnd).toBe(3);
+  });
+
   it("renderiza rubrica manual ativa nova no drawer e salva por tipo", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     const newManualRubric: Rubric = {
