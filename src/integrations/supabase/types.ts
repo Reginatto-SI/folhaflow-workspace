@@ -213,6 +213,7 @@ export type Database = {
           company_id: string
           created_at: string
           id: string
+          is_archived: boolean
           month: number
           status: string
           updated_at: string
@@ -222,6 +223,7 @@ export type Database = {
           company_id: string
           created_at?: string
           id?: string
+          is_archived?: boolean
           month: number
           status?: string
           updated_at?: string
@@ -231,6 +233,7 @@ export type Database = {
           company_id?: string
           created_at?: string
           id?: string
+          is_archived?: boolean
           month?: number
           status?: string
           updated_at?: string

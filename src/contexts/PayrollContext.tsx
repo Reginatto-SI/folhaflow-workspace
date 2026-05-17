@@ -42,7 +42,9 @@ interface PayrollContextType {
   setSelectedCompany: (company: Company) => void;
   selectedMonth: PayrollMonth;
   setSelectedMonth: (month: PayrollMonth) => void;
-  availableCompetences: PayrollMonth[];
+  showArchivedPayrolls: boolean;
+  setShowArchivedPayrolls: (show: boolean) => void;
+  availableCompetences: PayrollBatch[];
   employees: Employee[];
   allEmployees: Employee[];
   departments: Department[];
@@ -56,6 +58,8 @@ interface PayrollContextType {
   allPayrollBatches: PayrollBatch[];
   duplicatePayroll: (input: PayrollDuplicationInput) => Promise<PayrollDuplicationResult>;
   updateCurrentBatchStatus: (status: PayrollBatch["status"]) => Promise<void>;
+  archiveCurrentBatch: () => Promise<void>;
+  restoreCurrentBatch: () => Promise<void>;
   payrollCatalogErrors: { departments?: string; jobRoles?: string; payrollEntries?: string };
   isLoading: boolean;
   loadError: string | null;
@@ -413,12 +417,14 @@ const mapPayrollBatchRowToModel = (row: {
   month: number;
   year: number;
   status: string;
+  is_archived?: boolean | null;
 }): PayrollBatch => ({
   id: row.id,
   companyId: row.company_id,
   month: row.month,
   year: row.year,
   status: row.status as PayrollBatch["status"],
+  isArchived: Boolean(row.is_archived),
 });
 
 // Comentário: a tabela de itens possui duas FKs para `rubricas`; usamos embed explícito para evitar ambiguidade no PostgREST.
@@ -427,6 +433,7 @@ const RUBRICA_SELECT_WITH_ITEMS =
   "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, nature, calculation_method, classification, fixed_value, percentage_value, percentage_base_rubrica_id, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
 
 const PAYROLL_ENTRY_SELECT = "id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary";
+const PAYROLL_BATCH_SELECT = "id, company_id, month, year, status, is_archived";
 
 const isSameCompetence = (a: PayrollMonth, b: PayrollMonth) => a.month === b.month && a.year === b.year;
 
@@ -451,6 +458,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [payrollCatalogErrors, setPayrollCatalogErrors] = useState<{ departments?: string; jobRoles?: string; payrollEntries?: string }>({});
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<PayrollMonth>({ month: 3, year: 2026 });
+  const [showArchivedPayrolls, setShowArchivedPayrolls] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -625,7 +633,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const payrollBatchesRequest = canOperatePayroll
       ? supabase
           .from("payroll_batches")
-          .select("id, company_id, month, year, status")
+          .select(PAYROLL_BATCH_SELECT)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [], error: null });
     const payrollEntriesRequest = canOperatePayroll
@@ -725,13 +733,12 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const availableCompetences = React.useMemo(() => {
     if (!selectedCompany) return [];
-    // Comentário: fonte de verdade da competência visível é a folha formal (payroll_batches).
-    // Não listamos meses "vazios" sem batch cadastrado para a empresa selecionada.
+    // Comentário: folhas arquivadas continuam no banco, mas ficam ocultas da visualização padrão.
     return allPayrollBatches
       .filter((batch) => batch.companyId === selectedCompany.id)
-      .map((batch) => ({ month: batch.month, year: batch.year }))
+      .filter((batch) => showArchivedPayrolls || !batch.isArchived)
       .sort((a, b) => (b.year - a.year) || (b.month - a.month));
-  }, [allPayrollBatches, selectedCompany]);
+  }, [allPayrollBatches, selectedCompany, showArchivedPayrolls]);
 
 
   const ensureCurrentBatch = useCallback(async (): Promise<PayrollBatch | null> => {
@@ -753,7 +760,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         },
         { onConflict: "company_id,month,year" }
       )
-      .select("id, company_id, month, year, status")
+      .select(PAYROLL_BATCH_SELECT)
       .single();
     if (error || !data) throw error;
 
@@ -774,6 +781,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const payrollEntries = React.useMemo(() => {
     if (!selectedCompany) return [];
+    // Comentário: consultas operacionais ignoram folha arquivada enquanto o filtro não estiver ativo.
+    if (currentBatch?.isArchived && !showArchivedPayrolls) return [];
     if (currentBatch) {
       return allPayrollEntries.filter(
         (entry) =>
@@ -791,7 +800,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         entry.month === selectedMonth.month &&
         entry.year === selectedMonth.year
     );
-  }, [allPayrollEntries, currentBatch, selectedCompany, selectedMonth]);
+  }, [allPayrollEntries, currentBatch, selectedCompany, selectedMonth, showArchivedPayrolls]);
 
   // PRD-00/01: a Central não chama mais recálculo operacional no backend.
   // O backend deve persistir/carregar; os totais gravados vêm do cálculo frontend do drawer.
@@ -861,12 +870,48 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .from("payroll_batches")
       .update({ status })
       .eq("id", currentBatch.id)
-      .select("id, company_id, month, year, status")
+      .select(PAYROLL_BATCH_SELECT)
       .single();
     if (error || !data) throw error;
 
     const mapped = mapPayrollBatchRowToModel(data);
     setAllPayrollBatches((prev) => prev.map((batch) => (batch.id === mapped.id ? mapped : batch)));
+  }, [currentBatch]);
+
+  const archiveCurrentBatch = useCallback(async () => {
+    if (!currentBatch) throw new Error("Nenhuma folha selecionada para arquivar.");
+    const { data, error } = await supabase
+      .from("payroll_batches")
+      // Comentário: arquivar marca a folha logicamente; nenhum lançamento é excluído.
+      .update({ is_archived: true })
+      .eq("id", currentBatch.id)
+      .select(PAYROLL_BATCH_SELECT)
+      .single();
+    if (error || !data) throw error;
+
+    const mapped = mapPayrollBatchRowToModel(data);
+    setAllPayrollBatches((prev) => prev.map((batch) => (batch.id === mapped.id ? mapped : batch)));
+
+    const nextActive = allPayrollBatches
+      .filter((batch) => batch.companyId === mapped.companyId && batch.id !== mapped.id && !batch.isArchived)
+      .sort((a, b) => (b.year - a.year) || (b.month - a.month))[0];
+    if (nextActive) setSelectedMonth({ month: nextActive.month, year: nextActive.year });
+  }, [allPayrollBatches, currentBatch]);
+
+  const restoreCurrentBatch = useCallback(async () => {
+    if (!currentBatch) throw new Error("Nenhuma folha selecionada para restaurar.");
+    const { data, error } = await supabase
+      .from("payroll_batches")
+      // Comentário: restauração apenas reativa a folha para uso operacional.
+      .update({ is_archived: false })
+      .eq("id", currentBatch.id)
+      .select(PAYROLL_BATCH_SELECT)
+      .single();
+    if (error || !data) throw error;
+
+    const mapped = mapPayrollBatchRowToModel(data);
+    setAllPayrollBatches((prev) => prev.map((batch) => (batch.id === mapped.id ? mapped : batch)));
+    setSelectedMonth({ month: mapped.month, year: mapped.year });
   }, [currentBatch]);
 
 
@@ -912,7 +957,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     for (const company of companiesToProcess) {
       const sourceBatch = allPayrollBatches.find(
-        (batch) => batch.companyId === company.id && isSameCompetence(batch, input.baseMonth)
+        (batch) => batch.companyId === company.id && !batch.isArchived && isSameCompetence(batch, input.baseMonth)
       );
       const targetBatch = allPayrollBatches.find(
         (batch) => batch.companyId === company.id && isSameCompetence(batch, input.targetMonth)
@@ -956,7 +1001,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
             // sem criar novo status e sem interferir nos cálculos/lançamentos copiados.
             status: "em_edicao",
           })
-          .select("id, company_id, month, year, status")
+          .select(PAYROLL_BATCH_SELECT)
           .single();
         if (batchError || !batchData) throw batchError;
 
@@ -1323,6 +1368,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setSelectedCompany,
         selectedMonth,
         setSelectedMonth,
+        showArchivedPayrolls,
+        setShowArchivedPayrolls,
         availableCompetences,
         employees,
         allEmployees,
@@ -1336,6 +1383,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         allPayrollBatches,
         duplicatePayroll,
         updateCurrentBatchStatus,
+        archiveCurrentBatch,
+        restoreCurrentBatch,
         payrollCatalogErrors,
         isLoading,
         loadError,

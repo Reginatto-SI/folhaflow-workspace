@@ -29,6 +29,9 @@ const Index = () => {
     deletePayrollEntry,
     selectedCompany,
     selectedMonth,
+    currentBatch,
+    showArchivedPayrolls,
+    availableCompetences,
   } = usePayroll();
 
   const [search, setSearch] = useState("");
@@ -236,14 +239,21 @@ const Index = () => {
         jobRoles={jobRoles}
         onClear={clearFilters}
       />
-      <PayrollTable
-        entries={pagedEntries}
-        allEmployees={allEmployees}
-        allDepartments={allDepartments}
-        allJobRoles={allJobRoles}
-        onRowClick={handleRowClick}
-        rubrics={rubrics}
-      />
+      {(!currentBatch || currentBatch.isArchived) && !showArchivedPayrolls && availableCompetences.length === 0 ? (
+        <div className="rounded-md border bg-card p-6 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">Nenhuma folha ativa encontrada para esta empresa.</p>
+          <p>Ative a visualização de arquivadas ou crie uma nova folha.</p>
+        </div>
+      ) : (
+        <PayrollTable
+          entries={pagedEntries}
+          allEmployees={allEmployees}
+          allDepartments={allDepartments}
+          allJobRoles={allJobRoles}
+          onRowClick={handleRowClick}
+          rubrics={rubrics}
+        />
+      )}
       {filteredEntries.length > 0 && (
         <div className="mt-2 rounded-lg border bg-card">
           <TablePagination
