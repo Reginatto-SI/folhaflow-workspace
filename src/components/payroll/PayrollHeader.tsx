@@ -2,7 +2,7 @@ import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText, Printer } from "lucide-react";
+import { Copy, Plus, FileText, Printer } from "lucide-react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -19,6 +19,7 @@ import { toast } from "sonner";
 interface PayrollHeaderProps {
   onNewEntry?: () => void;
   onGenerateReceipts?: () => void;
+  onDuplicatePayroll?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -34,7 +35,7 @@ const STATUS_OPTIONS: Array<{ value: "em_edicao" | "em_revisao" | "finalizado"; 
   { value: "finalizado", label: "Finalizado" },
 ];
 
-const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateReceipts }) => {
+const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateReceipts, onDuplicatePayroll }) => {
   const {
     activeCompanies,
     selectedCompany,
@@ -151,6 +152,10 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
         </Button>
 
         <div className="ml-auto flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={onDuplicatePayroll} className="h-8 px-3">
+            <Copy className="h-4 w-4 mr-1" />
+            Criar nova folha
+          </Button>
           <Button size="sm" onClick={onNewEntry} className="h-8 px-3">
             <Plus className="h-4 w-4 mr-1" />
             Novo lançamento
