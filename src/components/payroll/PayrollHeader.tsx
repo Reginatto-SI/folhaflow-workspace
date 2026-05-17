@@ -2,7 +2,7 @@ import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, Printer } from "lucide-react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
