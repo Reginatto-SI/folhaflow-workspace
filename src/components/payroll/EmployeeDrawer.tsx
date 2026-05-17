@@ -71,6 +71,8 @@ interface EmployeeDrawerProps {
   onDelete?: (id: string) => Promise<void>;
   canDelete?: boolean;
   onPreviewChange?: (entry: PayrollEntry | null) => void;
+  // Comentário: drawer apenas dispara a geração; recibo é renderizado fora (PRD-07).
+  onGenerateReceipt?: (entry: PayrollEntry) => void;
 }
 
 const NumericRubricInput: React.FC<{
