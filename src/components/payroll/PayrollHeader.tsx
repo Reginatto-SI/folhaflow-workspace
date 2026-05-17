@@ -2,7 +2,7 @@ import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Archive, CheckCircle2, Copy, FileText, MoreHorizontal, PencilLine, Plus, Printer } from "lucide-react";
+import { AlertTriangle, Archive, Building2, CalendarDays, CheckCircle2, Copy, FileText, MoreHorizontal, PencilLine, Plus, Printer, RotateCcw } from "lucide-react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -154,45 +154,75 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
   return (
     <TooltipProvider>
       <div className="flex flex-wrap items-center gap-2.5 mb-3">
-        {/* Combobox com busca: o usuário digita parte do nome da empresa para filtrar a lista. */}
-        <SearchableCombobox
-          value={selectedCompany?.id || ""}
-          items={companyItems}
-          placeholder="Selecione a empresa"
-          searchPlaceholder="Buscar empresa..."
-          emptyMessage="Nenhuma empresa encontrada."
-          className="w-[220px]"
-          onValueChange={(id) => {
-            const c = activeCompanies.find((c) => c.id === id);
-            if (c) setSelectedCompany(c);
-          }}
-        />
+        {/* Comentário: faixa compacta de contexto; mantém seletores e status com a mesma lógica operacional. */}
+        <div className="flex flex-wrap items-end gap-2.5 rounded-md border bg-muted/20 px-2.5 py-2">
+          <div className="w-full space-y-1 sm:w-[220px]">
+            <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <Building2 className="h-3 w-3" />
+              Empresa
+            </div>
+            {/* Combobox com busca: o usuário digita parte do nome da empresa para filtrar a lista. */}
+            <SearchableCombobox
+              value={selectedCompany?.id || ""}
+              items={companyItems}
+              placeholder="Selecione a empresa"
+              searchPlaceholder="Buscar empresa..."
+              emptyMessage="Nenhuma empresa encontrada."
+              className="h-8 py-0 font-medium text-foreground sm:w-[220px]"
+              onValueChange={(id) => {
+                const c = activeCompanies.find((c) => c.id === id);
+                if (c) setSelectedCompany(c);
+              }}
+            />
+          </div>
 
-        {/* Combobox com busca: aceita mês ou ano (ex: "março", "2026"). */}
-        <SearchableCombobox
-          value={monthValue}
-          items={monthItems}
-          placeholder="Selecione a competência"
-          searchPlaceholder="Buscar competência..."
-          emptyMessage="Nenhuma folha ativa encontrada."
-          className="w-[190px]"
-          onValueChange={(v) => {
-            if (!v) return;
-            const [m, y] = v.split("-").map(Number);
-            setSelectedMonth({ month: m, year: y });
-          }}
-        />
+          <div className="w-full space-y-1 sm:w-[190px]">
+            <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <CalendarDays className="h-3 w-3" />
+              Competência
+            </div>
+            {/* Combobox com busca: aceita mês ou ano (ex: "março", "2026"). */}
+            <SearchableCombobox
+              value={monthValue}
+              items={monthItems}
+              placeholder="Selecione a competência"
+              searchPlaceholder="Buscar competência..."
+              emptyMessage="Nenhuma folha cadastrada para esta empresa."
+              className="h-8 py-0 font-medium text-foreground sm:w-[190px]"
+              onValueChange={(v) => {
+                if (!v) return;
+                const [m, y] = v.split("-").map(Number);
+                setSelectedMonth({ month: m, year: y });
+              }}
+            />
+          </div>
 
-        {/* Comentário: badge virou controle operacional simples do status da folha. */}
-        <Button
-          type="button"
-          variant="outline"
-          className="h-8 px-3"
-          onClick={() => setStatusDialogOpen(true)}
-          disabled={!currentBatch}
-        >
-          <Badge variant="outline" className="text-xs font-medium">{statusLabel}</Badge>
-        </Button>
+          <div className="w-full space-y-1 sm:w-auto">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Status da folha
+            </div>
+            {/* Comentário: badge segue como controle operacional simples do status da folha. */}
+            <Button
+              type="button"
+              variant="outline"
+              className={cn("h-8 w-full justify-start px-2.5 py-0 sm:w-auto", currentStatusVisual.buttonClassName)}
+              onClick={() => setStatusDialogOpen(true)}
+              disabled={!currentBatch || currentBatch.isArchived}
+            >
+              <Badge variant="outline" className={cn("h-5 gap-1.5 text-xs font-medium", currentStatusVisual.badgeClassName)}>
+                <CurrentStatusIcon className="h-3 w-3" />
+                {statusLabel}
+              </Badge>
+            </Button>
+          </div>
+
+          {currentBatch?.isArchived && (
+            <div className="w-full space-y-1 sm:w-auto">
+              <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Arquivamento</div>
+              <Badge variant="secondary" className="h-8 px-2.5 text-xs font-medium">Arquivada</Badge>
+            </div>
+          )}
+        </div>
 
         <div className="ml-auto flex items-center gap-2">
           <Button
