@@ -30,7 +30,6 @@ const Index = () => {
     selectedCompany,
     selectedMonth,
     currentBatch,
-    showArchivedPayrolls,
     availableCompetences,
   } = usePayroll();
 
@@ -244,10 +243,10 @@ const Index = () => {
         jobRoles={jobRoles}
         onClear={clearFilters}
       />
-      {(!currentBatch || currentBatch.isArchived) && !showArchivedPayrolls && availableCompetences.length === 0 ? (
+      {!currentBatch && availableCompetences.length === 0 ? (
         <div className="rounded-md border bg-card p-6 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">Nenhuma folha ativa encontrada para esta empresa.</p>
-          <p>Ative a visualização de arquivadas ou crie uma nova folha.</p>
+          <p>Crie uma nova folha para continuar a operação.</p>
         </div>
       ) : (
         <PayrollTable

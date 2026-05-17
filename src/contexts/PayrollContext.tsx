@@ -42,8 +42,6 @@ interface PayrollContextType {
   setSelectedCompany: (company: Company) => void;
   selectedMonth: PayrollMonth;
   setSelectedMonth: (month: PayrollMonth) => void;
-  showArchivedPayrolls: boolean;
-  setShowArchivedPayrolls: (show: boolean) => void;
   availableCompetences: PayrollBatch[];
   employees: Employee[];
   allEmployees: Employee[];
@@ -458,7 +456,6 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [payrollCatalogErrors, setPayrollCatalogErrors] = useState<{ departments?: string; jobRoles?: string; payrollEntries?: string }>({});
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<PayrollMonth>({ month: 3, year: 2026 });
-  const [showArchivedPayrolls, setShowArchivedPayrolls] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -719,7 +716,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Comentário: empresas ativas precisam estar disponíveis antes dos callbacks que dependem delas.
   const activeCompanies = React.useMemo(() => companies.filter((c) => c.isActive), [companies]);
 
-  const currentBatch = React.useMemo(() => {
+  const selectedBatch = React.useMemo(() => {
     if (!selectedCompany) return null;
     return (
       allPayrollBatches.find(
@@ -731,19 +728,33 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     );
   }, [allPayrollBatches, selectedCompany, selectedMonth.month, selectedMonth.year]);
 
+  const currentBatch = React.useMemo(() => {
+    // Comentário: para o usuário operacional, folha arquivada equivale a exclusão visual.
+    return selectedBatch && !selectedBatch.isArchived ? selectedBatch : null;
+  }, [selectedBatch]);
+
   const availableCompetences = React.useMemo(() => {
     if (!selectedCompany) return [];
-    // Comentário: folhas arquivadas continuam no banco, mas ficam ocultas da visualização padrão.
+    // Comentário: regra padrão da Central: listar somente folhas ativas (não arquivadas).
     return allPayrollBatches
-      .filter((batch) => batch.companyId === selectedCompany.id)
-      .filter((batch) => showArchivedPayrolls || !batch.isArchived)
+      .filter((batch) => batch.companyId === selectedCompany.id && !batch.isArchived)
       .sort((a, b) => (b.year - a.year) || (b.month - a.month));
-  }, [allPayrollBatches, selectedCompany, showArchivedPayrolls]);
+  }, [allPayrollBatches, selectedCompany]);
 
+  useEffect(() => {
+    if (!selectedCompany || !availableCompetences.length) return;
+    const hasSelectedActiveBatch = availableCompetences.some(
+      (batch) => batch.month === selectedMonth.month && batch.year === selectedMonth.year
+    );
+    if (hasSelectedActiveBatch) return;
+    const [mostRecentActiveBatch] = availableCompetences;
+    setSelectedMonth({ month: mostRecentActiveBatch.month, year: mostRecentActiveBatch.year });
+  }, [availableCompetences, selectedCompany, selectedMonth.month, selectedMonth.year]);
 
   const ensureCurrentBatch = useCallback(async (): Promise<PayrollBatch | null> => {
     if (!canOperatePayroll || !selectedCompany) return null;
     if (currentBatch) return currentBatch;
+    if (selectedBatch?.isArchived) return null;
 
     // Bloco 2 / Fase 1: a Central passa a ter uma folha formal por empresa+competência.
     // Nova folha nasce em `em_edicao` por padrão; esse status é apenas operacional/visual
@@ -777,12 +788,11 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return [mapped, ...withoutSameScope];
     });
     return mapped;
-  }, [canOperatePayroll, currentBatch, selectedCompany, selectedMonth.month, selectedMonth.year]);
+  }, [canOperatePayroll, currentBatch, selectedBatch, selectedCompany, selectedMonth.month, selectedMonth.year]);
 
   const payrollEntries = React.useMemo(() => {
     if (!selectedCompany) return [];
-    // Comentário: consultas operacionais ignoram folha arquivada enquanto o filtro não estiver ativo.
-    if (currentBatch?.isArchived && !showArchivedPayrolls) return [];
+    if (selectedBatch?.isArchived) return [];
     if (currentBatch) {
       return allPayrollEntries.filter(
         (entry) =>
@@ -800,7 +810,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         entry.month === selectedMonth.month &&
         entry.year === selectedMonth.year
     );
-  }, [allPayrollEntries, currentBatch, selectedCompany, selectedMonth, showArchivedPayrolls]);
+  }, [allPayrollEntries, currentBatch, selectedBatch, selectedCompany, selectedMonth]);
 
   // PRD-00/01: a Central não chama mais recálculo operacional no backend.
   // O backend deve persistir/carregar; os totais gravados vêm do cálculo frontend do drawer.
@@ -960,6 +970,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         (batch) => batch.companyId === company.id && !batch.isArchived && isSameCompetence(batch, input.baseMonth)
       );
       const targetBatch = allPayrollBatches.find(
+        // Comentário: folha arquivada é invisível na UI, mas ainda bloqueia a mesma empresa/competência.
         (batch) => batch.companyId === company.id && isSameCompetence(batch, input.targetMonth)
       );
 
@@ -970,8 +981,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       // Validação de competência duplicada: nunca sobrescrevemos uma folha já existente.
       if (targetBatch) {
-        if (input.mode === "single") throw new Error("Já existe uma folha para a nova competência nesta empresa.");
-        result.skipped.push({ companyId: company.id, companyName: company.name, reason: "duplicate_target", message: "Já possui folha na nova competência." });
+        if (input.mode === "single") throw new Error("Já existe uma folha para esta competência nesta empresa. Se ela foi arquivada por engano, solicite recuperação ao suporte.");
+        result.skipped.push({ companyId: company.id, companyName: company.name, reason: "duplicate_target", message: "Já possui folha ativa ou arquivada nesta competência." });
         continue;
       }
 
@@ -1368,8 +1379,6 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setSelectedCompany,
         selectedMonth,
         setSelectedMonth,
-        showArchivedPayrolls,
-        setShowArchivedPayrolls,
         availableCompetences,
         employees,
         allEmployees,
