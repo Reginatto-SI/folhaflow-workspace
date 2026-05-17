@@ -29,7 +29,6 @@ const Index = () => {
     deletePayrollEntry,
     selectedCompany,
     selectedMonth,
-    currentBatch,
   } = usePayroll();
 
   const [search, setSearch] = useState("");
@@ -272,7 +271,6 @@ const Index = () => {
         competenceLabel={competenceLabel}
         onSave={handleSave}
         onDelete={handleDeleteEntry}
-        canDelete={currentBatch?.status !== "finalizado"}
         onPreviewChange={handlePreviewChange}
         onGenerateReceipt={handleGenerateReceiptIndividual}
       />

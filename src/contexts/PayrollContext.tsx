@@ -739,6 +739,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (currentBatch) return currentBatch;
 
     // Bloco 2 / Fase 1: a Central passa a ter uma folha formal por empresa+competência.
+    // Nova folha nasce em `em_edicao` por padrão; esse status é apenas operacional/visual
+    // e não deve afetar cálculo, edição, recibos ou relatórios.
     // Usamos upsert conservador para evitar duplicidade e manter compatibilidade com o fluxo atual.
     const { data, error } = await supabase
       .from("payroll_batches")
@@ -852,6 +854,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const updateCurrentBatchStatus = useCallback(async (status: PayrollBatch["status"]) => {
+    // Status operacional/visual da Central: persistimos somente a sinalização escolhida,
+    // sem alterar lançamentos, cálculo, recibos ou relatórios.
     if (!currentBatch) throw new Error("Nenhuma folha selecionada para atualizar status.");
     const { data, error } = await supabase
       .from("payroll_batches")
@@ -948,6 +952,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
             company_id: company.id,
             month: input.targetMonth.month,
             year: input.targetMonth.year,
+            // Nova folha duplicada nasce em `em_edicao` (rascunho conceitual do PRD-09),
+            // sem criar novo status e sem interferir nos cálculos/lançamentos copiados.
             status: "em_edicao",
           })
           .select("id, company_id, month, year, status")
