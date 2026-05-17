@@ -34,7 +34,7 @@ const STATUS_OPTIONS: Array<{ value: "em_edicao" | "em_revisao" | "finalizado"; 
   { value: "finalizado", label: "Finalizado" },
 ];
 
-const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
+const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateReceipts }) => {
   const {
     activeCompanies,
     selectedCompany,
