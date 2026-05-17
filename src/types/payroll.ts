@@ -140,4 +140,6 @@ export interface PayrollBatch {
   year: number;
   // Comentário: status operacional simples da folha na Central.
   status: "em_edicao" | "em_revisao" | "finalizado";
+  // Comentário: arquivamento é estado lógico separado do status operacional; não exclui dados.
+  isArchived: boolean;
 }

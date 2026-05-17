@@ -117,7 +117,7 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
   const singleBaseOptions = React.useMemo(() => {
     if (!companyId) return [];
     return allPayrollBatches
-      .filter((batch) => batch.companyId === companyId)
+      .filter((batch) => batch.companyId === companyId && !batch.isArchived)
       .map((batch) => ({ month: batch.month, year: batch.year }))
       .sort((a, b) => (b.year - a.year) || (b.month - a.month));
   }, [allPayrollBatches, companyId]);
@@ -125,6 +125,7 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
   const allBaseOptions = React.useMemo(() => {
     const seen = new Map<string, PayrollMonth>();
     allPayrollBatches.forEach((batch) => {
+      if (batch.isArchived) return;
       const key = competenceValue(batch);
       if (!seen.has(key)) seen.set(key, { month: batch.month, year: batch.year });
     });

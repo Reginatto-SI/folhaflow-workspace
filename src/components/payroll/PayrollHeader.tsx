@@ -2,7 +2,7 @@ import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Copy, Plus, FileText, Printer } from "lucide-react";
+import { Archive, Copy, FileText, MoreHorizontal, Plus, Printer, RotateCcw } from "lucide-react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
 interface PayrollHeaderProps {
@@ -43,12 +44,19 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
     selectedMonth,
     setSelectedMonth,
     availableCompetences,
+    showArchivedPayrolls,
+    setShowArchivedPayrolls,
     currentBatch,
     updateCurrentBatchStatus,
+    archiveCurrentBatch,
+    restoreCurrentBatch,
   } = usePayroll();
   const [statusDialogOpen, setStatusDialogOpen] = React.useState(false);
   const [statusDraft, setStatusDraft] = React.useState<"em_edicao" | "em_revisao" | "finalizado">("em_edicao");
   const [isSavingStatus, setIsSavingStatus] = React.useState(false);
+  const [archiveDialogOpen, setArchiveDialogOpen] = React.useState(false);
+  const [restoreDialogOpen, setRestoreDialogOpen] = React.useState(false);
+  const [isSavingArchiveState, setIsSavingArchiveState] = React.useState(false);
 
   // Comentário: PRD-05 §5.4 — apenas empresas ATIVAS aparecem no seletor da Central de Folha.
   const companyItems = React.useMemo(
@@ -62,7 +70,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
         const date = new Date(item.year, item.month - 1, 1);
         return {
           value: `${item.month}-${item.year}`,
-          label: date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+          label: `${date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}${item.isArchived ? " · Arquivada" : ""}`,
         };
       }),
     [availableCompetences],
@@ -82,6 +90,9 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
   }, [availableCompetences, hasSelectedMonthInOptions, setSelectedMonth]);
 
   const statusLabel = currentBatch ? (STATUS_LABEL[currentBatch.status] ?? currentBatch.status) : "Em edição";
+  const isCurrentBatchArchived = currentBatch?.isArchived === true;
+  const competenceLabel = new Date(selectedMonth.year, selectedMonth.month - 1, 1).toLocaleDateString("pt-BR", { month: "2-digit", year: "numeric" });
+  const companyName = selectedCompany?.name || "empresa selecionada";
 
   React.useEffect(() => {
     if (!currentBatch) {
@@ -105,6 +116,32 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
       toast.error("Não foi possível atualizar o status da folha.");
     } finally {
       setIsSavingStatus(false);
+    }
+  };
+
+  const handleArchiveCurrentBatch = async () => {
+    try {
+      setIsSavingArchiveState(true);
+      await archiveCurrentBatch();
+      toast.success("Folha arquivada com sucesso.");
+      setArchiveDialogOpen(false);
+    } catch {
+      toast.error("Não foi possível arquivar a folha.");
+    } finally {
+      setIsSavingArchiveState(false);
+    }
+  };
+
+  const handleRestoreCurrentBatch = async () => {
+    try {
+      setIsSavingArchiveState(true);
+      await restoreCurrentBatch();
+      toast.success("Folha restaurada com sucesso.");
+      setRestoreDialogOpen(false);
+    } catch {
+      toast.error("Não foi possível restaurar a folha.");
+    } finally {
+      setIsSavingArchiveState(false);
     }
   };
 
@@ -146,17 +183,36 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
           variant="outline"
           className="h-8 px-3"
           onClick={() => setStatusDialogOpen(true)}
-          disabled={!currentBatch}
+          disabled={!currentBatch || currentBatch.isArchived}
         >
           <Badge variant="outline" className="text-xs font-medium">{statusLabel}</Badge>
         </Button>
 
+        {currentBatch?.isArchived && (
+          <Badge variant="secondary" className="h-8 px-3 text-xs font-medium">Arquivada</Badge>
+        )}
+
         <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={onDuplicatePayroll} className="h-8 px-3">
-            <Copy className="h-4 w-4 mr-1" />
-            Criar nova folha
-          </Button>
-          <Button size="sm" onClick={onNewEntry} className="h-8 px-3">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span tabIndex={isCurrentBatchArchived ? 0 : undefined}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onDuplicatePayroll}
+                  className="h-8 px-3"
+                  disabled={isCurrentBatchArchived}
+                >
+                  <Copy className="h-4 w-4 mr-1" />
+                  Criar nova folha
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {isCurrentBatchArchived && (
+              <TooltipContent>Restaure a folha ou selecione uma folha ativa para criar nova folha.</TooltipContent>
+            )}
+          </Tooltip>
+          <Button size="sm" onClick={onNewEntry} className="h-8 px-3" disabled={!currentBatch || currentBatch.isArchived}>
             <Plus className="h-4 w-4 mr-1" />
             Novo lançamento
           </Button>
@@ -167,7 +223,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
             variant="outline"
             className="h-8 px-3"
             onClick={onGenerateReceipts}
-            disabled={!currentBatch || !onGenerateReceipts}
+            disabled={!currentBatch || currentBatch.isArchived || !onGenerateReceipts}
           >
             <Printer className="h-4 w-4 mr-1" />
             Gerar recibos
@@ -184,6 +240,33 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
             </TooltipTrigger>
             <TooltipContent>Disponível em sprint futura (PRD-08).</TooltipContent>
           </Tooltip>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="h-8 w-8 p-0" aria-label="Mais ações da folha">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuCheckboxItem
+                checked={showArchivedPayrolls}
+                onCheckedChange={(checked) => setShowArchivedPayrolls(checked === true)}
+              >
+                Mostrar arquivadas
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              {currentBatch?.isArchived ? (
+                <DropdownMenuItem onClick={() => setRestoreDialogOpen(true)}>
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Restaurar folha
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => setArchiveDialogOpen(true)} disabled={!currentBatch}>
+                  <Archive className="mr-2 h-4 w-4" />
+                  Arquivar folha atual
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
@@ -210,6 +293,45 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
             </Button>
             <Button onClick={handleSaveStatus} disabled={isSavingStatus || !currentBatch}>
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Arquivar folha de pagamento?</DialogTitle>
+            <DialogDescription>
+              A folha da competência {competenceLabel} da empresa {companyName} será removida da visualização padrão, mas poderá ser restaurada depois.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Nenhum lançamento será excluído definitivamente.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setArchiveDialogOpen(false)} disabled={isSavingArchiveState}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleArchiveCurrentBatch} disabled={isSavingArchiveState || !currentBatch}>
+              Arquivar folha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Restaurar folha de pagamento?</DialogTitle>
+            <DialogDescription>
+              A folha da competência {competenceLabel} da empresa {companyName} voltará a aparecer na visualização padrão da Central de Folha.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRestoreDialogOpen(false)} disabled={isSavingArchiveState}>
+              Cancelar
+            </Button>
+            <Button onClick={handleRestoreCurrentBatch} disabled={isSavingArchiveState || !currentBatch}>
+              Restaurar folha
             </Button>
           </DialogFooter>
         </DialogContent>
