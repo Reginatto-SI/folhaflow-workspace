@@ -155,6 +155,18 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
             <Plus className="h-4 w-4 mr-1" />
             Novo lançamento
           </Button>
+          {/* Comentário: recibos em lote — reutiliza o mesmo componente do recibo
+              individual; cada funcionário ocupa uma página A4 própria. */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 px-3"
+            onClick={onGenerateReceipts}
+            disabled={!currentBatch || !onGenerateReceipts}
+          >
+            <Printer className="h-4 w-4 mr-1" />
+            Gerar recibos
+          </Button>
           {/* Tooltip explica que relatório é PRD-08, fora do escopo desta sprint. */}
           <Tooltip>
             <TooltipTrigger asChild>
