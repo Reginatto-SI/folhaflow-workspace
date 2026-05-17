@@ -30,7 +30,8 @@ export interface ReceiptProps {
 const Receipt: React.FC<ReceiptProps> = ({ entry, employee, company, department, jobRole, rubrics, isLast }) => {
   const data = buildReceiptData(entry, rubrics);
   const competencia = formatCompetencia(entry.month, entry.year);
-  const observacao = (entry.notes && entry.notes.trim()) || `Saldo salário - ${competencia}`;
+  // Comentário: observação do recibo é fixa por competência; não vem do Drawer/lançamento.
+  const observacao = `Saldo salário - ${competencia}`;
 
   return (
     <div
@@ -67,7 +68,7 @@ const Receipt: React.FC<ReceiptProps> = ({ entry, employee, company, department,
             {data.lines.map((line, idx) => (
               <tr key={idx} className={line.highlight ? "verba-total" : ""}>
                 <td className="vl">{line.prefix ? `${line.prefix} ${line.label}` : line.label}</td>
-                <td className="vv">{line.value > 0 ? fmt(line.value) : ""}</td>
+                <td className="vv">{line.highlight || line.value !== 0 ? fmt(line.value) : ""}</td>
               </tr>
             ))}
           </tbody>
@@ -83,6 +84,8 @@ const Receipt: React.FC<ReceiptProps> = ({ entry, employee, company, department,
           <div className="sign-line" />
           <div className="sign-name">{employee.name}</div>
         </div>
+
+        <div className="receipt-footer">www.reginattosistemas.com.br - (65) 99210-2030</div>
       </div>
     </div>
   );
