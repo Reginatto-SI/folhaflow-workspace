@@ -16,6 +16,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface PayrollHeaderProps {
   onNewEntry?: () => void;
@@ -30,11 +31,36 @@ const STATUS_LABEL: Record<string, string> = {
   finalizado: "Finalizado",
 };
 
-const STATUS_OPTIONS: Array<{ value: "em_edicao" | "em_revisao" | "finalizado"; label: string }> = [
+type PayrollStatus = "em_edicao" | "em_revisao" | "finalizado";
+
+const STATUS_OPTIONS: Array<{ value: PayrollStatus; label: string }> = [
   { value: "em_edicao", label: "Em edição" },
   { value: "em_revisao", label: "Em revisão" },
   { value: "finalizado", label: "Finalizado" },
 ];
+
+const STATUS_VISUAL: Record<PayrollStatus, { icon: React.ElementType; badgeClassName: string; buttonClassName: string }> = {
+  em_edicao: {
+    icon: PencilLine,
+    badgeClassName: "border-sky-200 bg-sky-50 text-sky-700",
+    buttonClassName: "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 hover:text-sky-800",
+  },
+  em_revisao: {
+    icon: AlertTriangle,
+    badgeClassName: "border-amber-200 bg-amber-50 text-amber-700",
+    buttonClassName: "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800",
+  },
+  finalizado: {
+    icon: CheckCircle2,
+    badgeClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    buttonClassName: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800",
+  },
+};
+
+const normalizePayrollStatus = (status?: string | null): PayrollStatus => {
+  if (status === "em_revisao" || status === "finalizado") return status;
+  return "em_edicao";
+};
 
 const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateReceipts, onDuplicatePayroll }) => {
   const {
@@ -52,7 +78,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
     restoreCurrentBatch,
   } = usePayroll();
   const [statusDialogOpen, setStatusDialogOpen] = React.useState(false);
-  const [statusDraft, setStatusDraft] = React.useState<"em_edicao" | "em_revisao" | "finalizado">("em_edicao");
+  const [statusDraft, setStatusDraft] = React.useState<PayrollStatus>("em_edicao");
   const [isSavingStatus, setIsSavingStatus] = React.useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = React.useState(false);
   const [restoreDialogOpen, setRestoreDialogOpen] = React.useState(false);
@@ -89,6 +115,11 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
     setSelectedMonth({ month: first.month, year: first.year });
   }, [availableCompetences, hasSelectedMonthInOptions, setSelectedMonth]);
 
+  const normalizedStatus = normalizePayrollStatus(currentBatch?.status);
+  const currentStatusVisual = STATUS_VISUAL[normalizedStatus];
+  const CurrentStatusIcon = currentStatusVisual.icon;
+  const statusDraftVisual = STATUS_VISUAL[statusDraft];
+  const StatusDraftIcon = statusDraftVisual.icon;
   const statusLabel = currentBatch ? (STATUS_LABEL[currentBatch.status] ?? currentBatch.status) : "Em edição";
   const isCurrentBatchArchived = currentBatch?.isArchived === true;
   const competenceLabel = new Date(selectedMonth.year, selectedMonth.month - 1, 1).toLocaleDateString("pt-BR", { month: "2-digit", year: "numeric" });
@@ -99,11 +130,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
       setStatusDraft("em_edicao");
       return;
     }
-    if (currentBatch.status === "em_revisao" || currentBatch.status === "finalizado") {
-      setStatusDraft(currentBatch.status);
-      return;
-    }
-    setStatusDraft("em_edicao");
+    setStatusDraft(normalizePayrollStatus(currentBatch.status));
   }, [currentBatch]);
 
   const handleSaveStatus = async () => {
@@ -273,18 +300,31 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Alterar status da folha</DialogTitle>
-            <DialogDescription>Defina o status operacional da folha selecionada.</DialogDescription>
+            <DialogDescription>
+              Defina o status operacional da folha selecionada. Ele é apenas visual e não afeta cálculo, edição, recibos ou relatórios.
+            </DialogDescription>
           </DialogHeader>
-          <Select value={statusDraft} onValueChange={(value) => setStatusDraft(value as typeof statusDraft)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione um status" />
+          <Select value={statusDraft} onValueChange={(value) => setStatusDraft(value as PayrollStatus)}>
+            <SelectTrigger className={cn("h-11", statusDraftVisual.badgeClassName)}>
+              <Badge variant="outline" className={cn("gap-1.5 font-semibold", statusDraftVisual.badgeClassName)}>
+                <StatusDraftIcon className="h-3.5 w-3.5" />
+                {STATUS_LABEL[statusDraft]}
+              </Badge>
             </SelectTrigger>
             <SelectContent>
-              {STATUS_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
+              {STATUS_OPTIONS.map((option) => {
+                const optionVisual = STATUS_VISUAL[option.value];
+                const OptionIcon = optionVisual.icon;
+
+                return (
+                  <SelectItem key={option.value} value={option.value}>
+                    <Badge variant="outline" className={cn("gap-1.5 font-semibold", optionVisual.badgeClassName)}>
+                      <OptionIcon className="h-3.5 w-3.5" />
+                      {option.label}
+                    </Badge>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
           <DialogFooter>

@@ -281,7 +281,6 @@ const Index = () => {
         competenceLabel={competenceLabel}
         onSave={handleSave}
         onDelete={handleDeleteEntry}
-        canDelete={currentBatch?.status !== "finalizado"}
         onPreviewChange={handlePreviewChange}
         onGenerateReceipt={handleGenerateReceiptIndividual}
       />
