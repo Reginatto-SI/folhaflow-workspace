@@ -22,6 +22,9 @@ import { toast } from "sonner";
 const formatCompetence = (competence: PayrollMonth) =>
   new Date(competence.year, competence.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
+const formatCompetenceShort = (competence: PayrollMonth) =>
+  `${String(competence.month).padStart(2, "0")}/${competence.year}`;
+
 const competenceValue = (competence: PayrollMonth) => `${competence.month}-${competence.year}`;
 
 const parseCompetenceValue = (value: string): PayrollMonth => {
@@ -66,6 +69,12 @@ interface PayrollDuplicationDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+interface SuccessConfirmationState {
+  result: PayrollDuplicationResult;
+  baseCompetence: PayrollMonth;
+  targetCompetence: PayrollMonth;
+}
+
 const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ open, onOpenChange }) => {
   const {
     activeCompanies,
@@ -74,6 +83,8 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
     allPayrollBatches,
     rubrics,
     duplicatePayroll,
+    setSelectedCompany,
+    setSelectedMonth,
   } = usePayroll();
 
   const [mode, setMode] = React.useState<"single" | "all">("single");
@@ -82,7 +93,7 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
   const [targetCompetence, setTargetCompetence] = React.useState<PayrollMonth | null>(null);
   const [selectedRubricIds, setSelectedRubricIds] = React.useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [result, setResult] = React.useState<PayrollDuplicationResult | null>(null);
+  const [successConfirmation, setSuccessConfirmation] = React.useState<SuccessConfirmationState | null>(null);
 
   const manualRubrics = React.useMemo(
     () => rubrics.filter(isManualRubric).sort((a, b) => a.order - b.order),
@@ -101,7 +112,6 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
     setBaseCompetence(selectedMonth);
     setTargetCompetence(null);
     setSelectedRubricIds(manualRubrics.map((rubric) => rubric.id));
-    setResult(null);
   }, [manualRubrics, open, selectedCompany?.id, selectedMonth]);
 
   const singleBaseOptions = React.useMemo(() => {
@@ -122,17 +132,17 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
   }, [allPayrollBatches]);
 
   const baseOptions = mode === "single" ? singleBaseOptions : allBaseOptions;
-  const summaryLines = result ? buildSummaryLines(result) : [];
+  const summaryLines = successConfirmation ? buildSummaryLines(successConfirmation.result) : [];
 
   React.useEffect(() => {
-    if (!open || result) return;
+    if (!open) return;
     if (baseOptions.length === 0) {
       setBaseCompetence(null);
       return;
     }
     if (baseCompetence && baseOptions.some((item) => competenceValue(item) === competenceValue(baseCompetence))) return;
     setBaseCompetence(baseOptions[0]);
-  }, [baseCompetence, baseOptions, open, result]);
+  }, [baseCompetence, baseOptions, open]);
 
   const toggleRubric = (rubricId: string, checked: boolean) => {
     setSelectedRubricIds((prev) => checked ? [...prev, rubricId] : prev.filter((id) => id !== rubricId));
@@ -164,9 +174,14 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
         targetMonth: targetCompetence!,
         selectedRubricIds,
       });
-      // Feedback visual central: mantemos o dialog aberto e trocamos o conteúdo para o resumo final.
-      setResult(duplicationResult);
-      toast.success(mode === "single" ? "Folha criada com sucesso." : "Processo concluído.");
+      // O modal de criação é fechado após sucesso para separar o fluxo de confirmação.
+      onOpenChange(false);
+      // O modal de sucesso confirma visualmente a folha recém-criada antes de navegar.
+      setSuccessConfirmation({
+        result: duplicationResult,
+        baseCompetence: baseCompetence!,
+        targetCompetence: targetCompetence!,
+      });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível criar a folha.");
     } finally {
@@ -180,43 +195,26 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
     setBaseCompetence(null);
   };
 
+  const createdPayroll = successConfirmation?.result.created[0] ?? null;
+  const canNavigateToCreatedPayroll = successConfirmation?.result.mode === "single" && !!createdPayroll;
+
+  const handleCloseSuccessConfirmation = () => {
+    if (successConfirmation && canNavigateToCreatedPayroll && createdPayroll) {
+      const targetCompany = activeCompanies.find((company) => company.id === createdPayroll.companyId);
+      if (targetCompany) {
+        // No modo Empresa específica, fechar o modal de sucesso também confirma a navegação.
+        setSelectedCompany(targetCompany);
+        setSelectedMonth(successConfirmation.targetCompetence);
+      }
+    }
+
+    setSuccessConfirmation(null);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        {result ? (
-          <>
-            <DialogHeader className="items-center text-center">
-              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                <CheckCircle2 className="h-7 w-7" />
-              </div>
-              <DialogTitle>{result.mode === "single" ? "Folha criada com sucesso" : "Processo concluído"}</DialogTitle>
-              <DialogDescription>
-                {result.mode === "single"
-                  ? "A nova folha de pagamento foi criada com base na competência selecionada."
-                  : "Resumo da criação de folhas por empresa."}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-              <ul className="space-y-2">
-                {summaryLines.map((line) => (
-                  <li key={line} className="flex items-center justify-between gap-3">
-                    <span>{line}</span>
-                  </li>
-                ))}
-              </ul>
-              {result.errors.length > 0 && (
-                <div className="mt-3 text-xs text-destructive">
-                  {result.errors.map((item) => (
-                    <p key={item.companyId}>{item.companyName}: {item.message}</p>
-                  ))}
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button onClick={() => onOpenChange(false)}>Fechar</Button>
-            </DialogFooter>
-          </>
-        ) : (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-2xl">
           <>
             <DialogHeader>
               <DialogTitle>Criar nova folha</DialogTitle>
@@ -316,9 +314,54 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
               </Button>
             </DialogFooter>
           </>
-        )}
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!successConfirmation} onOpenChange={(nextOpen) => { if (!nextOpen) handleCloseSuccessConfirmation(); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader className="items-center text-center">
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+              <CheckCircle2 className="h-7 w-7" />
+            </div>
+            <DialogTitle>{successConfirmation?.result.mode === "single" ? "Folha criada com sucesso" : "Processo concluído"}</DialogTitle>
+            <DialogDescription>
+              {successConfirmation?.result.mode === "single" && successConfirmation
+                ? `A nova folha da competência ${formatCompetenceShort(successConfirmation.targetCompetence)} foi criada com base na folha ${formatCompetenceShort(successConfirmation.baseCompetence)}.`
+                : "Resumo da criação de folhas por empresa."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {successConfirmation?.result.mode === "single" ? (
+            <p className="text-center text-sm text-muted-foreground">
+              Você será direcionado para a nova folha para continuar a conferência e edição dos valores.
+            </p>
+          ) : (
+            <div className="rounded-lg border bg-muted/30 p-4 text-sm">
+              <ul className="space-y-2">
+                {summaryLines.map((line) => (
+                  <li key={line} className="flex items-center justify-between gap-3">
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+              {successConfirmation && successConfirmation.result.errors.length > 0 && (
+                <div className="mt-3 text-xs text-destructive">
+                  {successConfirmation.result.errors.map((item) => (
+                    <p key={item.companyId}>{item.companyName}: {item.message}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button onClick={handleCloseSuccessConfirmation}>
+              {canNavigateToCreatedPayroll ? "Ir para nova folha" : "Fechar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
