@@ -71,6 +71,8 @@ interface EmployeeDrawerProps {
   onDelete?: (id: string) => Promise<void>;
   canDelete?: boolean;
   onPreviewChange?: (entry: PayrollEntry | null) => void;
+  // Comentário: drawer apenas dispara a geração; recibo é renderizado fora (PRD-07).
+  onGenerateReceipt?: (entry: PayrollEntry) => void;
 }
 
 const NumericRubricInput: React.FC<{
@@ -177,6 +179,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   onDelete,
   canDelete = true,
   onPreviewChange,
+  onGenerateReceipt,
 }) => {
   const isCreateMode = mode === "create";
   const [rubricValues, setRubricValues] = useState<Record<string, number>>({});
@@ -383,19 +386,18 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
               <Save className="mr-1 h-4 w-4" />
               {isCreateMode ? "Criar" : "Salvar"}
             </Button>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span tabIndex={0}>
-                    <Button variant="outline" size="sm" disabled className="h-8 rounded-md px-3">
-                      <FileText className="mr-1 h-4 w-4" />
-                      Gerar recibo
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Disponível em sprint futura (PRD-07).</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-md px-3"
+              disabled={isCreateMode || !entry || !onGenerateReceipt}
+              onClick={() => {
+                if (entry && onGenerateReceipt) onGenerateReceipt(entry);
+              }}
+            >
+              <FileText className="mr-1 h-4 w-4" />
+              Gerar recibo
+            </Button>
           </div>
         </SheetHeader>
 

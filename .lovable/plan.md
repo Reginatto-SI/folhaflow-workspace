@@ -1,75 +1,71 @@
-## Causa-raiz confirmada
+# Plano — Geração de Recibos de Pagamento
 
-Consultando o cadastro de rubricas calculadas no backend:
+## Princípio
+O recibo apenas **exibe** os valores que já estão calculados em memória pela mesma função `calculatePayroll` usada hoje pelo drawer e pela Central. Sem novo motor, sem recálculo paralelo, sem mudança de banco.
 
-```
-code | name                 | nature
------+----------------------+-----------
-14   | Salário Real         | calculada
-15   | Salário G2 complem.  | calculada
-16   | Salário Líquido      | calculada
-```
+## Arquivos novos
 
-A função única `resolveCanonicalDerivedRubricIds` em `src/lib/payrollSpreadsheet.ts` tenta resolver cada rubrica canônica por:
+1. **`src/lib/numberToWords.ts`**
+   - Utilitário isolado `valorPorExtenso(valor: number): string` em pt-BR ("R$ 2.996,57" → "dois mil novecentos e noventa e seis reais e cinquenta e sete centavos").
+   - Apenas para exibição no recibo. Não usado em cálculo.
 
-1. `code` exato (`salario_real`, `g2_complemento`, `salario_liquido`) — falha (códigos são `14/15/16`);
-2. `code` legado (`salario_g2_complemento` p/ G2) — falha;
-3. `name` legado normalizado contra aliases:
-   - `salario real` → casa com "Salário Real" ✓
-   - `salario liquido` → casa com "Salário Líquido" ✓
-   - `g2 complemento` → **NÃO casa** com "Salário G2 complem." (normaliza para `salario g2 complem.`) ✗
+2. **`src/components/payroll/Receipt.tsx`**
+   - Componente único reutilizável que renderiza **um** recibo fiel ao modelo legado:
+     - Cabeçalho com nome da empresa em caixa alta (bloco cinza).
+     - Tabela superior com: NOME, EMPRESA, SETOR, FUNÇÃO, MÊS (ex: "ABRIL-26"), VALOR RECEBIDO, Valor por Extenso, Observação.
+     - Bloco central "DISCRIMINAÇÃO DAS VERBAS" com bordas, listando todas as rubricas com valor ≠ 0 (proventos com `(+)`, descontos com `(-)`), salário base como "Salário Bruto", e linha final `(=) Líquido a receber` em destaque cinza.
+     - Texto "Declaro ter recebido a importância discriminada neste recibo."
+     - Linha de cidade/data + linha de assinatura + nome do funcionário.
+   - Props: `{ entry, employee, company, department, jobRole, rubrics, competence }`. Recebe valores já calculados; não chama `calculatePayroll` (a página pai monta os valores via `getEntryManualValues` + `calculatePayroll`, igual ao drawer).
+   - CSS dedicado em escopo `.receipt-sheet` (cores cinza claras `#dcdcdc`/`#eeeeee`, bordas pretas finas, fonte Arial/sans-serif compacta) — visual fiel ao legado, sem cards modernos / sombras / radius.
+   - Quebra de página: classe `print:break-after-page` (Tailwind) + CSS `page-break-after: always` em cada recibo.
 
-Como `g2ComplementoId` fica `null`, `calculatePayroll` retorna `g2Complemento = 0`. Por isso:
+3. **`src/components/payroll/ReceiptPrintView.tsx`**
+   - Página/visualização **fora do Drawer**: ocupa tela cheia (rota ou `Dialog` em modo full-screen sem chrome). Renderiza uma lista de `<Receipt />` (1 para individual, N para lote).
+   - Botões topo (escondidos no print via `print:hidden`): "Imprimir / Salvar PDF" (chama `window.print()`) e "Fechar".
+   - `@media print`: A4, margens 1cm, `body { background: white }`, oculta chrome do app.
+   - Abertura: via estado controlado por `Index.tsx` (`receiptsOpen`, `receiptsData`).
 
-- **Drawer** mostra o valor correto: ele itera **todas** as rubricas derivadas e lê `valuesByRubricId[rubric.id]` — o cálculo da fórmula (15.000) aparece independentemente do mapeamento canônico.
-- **Tabela** e **TotalsBar** consomem `result.g2Complemento` (que depende do mapeamento canônico) → `R$ 0,00`.
-- **Ordem do card Resultados no drawer** fica errada porque a G2 cai no bucket "nonCanonical" (vai pro fim), exibindo: Real → Líquido → G2.
+4. **`src/lib/receiptData.ts`**
+   - Função `buildReceiptData(entry, rubrics)` → retorna `{ baseSalary, lines: [{label, type:'+'|'-'|'=', value}], netSalary, valorExtenso }` usando `calculatePayroll(...)` sobre os valores manuais já persistidos. Compartilhada por individual e lote.
 
-## Correção mínima
+## Arquivos alterados
 
-Fonte única já existe (`resolveCanonicalDerivedRubricIds`). Não há cálculo paralelo a criar nem refator. A correção é ampliar o reconhecimento por nome dessa função única para que drawer, tabela e cards usem a mesma resolução.
+5. **`src/components/payroll/EmployeeDrawer.tsx`**
+   - Reativar o botão "Gerar recibo" (hoje desabilitado com tooltip PRD-07).
+   - Nova prop `onGenerateReceipt?: (entry: PayrollEntry) => void`. Ao clicar, fecha o drawer (opcional) e chama o handler com o `entry` atual já com a prévia aplicada (mesma fonte da `livePreviewEntry` usada hoje).
+   - Comentário: drawer apenas dispara; render do recibo é fora.
 
-### 1. `src/lib/payrollSpreadsheet.ts`
+6. **`src/components/payroll/PayrollHeader.tsx`**
+   - Adicionar botão "Gerar recibos" ao lado do "Gerar relatório" (este último permanece desabilitado). Ícone `Printer`. Disparar callback `onGenerateBatchReceipts` (prop nova) ou consumir do contexto via prop drilling a partir de `Index.tsx`.
 
-- Endurecer `normalizeRubricKey` para remover pontuação trivial (pontos, hífens), tratando "Salário G2 complem." e "Salário G2 complem" igualmente.
-- Expandir `canonicalLegacyNameAliases.g2_complemento` para cobrir as variantes legadas reais cadastradas:
-  - `"g2 complemento"`
-  - `"salario g2 complemento"`
-  - `"salario g2 complem"` (forma abreviada do cadastro atual)
-  - `"salario g2"`
-- Manter `salario_real` e `salario_liquido` como estão (já casam), apenas adicionando variantes equivalentes (`"salario real liquido"` não se aplica — manter o que existe).
+7. **`src/pages/Index.tsx`**
+   - Novo estado `receiptsState: { open: boolean; entries: PayrollEntry[] } | null`.
+   - `handleGenerateReceiptIndividual(entry)` → preenche com `[entry]` (usando `centralEntries` que já reflete prévia do drawer).
+   - `handleGenerateBatchReceipts()` → usa `centralEntries` filtrados apenas por empresa+competência atual (ignora busca/setor/cargo? **Decisão default: respeita os filtros aplicados na tela**, pois o usuário pode querer recortar; comentário no código deixa explícito).
+   - Renderiza `<ReceiptPrintView />` quando aberto.
+   - Passa handlers para `PayrollHeader` e `EmployeeDrawer`.
 
-Isso mantém:
-- regra oficial PRD-12 (resolução por `code` canônico é prioritária);
-- fallback legado explícito, rastreável e determinístico;
-- warning em DEV quando cai em fallback legado, sinalizando que o cadastro deve ser corrigido.
+## Dados usados (já existentes)
+- Funcionário: `allEmployees` (nome, cpf).
+- Empresa: `selectedCompany.name`.
+- Setor: `allDepartments` via `employee.departmentId` (fallback `employee.department`).
+- Função: `allJobRoles` via `employee.jobRoleId` (fallback `employee.role`).
+- Competência: formato "MÊS-AA" derivado de `selectedMonth` (`"ABRIL-26"`).
+- Valores das verbas: `entry.earnings`/`deductions` + `rubrics` ativos.
+- Observação: padrão `"Saldo salário - <COMPETÊNCIA>"`, **substituível por `entry.notes`** se preenchido.
+- Cidade na assinatura: hard-coded `"Sorriso - MT"` (igual ao modelo). **Pendência sinalizada no resumo final** — não há campo de cidade da empresa no schema.
 
-### 2. `src/components/payroll/EmployeeDrawer.tsx` — ordem visual do card "Resultados"
-
-Não há mudança de fórmula. `orderedDerivedRubrics` já posiciona canônicas na ordem `[salarioReal, g2Complemento, salarioLiquido]` quando todas resolvem. Com a correção #1, `g2ComplementoId` passa a resolver e a ordem visual passa a ser automaticamente:
-
-1. Salário Real
-2. Salário G2 complem.
-3. Salário Líquido
-
-Nenhuma alteração de código adicional no drawer é necessária para a ordem. (Caso o usuário queira forçar a ordem mesmo se algum canônico não resolver, podemos garantir a ordem fixa após a correção — verifico ao implementar.)
-
-## Validação
-
-1. `/central-de-folha` → empresa COND GRUPO → competência março/2026.
-2. Drawer do funcionário Edimar Reginato:
-   - Card Resultados na ordem: Salário Real → Salário G2 complem. → Salário Líquido.
-   - Salário G2 complem. = R$ 15.000,00.
-3. Coluna **G2 Complemento** da tabela: R$ 15.000,00 (mesma fonte).
-4. Card superior **G2 Complemento**: R$ 15.000,00 (`TotalsBar` consome a mesma função).
-5. Alterar um valor base no drawer e confirmar atualização imediata em tabela e cards (sem botão recalcular).
-6. Salvar, recarregar a página e confirmar que os três pontos continuam consistentes.
-7. Conferir no console (DEV) o warning de "resolved by legacy name" para `g2_complemento`, sinalizando que o cadastro deve ser corrigido para `code = g2_complemento` na origem.
+## Impressão
+- Apenas `window.print()` + CSS `@page { size: A4; margin: 1cm }`. Sem dependência nova (jspdf/html2pdf).
+- Cada `<Receipt />` envolto em `<div class="receipt-sheet">` com `page-break-after: always` exceto o último.
 
 ## Restrições respeitadas
+- Sem mudança em `payrollSpreadsheet.ts`, rubricas, banco, RLS, fórmulas, salvamento.
+- Sem nova rota obrigatória (usa overlay full-screen) — se preferir rota dedicada `/recibos`, é trivial trocar depois.
+- Mesmo componente `Receipt` serve individual e lote.
 
-- Sem novo motor de cálculo.
-- Sem botão de recalcular.
-- Sem cálculo paralelo.
-- Sem alteração em recibos, relatórios, autenticação ou cadastros.
-- Alteração isolada em 1 arquivo (`payrollSpreadsheet.ts`); drawer só recebe ajuste se a ordem precisar de blindagem extra.
+## Pendências a comunicar no resumo final
+- Cidade "Sorriso - MT" fixa (não há cadastro de cidade da empresa).
+- "Observação" usa `entry.notes` se houver; senão, padrão "Saldo salário - <COMPETÊNCIA>".
+- Lote respeita filtros ativos da Central (busca/setor/cargo) — comportamento documentado.

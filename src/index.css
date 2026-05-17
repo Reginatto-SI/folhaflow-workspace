@@ -113,3 +113,98 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* =========================================================================
+   Recibo de pagamento — layout fiel ao modelo legado.
+   Não modernizar: estilo replica recibo operacional usado pela empresa.
+   ========================================================================= */
+.receipt-sheet {
+  width: 190mm;
+  background: #ffffff;
+  color: #000;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 6mm;
+  box-sizing: border-box;
+}
+.receipt-frame {
+  border: 1px solid #000;
+  padding: 4mm 5mm;
+}
+.receipt-header {
+  background: #d9d9d9;
+  border: 1px solid #000;
+  padding: 4px 8px;
+  font-weight: bold;
+  font-size: 12px;
+  margin-bottom: 6mm;
+}
+.receipt-info {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 6mm;
+}
+.receipt-info td {
+  padding: 4px 6px;
+  vertical-align: middle;
+}
+.receipt-info td.rk {
+  width: 32%;
+  background: #d9d9d9;
+  border: 1px solid #000;
+  font-weight: bold;
+  font-size: 11px;
+}
+.receipt-info td.rv {
+  background: #ececec;
+  border: 1px solid #000;
+  font-size: 11px;
+}
+.receipt-verbas {
+  width: 70%;
+  margin: 4mm auto 6mm;
+  border-collapse: collapse;
+  border: 1px solid #000;
+}
+.receipt-verbas th {
+  background: #d9d9d9;
+  border: 1px solid #000;
+  padding: 4px 8px;
+  font-size: 11px;
+  text-align: center;
+}
+.receipt-verbas td {
+  border: 1px solid #000;
+  padding: 3px 8px;
+  font-size: 11px;
+}
+.receipt-verbas td.vl { width: 65%; }
+.receipt-verbas td.vv { width: 35%; text-align: right; font-variant-numeric: tabular-nums; }
+.receipt-verbas tr.verba-total td { background: #d9d9d9; font-weight: bold; }
+.receipt-decl { margin: 6mm 0 4mm; font-size: 11px; }
+.receipt-local { margin: 0 0 14mm; font-size: 11px; }
+.receipt-sign { margin-top: 14mm; text-align: center; }
+.receipt-sign .sign-line {
+  border-top: 1px solid #000;
+  width: 70%;
+  margin: 0 auto 4px;
+}
+.receipt-sign .sign-name { font-size: 11px; font-weight: bold; }
+
+@media print {
+  @page { size: A4; margin: 10mm; }
+  html, body { background: #ffffff !important; }
+  body * { visibility: hidden; }
+  .receipt-print-root, .receipt-print-root * { visibility: visible; }
+  .receipt-print-root {
+    position: absolute !important;
+    inset: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+  }
+  .receipt-toolbar { display: none !important; }
+  .receipt-print-canvas { padding: 0 !important; gap: 0 !important; }
+  .receipt-sheet { width: 100%; padding: 0; box-shadow: none; }
+}
+

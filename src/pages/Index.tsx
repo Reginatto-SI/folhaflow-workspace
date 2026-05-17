@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
+import ReceiptPrintView from "@/components/payroll/ReceiptPrintView";
 
 const Index = () => {
   const {
@@ -41,6 +42,8 @@ const Index = () => {
   const [newEntryOpen, setNewEntryOpen] = useState(false);
   const [newEmployeeId, setNewEmployeeId] = useState("");
   const [isSavingNewEntry, setIsSavingNewEntry] = useState(false);
+  // Comentário: estado dos recibos (individual = 1 entry, lote = N entries).
+  const [receiptsState, setReceiptsState] = useState<{ entries: PayrollEntry[]; title?: string } | null>(null);
 
   const competenceLabel = useMemo(
     () => new Date(selectedMonth.year, selectedMonth.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
@@ -105,6 +108,26 @@ const Index = () => {
     },
     [deletePayrollEntry]
   );
+
+  // Comentário: dispara visualização do recibo individual a partir do drawer.
+  // Usa a entrada com prévia já aplicada (mesma fonte do livePreviewEntry),
+  // garantindo que o recibo bata 100% com o que o usuário vê na tela.
+  const handleGenerateReceiptIndividual = useCallback((entry: PayrollEntry) => {
+    const live = livePreviewEntry && livePreviewEntry.id === entry.id ? livePreviewEntry : entry;
+    setReceiptsState({ entries: [live], title: "Recibo de pagamento" });
+    setDrawerOpen(false);
+  }, [livePreviewEntry]);
+
+  // Comentário: geração em lote — usa os lançamentos da Central já filtrados na tela
+  // (respeita busca/setor/cargo), 1 página A4 por recibo.
+  const handleGenerateReceiptsBatch = useCallback(() => {
+    if (!filteredEntries || filteredEntries.length === 0) {
+      toast.error("Não há lançamentos para gerar recibos.");
+      return;
+    }
+    setReceiptsState({ entries: filteredEntries, title: `Recibos — ${competenceLabel}` });
+  }, [competenceLabel, filteredEntries]);
+
 
   const availableEmployeesForEntry = useMemo(() => {
     const alreadyInPayroll = new Set(payrollEntries.map((entry) => entry.employeeId));
@@ -199,7 +222,7 @@ const Index = () => {
         <p className="text-sm text-muted-foreground mt-1">Selecione empresa e competência, clique em um funcionário para editar valores.</p>
       </div>
 
-      <PayrollHeader onNewEntry={handleOpenNewEntry} />
+      <PayrollHeader onNewEntry={handleOpenNewEntry} onGenerateReceipts={handleGenerateReceiptsBatch} />
       <TotalsBar entriesOverride={centralEntries} />
       <PayrollFilters
         search={search}
@@ -249,6 +272,18 @@ const Index = () => {
         onDelete={handleDeleteEntry}
         canDelete={currentBatch?.status !== "finalizado"}
         onPreviewChange={handlePreviewChange}
+        onGenerateReceipt={handleGenerateReceiptIndividual}
+      />
+      <ReceiptPrintView
+        open={!!receiptsState}
+        onClose={() => setReceiptsState(null)}
+        entries={receiptsState?.entries || []}
+        allEmployees={allEmployees}
+        allDepartments={allDepartments}
+        allJobRoles={allJobRoles}
+        company={selectedCompany}
+        rubrics={rubrics}
+        title={receiptsState?.title}
       />
       <Dialog open={newEntryOpen} onOpenChange={setNewEntryOpen}>
         <DialogContent className="sm:max-w-md">

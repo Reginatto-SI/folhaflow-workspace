@@ -2,7 +2,7 @@ import React from "react";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, Printer } from "lucide-react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 interface PayrollHeaderProps {
   onNewEntry?: () => void;
+  onGenerateReceipts?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -33,7 +34,7 @@ const STATUS_OPTIONS: Array<{ value: "em_edicao" | "em_revisao" | "finalizado"; 
   { value: "finalizado", label: "Finalizado" },
 ];
 
-const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
+const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateReceipts }) => {
   const {
     activeCompanies,
     selectedCompany,
@@ -153,6 +154,18 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry }) => {
           <Button size="sm" onClick={onNewEntry} className="h-8 px-3">
             <Plus className="h-4 w-4 mr-1" />
             Novo lançamento
+          </Button>
+          {/* Comentário: recibos em lote — reutiliza o mesmo componente do recibo
+              individual; cada funcionário ocupa uma página A4 própria. */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 px-3"
+            onClick={onGenerateReceipts}
+            disabled={!currentBatch || !onGenerateReceipts}
+          >
+            <Printer className="h-4 w-4 mr-1" />
+            Gerar recibos
           </Button>
           {/* Tooltip explica que relatório é PRD-08, fora do escopo desta sprint. */}
           <Tooltip>
