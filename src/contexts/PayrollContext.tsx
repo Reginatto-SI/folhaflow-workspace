@@ -998,14 +998,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
-    if (input.mode === "single") {
-      const created = result.created[0];
-      const company = activeCompanies.find((item) => item.id === input.companyId);
-      if (created && company) {
-        setSelectedCompany(company);
-        setSelectedMonth(input.targetMonth);
-      }
-    }
+    // A navegação visual para a nova folha é feita pelo dialog de sucesso da Central.
 
     if (input.mode === "all" && result.created.length === 0 && result.skipped.length === 0 && result.errors.length === 0) {
       throw new Error("Nenhuma folha foi processada.");
