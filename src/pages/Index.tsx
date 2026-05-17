@@ -9,7 +9,7 @@ import PayrollDuplicationDialog from "@/components/payroll/PayrollDuplicationDia
 import { PayrollEntry, Employee } from "@/types/payroll";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
@@ -30,7 +30,6 @@ const Index = () => {
     selectedCompany,
     selectedMonth,
     currentBatch,
-    showArchivedPayrolls,
     availableCompetences,
   } = usePayroll();
 
@@ -140,6 +139,11 @@ const Index = () => {
     return allEmployees.filter((employee) => employee.isActive && !alreadyInPayroll.has(employee.id));
   }, [allEmployees, payrollEntries]);
 
+  const availableEmployeeItemsForEntry = useMemo(
+    () => availableEmployeesForEntry.map((employee) => ({ value: employee.id, label: employee.name })),
+    [availableEmployeesForEntry]
+  );
+
   const handleDrawerOpenChange = useCallback((open: boolean) => {
     setDrawerOpen(open);
     if (!open) setLivePreviewEntry(null);
@@ -239,10 +243,10 @@ const Index = () => {
         jobRoles={jobRoles}
         onClear={clearFilters}
       />
-      {(!currentBatch || currentBatch.isArchived) && !showArchivedPayrolls && availableCompetences.length === 0 ? (
+      {!currentBatch && availableCompetences.length === 0 ? (
         <div className="rounded-md border bg-card p-6 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">Nenhuma folha ativa encontrada para esta empresa.</p>
-          <p>Ative a visualização de arquivadas ou crie uma nova folha.</p>
+          <p>Crie uma nova folha para continuar a operação.</p>
         </div>
       ) : (
         <PayrollTable
@@ -303,18 +307,17 @@ const Index = () => {
           </DialogHeader>
           <div className="space-y-3">
             <Label>Funcionário</Label>
-            <Select value={newEmployeeId} onValueChange={setNewEmployeeId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o funcionário" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableEmployeesForEntry.map((employee) => (
-                  <SelectItem key={employee.id} value={employee.id}>
-                    {employee.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Comentário: substituímos o dropdown simples pelo combobox pesquisável já usado no sistema,
+                mantendo exatamente a mesma lista de funcionários disponíveis para o novo lançamento. */}
+            <SearchableCombobox
+              value={newEmployeeId}
+              items={availableEmployeeItemsForEntry}
+              placeholder="Pesquisar funcionário..."
+              searchPlaceholder="Pesquisar funcionário..."
+              emptyMessage="Nenhum funcionário encontrado"
+              disabled={isSavingNewEntry || availableEmployeesForEntry.length === 0}
+              onValueChange={setNewEmployeeId}
+            />
             {availableEmployeesForEntry.length === 0 && (
               <p className="text-xs text-muted-foreground">Todos os funcionários ativos já possuem lançamento para esta competência.</p>
             )}
@@ -322,7 +325,7 @@ const Index = () => {
               <Button variant="outline" onClick={() => setNewEntryOpen(false)} disabled={isSavingNewEntry}>
                 Cancelar
               </Button>
-              <Button onClick={handleCreatePayrollEntry} disabled={isSavingNewEntry || availableEmployeesForEntry.length === 0}>
+              <Button onClick={handleCreatePayrollEntry} disabled={isSavingNewEntry || availableEmployeesForEntry.length === 0 || !newEmployeeId}>
                 Salvar lançamento
               </Button>
             </div>

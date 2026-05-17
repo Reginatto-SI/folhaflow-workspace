@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -70,18 +70,14 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
     selectedMonth,
     setSelectedMonth,
     availableCompetences,
-    showArchivedPayrolls,
-    setShowArchivedPayrolls,
     currentBatch,
     updateCurrentBatchStatus,
     archiveCurrentBatch,
-    restoreCurrentBatch,
   } = usePayroll();
   const [statusDialogOpen, setStatusDialogOpen] = React.useState(false);
   const [statusDraft, setStatusDraft] = React.useState<PayrollStatus>("em_edicao");
   const [isSavingStatus, setIsSavingStatus] = React.useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = React.useState(false);
-  const [restoreDialogOpen, setRestoreDialogOpen] = React.useState(false);
   const [isSavingArchiveState, setIsSavingArchiveState] = React.useState(false);
 
   // Comentário: PRD-05 §5.4 — apenas empresas ATIVAS aparecem no seletor da Central de Folha.
@@ -96,7 +92,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
         const date = new Date(item.year, item.month - 1, 1);
         return {
           value: `${item.month}-${item.year}`,
-          label: `${date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}${item.isArchived ? " · Arquivada" : ""}`,
+          label: date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
         };
       }),
     [availableCompetences],
@@ -115,13 +111,9 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
     setSelectedMonth({ month: first.month, year: first.year });
   }, [availableCompetences, hasSelectedMonthInOptions, setSelectedMonth]);
 
-  const normalizedStatus = normalizePayrollStatus(currentBatch?.status);
-  const currentStatusVisual = STATUS_VISUAL[normalizedStatus];
-  const CurrentStatusIcon = currentStatusVisual.icon;
   const statusDraftVisual = STATUS_VISUAL[statusDraft];
   const StatusDraftIcon = statusDraftVisual.icon;
   const statusLabel = currentBatch ? (STATUS_LABEL[currentBatch.status] ?? currentBatch.status) : "Em edição";
-  const isCurrentBatchArchived = currentBatch?.isArchived === true;
   const competenceLabel = new Date(selectedMonth.year, selectedMonth.month - 1, 1).toLocaleDateString("pt-BR", { month: "2-digit", year: "numeric" });
   const companyName = selectedCompany?.name || "empresa selecionada";
 
@@ -154,19 +146,6 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
       setArchiveDialogOpen(false);
     } catch {
       toast.error("Não foi possível arquivar a folha.");
-    } finally {
-      setIsSavingArchiveState(false);
-    }
-  };
-
-  const handleRestoreCurrentBatch = async () => {
-    try {
-      setIsSavingArchiveState(true);
-      await restoreCurrentBatch();
-      toast.success("Folha restaurada com sucesso.");
-      setRestoreDialogOpen(false);
-    } catch {
-      toast.error("Não foi possível restaurar a folha.");
     } finally {
       setIsSavingArchiveState(false);
     }
@@ -246,26 +225,16 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span tabIndex={isCurrentBatchArchived ? 0 : undefined}>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={onDuplicatePayroll}
-                  className="h-8 px-3"
-                  disabled={isCurrentBatchArchived}
-                >
-                  <Copy className="h-4 w-4 mr-1" />
-                  Criar nova folha
-                </Button>
-              </span>
-            </TooltipTrigger>
-            {isCurrentBatchArchived && (
-              <TooltipContent>Restaure a folha ou selecione uma folha ativa para criar nova folha.</TooltipContent>
-            )}
-          </Tooltip>
-          <Button size="sm" onClick={onNewEntry} className="h-8 px-3" disabled={!currentBatch || currentBatch.isArchived}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onDuplicatePayroll}
+            className="h-8 px-3"
+          >
+            <Copy className="h-4 w-4 mr-1" />
+            Criar nova folha
+          </Button>
+          <Button size="sm" onClick={onNewEntry} className="h-8 px-3" disabled={!currentBatch}>
             <Plus className="h-4 w-4 mr-1" />
             Novo lançamento
           </Button>
@@ -276,7 +245,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
             variant="outline"
             className="h-8 px-3"
             onClick={onGenerateReceipts}
-            disabled={!currentBatch || currentBatch.isArchived || !onGenerateReceipts}
+            disabled={!currentBatch || !onGenerateReceipts}
           >
             <Printer className="h-4 w-4 mr-1" />
             Gerar recibos
@@ -300,24 +269,10 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuCheckboxItem
-                checked={showArchivedPayrolls}
-                onCheckedChange={(checked) => setShowArchivedPayrolls(checked === true)}
-              >
-                Mostrar arquivadas
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuSeparator />
-              {currentBatch?.isArchived ? (
-                <DropdownMenuItem onClick={() => setRestoreDialogOpen(true)}>
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Restaurar folha
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem onClick={() => setArchiveDialogOpen(true)} disabled={!currentBatch}>
-                  <Archive className="mr-2 h-4 w-4" />
-                  Arquivar folha atual
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onClick={() => setArchiveDialogOpen(true)} disabled={!currentBatch}>
+                <Archive className="mr-2 h-4 w-4" />
+                Arquivar folha atual
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -369,10 +324,10 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
           <DialogHeader>
             <DialogTitle>Arquivar folha de pagamento?</DialogTitle>
             <DialogDescription>
-              A folha da competência {competenceLabel} da empresa {companyName} será removida da visualização padrão, mas poderá ser restaurada depois.
+              A folha da competência {competenceLabel} da empresa {companyName} será removida da Central de Folha.
             </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">Nenhum lançamento será excluído definitivamente.</p>
+          <p className="text-sm text-muted-foreground">Nenhum dado será excluído definitivamente, mas esta folha não ficará mais visível para o usuário.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setArchiveDialogOpen(false)} disabled={isSavingArchiveState}>
               Cancelar
@@ -384,24 +339,6 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
         </DialogContent>
       </Dialog>
 
-      <Dialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Restaurar folha de pagamento?</DialogTitle>
-            <DialogDescription>
-              A folha da competência {competenceLabel} da empresa {companyName} voltará a aparecer na visualização padrão da Central de Folha.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRestoreDialogOpen(false)} disabled={isSavingArchiveState}>
-              Cancelar
-            </Button>
-            <Button onClick={handleRestoreCurrentBatch} disabled={isSavingArchiveState || !currentBatch}>
-              Restaurar folha
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </TooltipProvider>
   );
 };
