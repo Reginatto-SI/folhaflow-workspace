@@ -5,6 +5,7 @@ import TotalsBar from "@/components/payroll/TotalsBar";
 import PayrollFilters from "@/components/payroll/PayrollFilters";
 import PayrollTable from "@/components/payroll/PayrollTable";
 import EmployeeDrawer from "@/components/payroll/EmployeeDrawer";
+import PayrollDuplicationDialog from "@/components/payroll/PayrollDuplicationDialog";
 import { PayrollEntry, Employee } from "@/types/payroll";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -40,6 +41,7 @@ const Index = () => {
   const [createEmployeeId, setCreateEmployeeId] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [newEntryOpen, setNewEntryOpen] = useState(false);
+  const [duplicationOpen, setDuplicationOpen] = useState(false);
   const [newEmployeeId, setNewEmployeeId] = useState("");
   const [isSavingNewEntry, setIsSavingNewEntry] = useState(false);
   // Comentário: estado dos recibos (individual = 1 entry, lote = N entries).
@@ -222,7 +224,7 @@ const Index = () => {
         <p className="text-sm text-muted-foreground mt-1">Selecione empresa e competência, clique em um funcionário para editar valores.</p>
       </div>
 
-      <PayrollHeader onNewEntry={handleOpenNewEntry} onGenerateReceipts={handleGenerateReceiptsBatch} />
+      <PayrollHeader onNewEntry={handleOpenNewEntry} onGenerateReceipts={handleGenerateReceiptsBatch} onDuplicatePayroll={() => setDuplicationOpen(true)} />
       <TotalsBar entriesOverride={centralEntries} />
       <PayrollFilters
         search={search}
@@ -274,6 +276,7 @@ const Index = () => {
         onPreviewChange={handlePreviewChange}
         onGenerateReceipt={handleGenerateReceiptIndividual}
       />
+      <PayrollDuplicationDialog open={duplicationOpen} onOpenChange={setDuplicationOpen} />
       <ReceiptPrintView
         open={!!receiptsState}
         onClose={() => setReceiptsState(null)}
