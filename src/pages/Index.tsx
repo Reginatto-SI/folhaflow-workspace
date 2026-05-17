@@ -109,6 +109,26 @@ const Index = () => {
     [deletePayrollEntry]
   );
 
+  // Comentário: dispara visualização do recibo individual a partir do drawer.
+  // Usa a entrada com prévia já aplicada (mesma fonte do livePreviewEntry),
+  // garantindo que o recibo bata 100% com o que o usuário vê na tela.
+  const handleGenerateReceiptIndividual = useCallback((entry: PayrollEntry) => {
+    const live = livePreviewEntry && livePreviewEntry.id === entry.id ? livePreviewEntry : entry;
+    setReceiptsState({ entries: [live], title: "Recibo de pagamento" });
+    setDrawerOpen(false);
+  }, [livePreviewEntry]);
+
+  // Comentário: geração em lote — usa os lançamentos da Central já filtrados na tela
+  // (respeita busca/setor/cargo), 1 página A4 por recibo.
+  const handleGenerateReceiptsBatch = useCallback(() => {
+    if (!filteredEntries || filteredEntries.length === 0) {
+      toast.error("Não há lançamentos para gerar recibos.");
+      return;
+    }
+    setReceiptsState({ entries: filteredEntries, title: `Recibos — ${competenceLabel}` });
+  }, [competenceLabel]);
+
+
   const availableEmployeesForEntry = useMemo(() => {
     const alreadyInPayroll = new Set(payrollEntries.map((entry) => entry.employeeId));
     // Comentário: empresa registrante é referência cadastral.
