@@ -113,7 +113,11 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
 
   const statusDraftVisual = STATUS_VISUAL[statusDraft];
   const StatusDraftIcon = statusDraftVisual.icon;
-  const statusLabel = currentBatch ? (STATUS_LABEL[currentBatch.status] ?? currentBatch.status) : "Em edição";
+  // Comentário: o status exibido no header precisa de fallback visual seguro para dados legados ou ausentes.
+  const currentStatus = normalizePayrollStatus(currentBatch?.status);
+  const currentStatusVisual = STATUS_VISUAL[currentStatus];
+  const CurrentStatusIcon = currentStatusVisual.icon;
+  const statusLabel = currentBatch ? (STATUS_LABEL[currentBatch.status] ?? STATUS_LABEL[currentStatus]) : STATUS_LABEL[currentStatus];
   const competenceLabel = new Date(selectedMonth.year, selectedMonth.month - 1, 1).toLocaleDateString("pt-BR", { month: "2-digit", year: "numeric" });
   const companyName = selectedCompany?.name || "empresa selecionada";
 
