@@ -47,32 +47,49 @@ const entry: PayrollEntry = {
   month: 4,
   year: 2026,
   baseSalary: 0,
-  earnings: { provento: 1200 },
-  deductions: {},
+  earnings: { salario_ctps: 1200, horas_extras: 250 },
+  deductions: { inss: 100 },
   notes: "observação não deve aparecer no recibo",
+  netSalary: 1350,
 };
 
 describe("Receipt", () => {
-  it("mantém rubricas ativas sem valor em branco e preserva rodapé correto", () => {
+  it("renderiza o modelo legado, mantém linhas vazias e não duplica sinais", () => {
     const rubrics = [
-      makeRubric({ id: "sem-valor", name: "Rubrica sem valor", order: 1 }),
-      makeRubric({ id: "provento", name: "Provento lançado", order: 2 }),
+      makeRubric({ id: "salario_ctps", name: "Salário CTPS", code: "SAL_CTPS", classification: "salario_ctps", order: 1 }),
+      makeRubric({ id: "horas_extras", name: "(+) Horas Extras", code: "HE", classification: "horas_extras", order: 2 }),
+      makeRubric({ id: "inss", name: "(-) INSS", code: "INSS", type: "desconto", classification: "inss", order: 3 }),
+      makeRubric({ id: "salario_liquido", name: "Salário Líquido", code: "salario_liquido", nature: "calculada", calculationMethod: "formula", order: 4 }),
     ];
 
     render(<Receipt entry={entry} employee={employee} company={company} rubrics={rubrics} isLast />);
 
-    const semValorRow = screen.getByText("(+) Rubrica sem valor").closest("tr");
-    expect(semValorRow).not.toBeNull();
-    expect(within(semValorRow as HTMLTableRowElement).getAllByRole("cell")[1]).toHaveTextContent(/^$/);
-    expect(semValorRow).not.toHaveTextContent("R$ 0,00");
+    expect(screen.getByText("Observação:").closest("tr")).toHaveTextContent("Saldo salário - ABRIL-26");
+    expect(screen.queryByText("observação não deve aparecer no recibo")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\(\+\) \(\+\)/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\(-\) \(-\)/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Salário Líquido$/i)).not.toBeInTheDocument();
+
+    const emptyRow = screen.getByText("(+) 1/3 de férias").closest("tr");
+    expect(emptyRow).not.toBeNull();
+    expect(within(emptyRow as HTMLTableRowElement).getAllByRole("cell")[1]).toHaveTextContent(/^$/);
+    expect(emptyRow).not.toHaveTextContent("R$ 0,00");
 
     const verbasTable = screen.getByText("DISCRIMINAÇÃO DAS VERBAS").closest("table");
     expect(verbasTable).not.toBeNull();
     const verbasRows = (verbasTable as HTMLTableElement).querySelectorAll("tbody tr");
     expect(Array.from(verbasRows).map((row) => row.textContent?.replace(/\s+/g, " ").trim())).toEqual([
-      "(+) Rubrica sem valor",
-      "(+) Provento lançadoR$ 1.200,00",
-      "(=) Líquido a receberR$ 1.200,00",
+      "Salário BrutoR$ 1.200,00",
+      "(+) Diarias/Gratificações",
+      "(+) 1/3 de férias",
+      "(+) Hora extrasR$ 250,00",
+      "(+) Premio/Desemp.",
+      "(-) INSSR$ 100,00",
+      "(-) Emprést. Consig.",
+      "(-) Adiant. Gerencial",
+      "(-) Vale/Desconto",
+      "(-) Descontos/Faltas",
+      "(=) Líquido a receberR$ 1.350,00",
     ]);
     expect(screen.getByText("www.reginattosistemas.com.br - (65) 99210-2030")).toBeInTheDocument();
   });
