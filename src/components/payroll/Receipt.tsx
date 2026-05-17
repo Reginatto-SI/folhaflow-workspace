@@ -9,6 +9,16 @@ import { buildReceiptData } from "@/lib/receiptData";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const stripLeadingReceiptSign = (label: string) =>
+  label.replace(/^\s*(\(\+\)|\(-\)|\(=\))\s*/u, "");
+
+const formatReceiptLineLabel = (prefix: string, label: string) => {
+  // Comentário: cadastro legado pode trazer o sinal no nome da rubrica; o recibo
+  // adiciona o sinal pela linha do modelo, então removemos o sinal original só na renderização.
+  const cleanLabel = stripLeadingReceiptSign(label);
+  return prefix ? `${prefix} ${cleanLabel}` : cleanLabel;
+};
+
 const MESES_PT = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
 
 const formatCompetencia = (month: number, year: number) => {
@@ -67,7 +77,7 @@ const Receipt: React.FC<ReceiptProps> = ({ entry, employee, company, department,
           <tbody>
             {data.lines.map((line, idx) => (
               <tr key={idx} className={line.highlight ? "verba-total" : ""}>
-                <td className="vl">{line.prefix ? `${line.prefix} ${line.label}` : line.label}</td>
+                <td className="vl">{formatReceiptLineLabel(line.prefix, line.label)}</td>
                 <td className="vv">{line.highlight || line.value !== 0 ? fmt(line.value) : ""}</td>
               </tr>
             ))}
