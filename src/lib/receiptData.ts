@@ -19,39 +19,25 @@ export type ReceiptData = {
   lines: ReceiptLine[];
 };
 
-const isBaseSalary = (rubric: Rubric) =>
-  rubric.classification === "salario_ctps" || rubric.classification === "salario_g";
+const getRubricPrefix = (rubric: Rubric): ReceiptLine["prefix"] => {
+  if (rubric.type === "provento") return "(+)";
+  if (rubric.type === "desconto") return "(-)";
+  return "";
+};
 
 export function buildReceiptData(entry: PayrollEntry, rubrics: Rubric[]): ReceiptData {
   const result = calculatePayrollFromEntry({ entry, rubrics });
   const activeRubrics = [...rubrics].filter((r) => r.isActive).sort((a, b) => a.order - b.order);
 
-  const lines: ReceiptLine[] = [];
+  // Comentário: a tabela do recibo segue o cadastro real de rubricas ativas,
+  // preservando a ordem cadastrada e exibindo linhas mesmo quando o valor é zero.
+  const lines: ReceiptLine[] = activeRubrics.map((rubric) => ({
+    label: rubric.name,
+    prefix: getRubricPrefix(rubric),
+    value: result.valuesByRubricId[rubric.id] || 0,
+  }));
 
-  // Soma dos salários-base como linha "Salário Bruto" (fiel ao modelo legado).
-  const baseSalary = activeRubrics
-    .filter((r) => r.nature === "base" && r.type === "provento" && isBaseSalary(r))
-    .reduce((sum, r) => sum + (result.valuesByRubricId[r.id] || 0), 0);
-
-  if (baseSalary > 0) {
-    lines.push({ label: "Salário Bruto", prefix: "", value: baseSalary });
-  }
-
-  // Outros proventos (não salário-base) com valor > 0.
-  activeRubrics
-    .filter((r) => r.nature === "base" && r.type === "provento" && !isBaseSalary(r))
-    .forEach((r) => {
-      const value = result.valuesByRubricId[r.id] || 0;
-      if (value > 0) lines.push({ label: r.name, prefix: "(+)", value });
-    });
-
-  // Descontos com valor > 0.
-  activeRubrics
-    .filter((r) => r.nature === "base" && r.type === "desconto")
-    .forEach((r) => {
-      const value = result.valuesByRubricId[r.id] || 0;
-      if (value > 0) lines.push({ label: r.name, prefix: "(-)", value });
-    });
+  const baseSalary = result.baseSalary;
 
   // Líquido: prioriza canônica salario_liquido; fallback netSalary.
   const netSalary = result.canonicalDerivedRubricIds.salarioLiquidoId
