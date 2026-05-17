@@ -386,19 +386,18 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
               <Save className="mr-1 h-4 w-4" />
               {isCreateMode ? "Criar" : "Salvar"}
             </Button>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span tabIndex={0}>
-                    <Button variant="outline" size="sm" disabled className="h-8 rounded-md px-3">
-                      <FileText className="mr-1 h-4 w-4" />
-                      Gerar recibo
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Disponível em sprint futura (PRD-07).</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-md px-3"
+              disabled={isCreateMode || !entry || !onGenerateReceipt}
+              onClick={() => {
+                if (entry && onGenerateReceipt) onGenerateReceipt(entry);
+              }}
+            >
+              <FileText className="mr-1 h-4 w-4" />
+              Gerar recibo
+            </Button>
           </div>
         </SheetHeader>
 
