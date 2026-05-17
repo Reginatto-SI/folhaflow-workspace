@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 interface PayrollHeaderProps {
   onNewEntry?: () => void;
+  onGenerateReceipts?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
