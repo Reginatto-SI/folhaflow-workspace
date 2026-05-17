@@ -272,6 +272,18 @@ const Index = () => {
         onDelete={handleDeleteEntry}
         canDelete={currentBatch?.status !== "finalizado"}
         onPreviewChange={handlePreviewChange}
+        onGenerateReceipt={handleGenerateReceiptIndividual}
+      />
+      <ReceiptPrintView
+        open={!!receiptsState}
+        onClose={() => setReceiptsState(null)}
+        entries={receiptsState?.entries || []}
+        allEmployees={allEmployees}
+        allDepartments={allDepartments}
+        allJobRoles={allJobRoles}
+        company={selectedCompany}
+        rubrics={rubrics}
+        title={receiptsState?.title}
       />
       <Dialog open={newEntryOpen} onOpenChange={setNewEntryOpen}>
         <DialogContent className="sm:max-w-md">
