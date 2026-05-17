@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
+import ReceiptPrintView from "@/components/payroll/ReceiptPrintView";
 
 const Index = () => {
   const {
