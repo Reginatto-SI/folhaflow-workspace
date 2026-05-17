@@ -126,7 +126,7 @@ const Index = () => {
       return;
     }
     setReceiptsState({ entries: filteredEntries, title: `Recibos — ${competenceLabel}` });
-  }, [competenceLabel]);
+  }, [competenceLabel, filteredEntries]);
 
 
   const availableEmployeesForEntry = useMemo(() => {
