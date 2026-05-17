@@ -179,6 +179,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   onDelete,
   canDelete = true,
   onPreviewChange,
+  onGenerateReceipt,
 }) => {
   const isCreateMode = mode === "create";
   const [rubricValues, setRubricValues] = useState<Record<string, number>>({});
