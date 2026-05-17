@@ -708,6 +708,9 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const departments = allDepartments.filter((department) => department.companyId === selectedCompany?.id);
   const jobRoles = allJobRoles.filter((jobRole) => jobRole.companyId === selectedCompany?.id);
 
+  // Comentário: empresas ativas precisam estar disponíveis antes dos callbacks que dependem delas.
+  const activeCompanies = React.useMemo(() => companies.filter((c) => c.isActive), [companies]);
+
   const currentBatch = React.useMemo(() => {
     if (!selectedCompany) return null;
     return (
@@ -1311,9 +1314,6 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setRubrics((prev) => prev.map((item) => (item.id === id ? mapRubricRowToModel(data as Parameters<typeof mapRubricRowToModel>[0]) : item)));
   }, [rubrics]);
-
-  // Comentário: empresas ativas para uso em filtros operacionais (Funcionários, Central de Folha) — PRD-05 §5.4.
-  const activeCompanies = React.useMemo(() => companies.filter((c) => c.isActive), [companies]);
 
   return (
     <PayrollContext.Provider
