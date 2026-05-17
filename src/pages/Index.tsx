@@ -42,6 +42,8 @@ const Index = () => {
   const [newEntryOpen, setNewEntryOpen] = useState(false);
   const [newEmployeeId, setNewEmployeeId] = useState("");
   const [isSavingNewEntry, setIsSavingNewEntry] = useState(false);
+  // Comentário: estado dos recibos (individual = 1 entry, lote = N entries).
+  const [receiptsState, setReceiptsState] = useState<{ entries: PayrollEntry[]; title?: string } | null>(null);
 
   const competenceLabel = useMemo(
     () => new Date(selectedMonth.year, selectedMonth.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
