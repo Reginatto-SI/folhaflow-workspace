@@ -42,18 +42,19 @@ const STATUS_OPTIONS: Array<{ value: PayrollStatus; label: string }> = [
 const STATUS_VISUAL: Record<PayrollStatus, { icon: React.ElementType; badgeClassName: string; buttonClassName: string }> = {
   em_edicao: {
     icon: PencilLine,
-    badgeClassName: "border-sky-200 bg-sky-50 text-sky-700",
-    buttonClassName: "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 hover:text-sky-800",
+    // Comentário: reforça contraste para status visual mais sólido e leitura profissional no header.
+    badgeClassName: "border-sky-300 bg-sky-100 text-sky-900",
+    buttonClassName: "border-sky-300 bg-sky-100 text-sky-900 hover:bg-sky-200 hover:text-sky-950",
   },
   em_revisao: {
     icon: AlertTriangle,
-    badgeClassName: "border-amber-200 bg-amber-50 text-amber-700",
-    buttonClassName: "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800",
+    badgeClassName: "border-amber-300 bg-amber-100 text-amber-900",
+    buttonClassName: "border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200 hover:text-amber-950",
   },
   finalizado: {
     icon: CheckCircle2,
-    badgeClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    buttonClassName: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800",
+    badgeClassName: "border-emerald-300 bg-emerald-100 text-emerald-900",
+    buttonClassName: "border-emerald-300 bg-emerald-100 text-emerald-900 hover:bg-emerald-200 hover:text-emerald-950",
   },
 };
 
