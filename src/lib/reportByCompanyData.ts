@@ -72,12 +72,16 @@ export function buildReportByCompanyData(params: {
   company: Company;
   month: PayrollMonth;
   batch: PayrollBatch | null;
-  allBatches: PayrollBatch[];
-  allEmployees: Employee[];
-  allEntries: PayrollEntry[];
-  rubrics: Rubric[];
+  allBatches?: PayrollBatch[];
+  allEmployees?: Employee[];
+  allEntries?: PayrollEntry[];
+  rubrics?: Rubric[];
 }): ReportByCompanyDataset {
-  const { company, month, batch, allBatches, allEmployees, allEntries, rubrics } = params;
+  const { company, month, batch } = params;
+  const allBatches = params.allBatches ?? [];
+  const allEmployees = params.allEmployees ?? [];
+  const allEntries = params.allEntries ?? [];
+  const rubrics = params.rubrics ?? [];
 
   const rubricById = new Map(rubrics.map((rubric) => [rubric.id, rubric]));
 
