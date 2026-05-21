@@ -41,15 +41,18 @@ const ReportsCompany: React.FC = () => {
     allEmployees,
     allPayrollEntries,
     rubrics,
+    isLoading,
     selectedCompany,
     setSelectedCompany,
     selectedMonth,
     setSelectedMonth,
   } = usePayroll();
 
+  const safeActiveCompanies = activeCompanies ?? [];
+
   const availableCompetences = React.useMemo(() => {
     if (!selectedCompany) return [];
-    return allPayrollBatches
+    return (allPayrollBatches ?? [])
       .filter((batch) => batch.companyId === selectedCompany.id && !batch.isArchived)
       .sort((a, b) => (b.year - a.year) || (b.month - a.month));
   }, [allPayrollBatches, selectedCompany]);
@@ -65,10 +68,10 @@ const ReportsCompany: React.FC = () => {
       company: selectedCompany,
       month: selectedMonth,
       batch: selectedBatch,
-      allBatches: allPayrollBatches,
-      allEmployees,
-      allEntries: allPayrollEntries,
-      rubrics,
+      allBatches: allPayrollBatches ?? [],
+      allEmployees: allEmployees ?? [],
+      allEntries: allPayrollEntries ?? [],
+      rubrics: rubrics ?? [],
     });
   }, [selectedCompany, selectedMonth, selectedBatch, allPayrollBatches, allEmployees, allPayrollEntries, rubrics]);
 
@@ -165,11 +168,11 @@ const ReportsCompany: React.FC = () => {
           <div className="space-y-2">
             <p className="text-sm font-medium">Empresa</p>
             <Select value={selectedCompany?.id || ""} onValueChange={(value) => {
-              const company = activeCompanies.find((item) => item.id === value);
+              const company = safeActiveCompanies.find((item) => item.id === value);
               if (company) setSelectedCompany(company);
             }}>
               <SelectTrigger><SelectValue placeholder="Selecione a empresa" /></SelectTrigger>
-              <SelectContent>{activeCompanies.map((company) => <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>)}</SelectContent>
+              <SelectContent>{safeActiveCompanies.map((company) => <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
@@ -201,7 +204,13 @@ const ReportsCompany: React.FC = () => {
       <Card>
         <CardHeader><CardTitle>{dataset?.title || "Relatório por Empresa"}</CardTitle></CardHeader>
         <CardContent>
-          {!dataset || dataset.rows.length === 0 ? (
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando dados do relatório...</p>
+          ) : !selectedCompany ? (
+            <p className="text-sm text-muted-foreground">Selecione uma empresa para visualizar o relatório.</p>
+          ) : availableCompetences.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Não há folhas não arquivadas para a empresa selecionada.</p>
+          ) : !dataset || dataset.rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">Não há lançamentos para a empresa/competência selecionadas.</p>
           ) : (
             <div className="overflow-x-auto">
