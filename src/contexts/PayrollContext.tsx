@@ -756,21 +756,28 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (currentBatch) return currentBatch;
     if (selectedBatch?.isArchived) return null;
 
+    // Comentário: folhas arquivadas ficam fora da operação normal.
+    // Aqui buscamos/criamos SOMENTE a folha ativa da empresa+competência, sem reaproveitar arquivada.
+    const existingActive = allPayrollBatches.find(
+      (batch) =>
+        batch.companyId === selectedCompany.id &&
+        batch.month === selectedMonth.month &&
+        batch.year === selectedMonth.year &&
+        !batch.isArchived
+    );
+    if (existingActive) return existingActive;
+
     // Bloco 2 / Fase 1: a Central passa a ter uma folha formal por empresa+competência.
     // Nova folha nasce em `em_edicao` por padrão; esse status é apenas operacional/visual
     // e não deve afetar cálculo, edição, recibos ou relatórios.
-    // Usamos upsert conservador para evitar duplicidade e manter compatibilidade com o fluxo atual.
     const { data, error } = await supabase
       .from("payroll_batches")
-      .upsert(
-        {
-          company_id: selectedCompany.id,
-          month: selectedMonth.month,
-          year: selectedMonth.year,
-          status: "em_edicao",
-        },
-        { onConflict: "company_id,month,year" }
-      )
+      .insert({
+        company_id: selectedCompany.id,
+        month: selectedMonth.month,
+        year: selectedMonth.year,
+        status: "em_edicao",
+      })
       .select(PAYROLL_BATCH_SELECT)
       .single();
     if (error || !data) throw error;
@@ -788,19 +795,16 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return [mapped, ...withoutSameScope];
     });
     return mapped;
-  }, [canOperatePayroll, currentBatch, selectedBatch, selectedCompany, selectedMonth.month, selectedMonth.year]);
+  }, [allPayrollBatches, canOperatePayroll, currentBatch, selectedBatch, selectedCompany, selectedMonth.month, selectedMonth.year]);
 
   const payrollEntries = React.useMemo(() => {
     if (!selectedCompany) return [];
     if (selectedBatch?.isArchived) return [];
     if (currentBatch) {
+      // Comentário: com batch formal ativo selecionado, a leitura operacional deve usar
+      // somente payroll_batch_id para não misturar lançamentos legados por competência.
       return allPayrollEntries.filter(
-        (entry) =>
-          entry.payrollBatchId === currentBatch.id ||
-          (!entry.payrollBatchId &&
-            entry.companyId === selectedCompany.id &&
-            entry.month === selectedMonth.month &&
-            entry.year === selectedMonth.year)
+        (entry) => entry.payrollBatchId === currentBatch.id
       );
     }
     // Compatibilidade transitória: mantém leitura antiga se ainda não existir batch carregado.
@@ -970,8 +974,9 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         (batch) => batch.companyId === company.id && !batch.isArchived && isSameCompetence(batch, input.baseMonth)
       );
       const targetBatch = allPayrollBatches.find(
-        // Comentário: folha arquivada é invisível na UI, mas ainda bloqueia a mesma empresa/competência.
-        (batch) => batch.companyId === company.id && isSameCompetence(batch, input.targetMonth)
+        // Comentário: folha arquivada deve ficar fora de todos os fluxos operacionais;
+        // na duplicação, só bloqueamos competência quando já existir folha NÃO arquivada.
+        (batch) => batch.companyId === company.id && !batch.isArchived && isSameCompetence(batch, input.targetMonth)
       );
 
       if (!sourceBatch) {
@@ -979,20 +984,16 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         result.skipped.push({ companyId: company.id, companyName: company.name, reason: "missing_base", message: "Sem folha base na competência informada." });
         continue;
       }
-      // Validação de competência duplicada: nunca sobrescrevemos uma folha já existente.
+      // Validação de competência duplicada: nunca sobrescrevemos uma folha operacional ativa.
       if (targetBatch) {
-        if (input.mode === "single") throw new Error("Já existe uma folha para esta competência nesta empresa. Se ela foi arquivada por engano, solicite recuperação ao suporte.");
-        result.skipped.push({ companyId: company.id, companyName: company.name, reason: "duplicate_target", message: "Já possui folha ativa ou arquivada nesta competência." });
+        if (input.mode === "single") throw new Error("Já existe uma folha ativa para esta competência nesta empresa.");
+        result.skipped.push({ companyId: company.id, companyName: company.name, reason: "duplicate_target", message: "Já possui folha ativa nesta competência." });
         continue;
       }
 
-      const sourceEntries = allPayrollEntries.filter(
-        (entry) => entry.payrollBatchId === sourceBatch.id || (
-          !entry.payrollBatchId &&
-          entry.companyId === company.id &&
-          isSameCompetence(entry, input.baseMonth)
-        )
-      );
+      // Comentário: quando existe folha base formal, duplicação copia somente lançamentos
+      // vinculados ao payroll_batch_id dela para evitar contaminação de dados legados.
+      const sourceEntries = allPayrollEntries.filter((entry) => entry.payrollBatchId === sourceBatch.id);
 
       if (sourceEntries.length === 0) {
         if (input.mode === "single") throw new Error("A folha base não possui funcionários/lançamentos para copiar.");
