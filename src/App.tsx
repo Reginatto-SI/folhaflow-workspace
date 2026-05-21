@@ -19,6 +19,7 @@ import SettingsPage from "./pages/SettingsPage";
 import UsersAdmin from "./pages/UsersAdmin";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import ReportsCompany from "./pages/ReportsCompany";
 
 const queryClient = new QueryClient();
 
@@ -92,6 +93,14 @@ const App = () => (
                             element={
                               <PermissionRoute permission="usuarios.manage">
                                 <UsersAdmin />
+                              </PermissionRoute>
+                            }
+                          />
+                          <Route
+                            path="/relatorios/por-empresa"
+                            element={
+                              <PermissionRoute permission="relatorios.view">
+                                <ReportsCompany />
                               </PermissionRoute>
                             }
                           />

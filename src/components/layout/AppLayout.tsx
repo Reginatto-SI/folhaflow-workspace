@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
   Settings,
   NotebookText,
+  FileText,
   Bell,
   LogOut,
   UserCircle,
@@ -76,6 +77,7 @@ type NavItem = {
 
 const mainNavItems: NavItem[] = [
   { to: "/central-de-folha", label: "Central de Folha", icon: FileSpreadsheet, permission: "folha.operar" },
+  { to: "/relatorios/por-empresa", label: "Relatórios", icon: FileText, permission: "relatorios.view" },
 ];
 
 const cadastrosNavItems: NavItem[] = [
@@ -99,6 +101,7 @@ const routeLabels: Record<string, string> = {
   "/funcoes-cargos": "Funções/Cargos",
   "/rubricas": "Rubricas",
   "/usuarios": "Usuários",
+  "/relatorios/por-empresa": "Relatórios",
   "/configuracoes": "Configurações",
 };
 
