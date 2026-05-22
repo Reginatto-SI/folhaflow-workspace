@@ -116,7 +116,7 @@ const formatPdfColumnLabel = (label: string): string => {
   const alias = PDF_LABEL_ALIASES[normalizePdfLabelKey(sanitized)];
   if (alias) return alias;
 
-  const firstTokenOperatorMatch = sanitized.match(/^([(+-)/\d]+)\s+(.+)$/);
+  const firstTokenOperatorMatch = sanitized.match(/^([(+\-)/\d]+)\s+(.+)$/);
   const operatorPrefix = firstTokenOperatorMatch ? firstTokenOperatorMatch[1] : "";
   const baseLabel = firstTokenOperatorMatch ? firstTokenOperatorMatch[2] : sanitized;
 
