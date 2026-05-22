@@ -40,6 +40,7 @@ const ReportsCompany: React.FC = () => {
     allPayrollBatches,
     allEmployees,
     allPayrollEntries,
+    payrollEntries,
     rubrics,
     isLoading,
     selectedCompany,
@@ -70,10 +71,42 @@ const ReportsCompany: React.FC = () => {
       batch: selectedBatch,
       allBatches: allPayrollBatches ?? [],
       allEmployees: allEmployees ?? [],
-      allEntries: allPayrollEntries ?? [],
+      // O relatório deve usar a mesma lista operacional da Central de Folha.
+      // Isso evita divergência entre o que a Central mostra e o que o relatório exporta.
+      allEntries: payrollEntries ?? [],
       rubrics: rubrics ?? [],
     });
-  }, [selectedCompany, selectedMonth, selectedBatch, allPayrollBatches, allEmployees, allPayrollEntries, rubrics]);
+  }, [selectedCompany, selectedMonth, selectedBatch, allPayrollBatches, allEmployees, payrollEntries, rubrics]);
+
+  React.useEffect(() => {
+    if (!import.meta.env.DEV) return;
+
+    console.table({
+      selectedCompanyId: selectedCompany?.id,
+      selectedCompanyName: selectedCompany?.name,
+      selectedMonth: selectedMonth?.month,
+      selectedYear: selectedMonth?.year,
+      selectedBatchId: selectedBatch?.id,
+      selectedBatchArchived: selectedBatch?.isArchived,
+      payrollEntriesCount: payrollEntries?.length ?? 0,
+      allPayrollEntriesCount: allPayrollEntries?.length ?? 0,
+      allPayrollBatchesCount: allPayrollBatches?.length ?? 0,
+      datasetRows: dataset?.rows?.length ?? 0,
+    });
+
+    console.table(
+      (payrollEntries ?? []).map((entry) => ({
+        id: entry.id,
+        companyId: entry.companyId,
+        employeeId: entry.employeeId,
+        month: entry.month,
+        year: entry.year,
+        payrollBatchId: entry.payrollBatchId,
+        netSalary: entry.netSalary,
+        inssAmount: entry.inssAmount,
+      }))
+    );
+  }, [selectedCompany, selectedMonth, selectedBatch, payrollEntries, allPayrollEntries, allPayrollBatches, dataset]);
 
   const exportCsv = React.useCallback(() => {
     if (!dataset) return;
