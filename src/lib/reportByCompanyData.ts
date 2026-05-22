@@ -96,24 +96,23 @@ export function buildReportByCompanyData(params: {
       order: rubric.order,
     }));
 
-  const validBatchIds = new Set(
-    allBatches
-      .filter(
-        (item) =>
-          item.companyId === company.id &&
-          item.month === month.month &&
-          item.year === month.year &&
-          !item.isArchived,
-      )
-      .map((item) => item.id),
-  );
+  const batchesById = new Map(allBatches.map((item) => [item.id, item]));
 
   const filteredEntries = allEntries.filter((entry) => {
     if (entry.companyId !== company.id || entry.month !== month.month || entry.year !== month.year) return false;
-    if (entry.payrollBatchId) return validBatchIds.has(entry.payrollBatchId);
-    // Compatibilidade transitória com legado: se não há vínculo de batch, aceitamos apenas
-    // quando o batch selecionado existe e não está arquivado.
-    return !!batch && !batch.isArchived;
+    if (batch && !batch.isArchived) {
+      // Regra compatível com a Central:
+      // 1) com competência ativa selecionada, prioriza vínculo explícito por batch;
+      // 2) fallback legado para entradas sem payrollBatchId.
+      if (entry.payrollBatchId) return entry.payrollBatchId === batch.id;
+      return true;
+    }
+
+    // Fallback transitório quando não há batch ativo selecionado.
+    // Mantém regra por empresa+competência, mas evita incluir dados de batch arquivado.
+    if (!entry.payrollBatchId) return true;
+    const linkedBatch = batchesById.get(entry.payrollBatchId);
+    return !linkedBatch?.isArchived;
   });
 
   const employeeById = new Map(allEmployees.map((employee) => [employee.id, employee]));
