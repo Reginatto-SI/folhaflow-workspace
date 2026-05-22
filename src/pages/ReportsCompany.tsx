@@ -22,6 +22,29 @@ const escapeHtml = (value: unknown): string => {
     .replace(/'/g, "&#39;");
 };
 
+
+const formatAdmissionRegistrationForPrint = (value: string): string => {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+
+  const [datePart, ...rest] = text.split("/").map((part) => part.trim()).filter(Boolean);
+  const isoDateMatch = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!isoDateMatch) return text;
+
+  const [, year, month, day] = isoDateMatch;
+  const parsedDate = new Date(Number(year), Number(month) - 1, Number(day));
+  const isValidDate = (
+    parsedDate.getFullYear() === Number(year) &&
+    parsedDate.getMonth() === Number(month) - 1 &&
+    parsedDate.getDate() === Number(day)
+  );
+
+  if (!isValidDate) return text;
+
+  const formattedDate = `${day}/${month}/${year}`;
+  return rest.length > 0 ? `${formattedDate} / ${rest.join(" / ")}` : formattedDate;
+};
 const safeCsvCell = (value: unknown): string => {
   if (value === null || value === undefined) return "\"\"";
 
@@ -147,34 +170,79 @@ const ReportsCompany: React.FC = () => {
 
   const exportPdf = React.useCallback(() => {
     if (!dataset) return;
+
+    const generatedAt = new Date();
+    const generatedAtLabel = generatedAt.toLocaleDateString("pt-BR") + " às " + generatedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+    // Comentário: distribuímos a largura das rubricas dinamicamente para evitar overflow
+    // quando o cadastro possuir muitas colunas variáveis no relatório.
+    const fixedNameWidth = 10;
+    const fixedDepartmentWidth = 7;
+    const fixedJobRoleWidth = 8;
+    const fixedAdmissionWidth = 7;
+    const fixedColumnsWidth = fixedNameWidth + fixedDepartmentWidth + fixedJobRoleWidth + fixedAdmissionWidth;
+    const numericColumnsCount = dataset.dynamicColumns.length;
+    const numericColumnWidth = numericColumnsCount > 0 ? (100 - fixedColumnsWidth) / numericColumnsCount : 0;
+
+    const fixedColumnClasses: Record<string, string> = {
+      name: "col-name",
+      department: "col-department",
+      jobRole: "col-job-role",
+      admissionRegistration: "col-admission",
+    };
+
     const tableHead = `
       <tr>
-        ${dataset.fixedColumns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}
-        ${dataset.dynamicColumns.map((column) => `<th>${escapeHtml(column.rubricName)}</th>`).join("")}
+        ${dataset.fixedColumns.map((column) => `<th class="${fixedColumnClasses[column.key] ?? "col-default"}">${escapeHtml(column.label)}</th>`).join("")}
+        ${dataset.dynamicColumns.map((column) => `<th class="col-numeric">${escapeHtml(column.rubricName)}</th>`).join("")}
       </tr>`;
+
     const tableBody = dataset.rows
       .map(
         (row) => `<tr>
-        <td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.department)}</td><td>${escapeHtml(row.jobRole)}</td><td>${escapeHtml(row.admissionRegistration)}</td>
-        ${dataset.dynamicColumns.map((column) => `<td class="num">${BRL(row.rubricValues[column.rubricId] ?? 0)}</td>`).join("")}
+        <td class="col-name">${escapeHtml(row.name)}</td>
+        <td class="col-department">${escapeHtml(row.department)}</td>
+        <td class="col-job-role">${escapeHtml(row.jobRole)}</td>
+        <td class="col-admission">${escapeHtml(formatAdmissionRegistrationForPrint(row.admissionRegistration))}</td>
+        ${dataset.dynamicColumns.map((column) => `<td class="numeric col-numeric">${BRL(row.rubricValues[column.rubricId] ?? 0)}</td>`).join("")}
       </tr>`,
       )
       .join("");
-    const totals = `<tr class="total"><td>TOTAL</td><td></td><td></td><td></td>${dataset.dynamicColumns.map((column) => `<td class="num">${BRL(dataset.totalsByRubricId[column.rubricId] ?? 0)}</td>`).join("")}</tr>`;
+    const totals = `<tr class="total-row"><td>TOTAL</td><td></td><td></td><td></td>${dataset.dynamicColumns.map((column) => `<td class="numeric col-numeric">${BRL(dataset.totalsByRubricId[column.rubricId] ?? 0)}</td>`).join("")}</tr>`;
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><style>
-      @page { size: A4 landscape; margin: 10mm; }
-      body { font-family: Arial, sans-serif; font-size: 10px; }
-      h1 { font-size: 14px; margin: 0 0 8px 0; }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { border: 1px solid #999; padding: 3px 4px; white-space: nowrap; }
-      th { background: #eee; position: sticky; top: 0; }
-      .num { text-align: right; }
-      .total td { font-weight: bold; }
-      .footer { margin-top: 8px; font-size: 9px; }
+      @page { size: A4 landscape; margin: 6mm; }
+      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 7px; color: #0f172a; }
+      .report-header { margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #cbd5e1; }
+      .report-title { font-size: 12px; margin: 0; font-weight: 700; }
+      .report-generated-at { margin-top: 2px; font-size: 8px; color: #334155; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      th, td { border: 1px solid #999; padding: 2px 3px; }
+      th {
+        background: #e2e8f0;
+        white-space: normal;
+        word-break: normal;
+        overflow-wrap: anywhere;
+        line-height: 1.1;
+        text-align: center;
+        vertical-align: middle;
+      }
+      td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      td.numeric { text-align: right; white-space: nowrap; }
+      .col-name { width: ${fixedNameWidth}%; }
+      .col-department { width: ${fixedDepartmentWidth}%; }
+      .col-job-role { width: ${fixedJobRoleWidth}%; }
+      .col-admission { width: ${fixedAdmissionWidth}%; }
+      .col-numeric { width: ${numericColumnWidth}%; }
+      tr.total-row td { background: #f1f5f9; font-weight: 700; border-top: 2px solid #475569; }
+      .footer { margin-top: 8px; font-size: 8px; color: #334155; text-align: center; }
       thead { display: table-header-group; }
+      tfoot { display: table-row-group; }
     </style></head><body>
-      <h1>${escapeHtml(dataset.title)}</h1>
+      <div class="report-header">
+        <h1 class="report-title">${escapeHtml(dataset.title)}</h1>
+        <div class="report-generated-at">Gerado em ${escapeHtml(generatedAtLabel)}</div>
+      </div>
       <table><thead>${tableHead}</thead><tbody>${tableBody}${totals}</tbody></table>
       <div class="footer">${escapeHtml(FOOTER_TEXT)}</div>
     </body></html>`;
