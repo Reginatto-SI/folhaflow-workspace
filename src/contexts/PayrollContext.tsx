@@ -1390,6 +1390,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         allJobRoles,
         rubrics,
         payrollEntries,
+        allPayrollEntries,
         currentBatch,
         allPayrollBatches,
         duplicatePayroll,
