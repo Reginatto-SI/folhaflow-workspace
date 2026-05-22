@@ -1,4 +1,6 @@
 import React from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,17 +13,6 @@ import { buildReportByCompanyData } from "@/lib/reportByCompanyData";
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br — Contato: (65) 99210-2030";
-
-const escapeHtml = (value: unknown): string => {
-  const text = String(value ?? "");
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-};
-
 
 const formatAdmissionRegistrationForPrint = (value: string): string => {
   const text = String(value ?? "").trim();
@@ -45,6 +36,26 @@ const formatAdmissionRegistrationForPrint = (value: string): string => {
   const formattedDate = `${day}/${month}/${year}`;
   return rest.length > 0 ? `${formattedDate} / ${rest.join(" / ")}` : formattedDate;
 };
+
+const normalizeFileToken = (value: string): string => {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+};
+
+const buildReportFileName = (companyName: string, month: number, year: number, extension: string): string => {
+  const competence = new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const companyToken = normalizeFileToken(companyName || "empresa");
+  const competenceToken = normalizeFileToken(competence || `${month}-${year}`);
+  return `${companyToken}-${competenceToken}.${extension}`;
+};
+
 const safeCsvCell = (value: unknown): string => {
   if (value === null || value === undefined) return "\"\"";
 
@@ -162,7 +173,8 @@ const ReportsCompany: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `relatorio-empresa-${dataset.month}-${dataset.year}.csv`;
+    // Comentário: padroniza nome amigável com empresa + competência sem alterar os dados exportados.
+    a.download = buildReportFileName(dataset.companyName, dataset.month, dataset.year, "csv");
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Exportação CSV concluída.");
@@ -174,91 +186,87 @@ const ReportsCompany: React.FC = () => {
     const generatedAt = new Date();
     const generatedAtLabel = generatedAt.toLocaleDateString("pt-BR") + " às " + generatedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
-    // Comentário: distribuímos a largura das rubricas dinamicamente para evitar overflow
-    // quando o cadastro possuir muitas colunas variáveis no relatório.
-    const fixedNameWidth = 10;
-    const fixedDepartmentWidth = 7;
-    const fixedJobRoleWidth = 8;
-    const fixedAdmissionWidth = 7;
-    const fixedColumnsWidth = fixedNameWidth + fixedDepartmentWidth + fixedJobRoleWidth + fixedAdmissionWidth;
-    const numericColumnsCount = dataset.dynamicColumns.length;
-    const numericColumnWidth = numericColumnsCount > 0 ? (100 - fixedColumnsWidth) / numericColumnsCount : 0;
+    const fileName = buildReportFileName(dataset.companyName, dataset.month, dataset.year, "pdf");
 
-    const fixedColumnClasses: Record<string, string> = {
-      name: "col-name",
-      department: "col-department",
-      jobRole: "col-job-role",
-      admissionRegistration: "col-admission",
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginLeft = 6;
+    const marginRight = 6;
+
+    const drawHeader = () => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text(dataset.title, marginLeft, 9);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(`Gerado em ${generatedAtLabel}`, marginLeft, 13);
     };
 
-    const tableHead = `
-      <tr>
-        ${dataset.fixedColumns.map((column) => `<th class="${fixedColumnClasses[column.key] ?? "col-default"}">${escapeHtml(column.label)}</th>`).join("")}
-        ${dataset.dynamicColumns.map((column) => `<th class="col-numeric">${escapeHtml(column.rubricName)}</th>`).join("")}
-      </tr>`;
+    const head = [[
+      ...dataset.fixedColumns.map((column) => column.label),
+      ...dataset.dynamicColumns.map((column) => column.rubricName),
+    ]];
 
-    const tableBody = dataset.rows
-      .map(
-        (row) => `<tr>
-        <td class="col-name">${escapeHtml(row.name)}</td>
-        <td class="col-department">${escapeHtml(row.department)}</td>
-        <td class="col-job-role">${escapeHtml(row.jobRole)}</td>
-        <td class="col-admission">${escapeHtml(formatAdmissionRegistrationForPrint(row.admissionRegistration))}</td>
-        ${dataset.dynamicColumns.map((column) => `<td class="numeric col-numeric">${BRL(row.rubricValues[column.rubricId] ?? 0)}</td>`).join("")}
-      </tr>`,
-      )
-      .join("");
-    const totals = `<tr class="total-row"><td>TOTAL</td><td></td><td></td><td></td>${dataset.dynamicColumns.map((column) => `<td class="numeric col-numeric">${BRL(dataset.totalsByRubricId[column.rubricId] ?? 0)}</td>`).join("")}</tr>`;
+    const body = dataset.rows.map((row) => [
+      row.name,
+      row.department,
+      row.jobRole,
+      formatAdmissionRegistrationForPrint(row.admissionRegistration),
+      ...dataset.dynamicColumns.map((column) => BRL(row.rubricValues[column.rubricId] ?? 0)),
+    ]);
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><style>
-      @page { size: A4 landscape; margin: 6mm; }
-      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 7px; color: #0f172a; }
-      .report-header { margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #cbd5e1; }
-      .report-title { font-size: 12px; margin: 0; font-weight: 700; }
-      .report-generated-at { margin-top: 2px; font-size: 8px; color: #334155; }
-      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-      th, td { border: 1px solid #999; padding: 2px 3px; }
-      th {
-        background: #e2e8f0;
-        white-space: normal;
-        word-break: normal;
-        overflow-wrap: anywhere;
-        line-height: 1.1;
-        text-align: center;
-        vertical-align: middle;
-      }
-      td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      td.numeric { text-align: right; white-space: nowrap; }
-      .col-name { width: ${fixedNameWidth}%; }
-      .col-department { width: ${fixedDepartmentWidth}%; }
-      .col-job-role { width: ${fixedJobRoleWidth}%; }
-      .col-admission { width: ${fixedAdmissionWidth}%; }
-      .col-numeric { width: ${numericColumnWidth}%; }
-      tr.total-row td { background: #f1f5f9; font-weight: 700; border-top: 2px solid #475569; }
-      .footer { margin-top: 8px; font-size: 8px; color: #334155; text-align: center; }
-      thead { display: table-header-group; }
-      tfoot { display: table-row-group; }
-    </style></head><body>
-      <div class="report-header">
-        <h1 class="report-title">${escapeHtml(dataset.title)}</h1>
-        <div class="report-generated-at">Gerado em ${escapeHtml(generatedAtLabel)}</div>
-      </div>
-      <table><thead>${tableHead}</thead><tbody>${tableBody}${totals}</tbody></table>
-      <div class="footer">${escapeHtml(FOOTER_TEXT)}</div>
-    </body></html>`;
+    const totalsRow = [
+      "TOTAL",
+      "",
+      "",
+      "",
+      ...dataset.dynamicColumns.map((column) => BRL(dataset.totalsByRubricId[column.rubricId] ?? 0)),
+    ];
 
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      toast.error("Não foi possível abrir a janela de impressão.");
-      return;
-    }
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.onload = () => {
-      printWindow.focus();
-      setTimeout(() => printWindow.print(), 100);
-    };
-    toast.success("PDF pronto para salvar/imprimir.");
+    // Comentário: o relatório somente exporta os valores já calculados na folha; não há recálculo no PDF.
+    // Comentário: o relatório somente exporta os valores já calculados na folha; não há recálculo no PDF.
+    // Comentário: o autotable divide horizontalmente quando há muitas rubricas para evitar corte de colunas à direita.
+    autoTable(doc, {
+      startY: 16,
+      head,
+      body: [...body, totalsRow],
+      styles: { fontSize: 6, cellPadding: 1, overflow: "linebreak", valign: "middle" },
+      headStyles: { fillColor: [226, 232, 240], textColor: 15, halign: "center", overflow: "linebreak", fontSize: 6 },
+      bodyStyles: { textColor: 15 },
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 22 },
+        2: { cellWidth: 24 },
+        3: { cellWidth: 21 },
+      },
+      horizontalPageBreak: true,
+      horizontalPageBreakRepeat: [0, 1, 2, 3],
+      didParseCell: (hookData) => {
+        if (hookData.section === "body" && hookData.row.index === body.length) {
+          hookData.cell.styles.fillColor = [241, 245, 249];
+          hookData.cell.styles.fontStyle = "bold";
+        }
+
+        // Comentário: mantém valores monetários alinhados à direita em todas as páginas/segmentos.
+        if (hookData.section !== "head" && hookData.column.index >= 4) {
+          hookData.cell.styles.halign = "right";
+        }
+      },
+      didDrawPage: () => {
+        drawHeader();
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.text(FOOTER_TEXT, pageWidth / 2, pageHeight - 4, { align: "center" });
+      },
+      margin: { top: 16, bottom: 8, left: marginLeft, right: marginRight },
+      theme: "grid",
+      showHead: "everyPage",
+    });
+
+    // Comentário: download direto substitui abertura de nova aba/print para operação mais rápida em lote.
+    doc.save(fileName);
+    toast.success("PDF gerado e baixado com sucesso.");
   }, [dataset]);
 
   return (
