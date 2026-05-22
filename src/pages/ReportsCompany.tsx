@@ -56,6 +56,72 @@ const buildReportFileName = (companyName: string, month: number, year: number, e
   return `${companyToken}-${competenceToken}.${extension}`;
 };
 
+const PDF_LABEL_ALIASES: Record<string, string> = {
+  "salário ctps": "Salário\nCTPS",
+  "salario ctps": "Salário\nCTPS",
+  "salário g": "Salário\nG",
+  "salario g": "Salário\nG",
+  "salário fiscal": "Salário\nFiscal",
+  "salario fiscal": "Salário\nFiscal",
+  "(+) outros rendim.": "(+)\nOutros\nRendim.",
+  "(+) horas extras": "(+)\nHoras\nExtras",
+  "(+) 1/3 de férias": "(+)\n1/3\nFérias",
+  "(+) 1/3 de ferias": "(+)\n1/3\nFérias",
+  "(+) premio/desemp.": "(+)\nPrêmio/\nDesemp.",
+  "(+) prêmio/desemp.": "(+)\nPrêmio/\nDesemp.",
+  "(-)inss": "(-)\nINSS",
+  "(-) emprést. consig.": "(-)\nEmprést.\nConsig.",
+  "(-) emprest. consig.": "(-)\nEmprést.\nConsig.",
+  "(-) adiant geren.": "(-)\nAdiant.\nGeren.",
+  "(-) vales/descontos": "(-)\nVales/\nDesc.",
+  "(-) faltas/descontos": "(-)\nFaltas/\nDesc.",
+  "salário real": "Salário\nReal",
+  "salario real": "Salário\nReal",
+  "salário g2 complem.": "Salário G2\nComplem.",
+  "salario g2 complem.": "Salário G2\nComplem.",
+  "salário líquido": "Salário\nLíquido",
+  "salario liquido": "Salário\nLíquido",
+};
+
+const normalizePdfLabelKey = (value: string): string => {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const formatPdfColumnLabel = (label: string): string => {
+  const sanitized = String(label ?? "").replace(/\s+/g, " ").trim();
+  if (!sanitized) return "";
+
+  const alias = PDF_LABEL_ALIASES[normalizePdfLabelKey(sanitized)];
+  if (alias) return alias;
+
+  const firstTokenOperatorMatch = sanitized.match(/^([(+-)/\d]+)\s+(.+)$/);
+  const operatorPrefix = firstTokenOperatorMatch ? firstTokenOperatorMatch[1] : "";
+  const baseLabel = firstTokenOperatorMatch ? firstTokenOperatorMatch[2] : sanitized;
+
+  const words = baseLabel.split(" ").filter(Boolean);
+  const lines: string[] = operatorPrefix ? [operatorPrefix] : [];
+  let currentLine = "";
+  const maxLineLength = 10;
+
+  words.forEach((word) => {
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+    if (candidate.length <= maxLineLength) {
+      currentLine = candidate;
+      return;
+    }
+    if (currentLine) lines.push(currentLine);
+    currentLine = word;
+  });
+
+  if (currentLine) lines.push(currentLine);
+  return lines.join("\n");
+};
+
 const safeCsvCell = (value: unknown): string => {
   if (value === null || value === undefined) return "\"\"";
 
@@ -203,10 +269,9 @@ const ReportsCompany: React.FC = () => {
       doc.text(`Gerado em ${generatedAtLabel}`, marginLeft, 13);
     };
 
-    const head = [[
-      ...dataset.fixedColumns.map((column) => column.label),
-      ...dataset.dynamicColumns.map((column) => column.rubricName),
-    ]];
+    const fixedColumnsPdfLabels = dataset.fixedColumns.map((column) => formatPdfColumnLabel(column.label));
+    const dynamicColumnsPdfLabels = dataset.dynamicColumns.map((column) => formatPdfColumnLabel(column.rubricName));
+    const head = [[...fixedColumnsPdfLabels, ...dynamicColumnsPdfLabels]];
 
     const body = dataset.rows.map((row) => [
       row.name,
@@ -224,24 +289,32 @@ const ReportsCompany: React.FC = () => {
       ...dataset.dynamicColumns.map((column) => BRL(dataset.totalsByRubricId[column.rubricId] ?? 0)),
     ];
 
+    const dynamicColumnCount = dataset.dynamicColumns.length;
+    const compactFontSize = dynamicColumnCount > 14 ? 5 : 6;
+    const compactCellPadding = dynamicColumnCount > 14 ? 0.6 : 0.8;
+    const enableExtremeHorizontalFallback = dynamicColumnCount > 24;
+
     // Comentário: o relatório somente exporta os valores já calculados na folha; não há recálculo no PDF.
-    // Comentário: o relatório somente exporta os valores já calculados na folha; não há recálculo no PDF.
-    // Comentário: o autotable divide horizontalmente quando há muitas rubricas para evitar corte de colunas à direita.
+    // Comentário: priorizamos manter colunas na mesma página usando compactação; quebra horizontal só em cenário extremo.
     autoTable(doc, {
       startY: 16,
       head,
       body: [...body, totalsRow],
-      styles: { fontSize: 6, cellPadding: 1, overflow: "linebreak", valign: "middle" },
-      headStyles: { fillColor: [226, 232, 240], textColor: 15, halign: "center", overflow: "linebreak", fontSize: 6 },
+      tableWidth: "auto",
+      styles: { fontSize: compactFontSize, cellPadding: compactCellPadding, overflow: "linebreak", valign: "middle" },
+      headStyles: { fillColor: [226, 232, 240], textColor: 15, halign: "center", overflow: "linebreak", fontSize: compactFontSize },
       bodyStyles: { textColor: 15 },
       columnStyles: {
-        0: { cellWidth: 30 },
-        1: { cellWidth: 22 },
-        2: { cellWidth: 24 },
-        3: { cellWidth: 21 },
+        0: { cellWidth: 24, overflow: "linebreak" },
+        1: { cellWidth: 14, overflow: "linebreak" },
+        2: { cellWidth: 16, overflow: "linebreak" },
+        3: { cellWidth: 14, overflow: "linebreak" },
+        ...Object.fromEntries(
+          dataset.dynamicColumns.map((_, index) => [index + 4, { cellWidth: "wrap", minCellWidth: 8 }]),
+        ),
       },
-      horizontalPageBreak: true,
-      horizontalPageBreakRepeat: [0, 1, 2, 3],
+      horizontalPageBreak: enableExtremeHorizontalFallback,
+      horizontalPageBreakRepeat: enableExtremeHorizontalFallback ? [0, 1, 2, 3] : undefined,
       didParseCell: (hookData) => {
         if (hookData.section === "body" && hookData.row.index === body.length) {
           hookData.cell.styles.fillColor = [241, 245, 249];
