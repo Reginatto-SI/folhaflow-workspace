@@ -51,6 +51,7 @@ interface PayrollContextType {
   rubrics: Rubric[];
   allJobRoles: JobRole[];
   payrollEntries: PayrollEntry[];
+  allPayrollEntries: PayrollEntry[];
   // PRD-03 §4: status da folha (batch) é parte do contexto operacional da Central.
   currentBatch: PayrollBatch | null;
   allPayrollBatches: PayrollBatch[];
