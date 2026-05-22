@@ -11,6 +11,7 @@ import { usePayroll } from "@/contexts/PayrollContext";
 import { buildReportByCompanyData } from "@/lib/reportByCompanyData";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const formatPdfCurrency = (value: number) => value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br — Contato: (65) 99210-2030";
 
@@ -57,6 +58,12 @@ const buildReportFileName = (companyName: string, month: number, year: number, e
 };
 
 const PDF_LABEL_ALIASES: Record<string, string> = {
+  "nome": "Nome",
+  "setor": "Setor",
+  "função/cargo": "Função/\nCargo",
+  "funcao/cargo": "Função/\nCargo",
+  "admissão/registro": "Admissão/\nRegistro",
+  "admissao/registro": "Admissão/\nRegistro",
   "salário ctps": "Salário\nCTPS",
   "salario ctps": "Salário\nCTPS",
   "salário g": "Salário\nG",
@@ -70,8 +77,8 @@ const PDF_LABEL_ALIASES: Record<string, string> = {
   "(+) premio/desemp.": "(+)\nPrêmio/\nDesemp.",
   "(+) prêmio/desemp.": "(+)\nPrêmio/\nDesemp.",
   "(-)inss": "(-)\nINSS",
-  "(-) emprést. consig.": "(-)\nEmprést.\nConsig.",
-  "(-) emprest. consig.": "(-)\nEmprést.\nConsig.",
+  "(-) emprést. consig.": "(-)\nEmpr.\nConsig.",
+  "(-) emprest. consig.": "(-)\nEmpr.\nConsig.",
   "(-) adiant geren.": "(-)\nAdiant.\nGeren.",
   "(-) vales/descontos": "(-)\nVales/\nDesc.",
   "(-) faltas/descontos": "(-)\nFaltas/\nDesc.",
@@ -259,6 +266,7 @@ const ReportsCompany: React.FC = () => {
     const pageHeight = doc.internal.pageSize.getHeight();
     const marginLeft = 6;
     const marginRight = 6;
+    const pageUsableWidth = pageWidth - marginLeft - marginRight;
 
     const drawHeader = () => {
       doc.setFont("helvetica", "bold");
@@ -278,7 +286,7 @@ const ReportsCompany: React.FC = () => {
       row.department,
       row.jobRole,
       formatAdmissionRegistrationForPrint(row.admissionRegistration),
-      ...dataset.dynamicColumns.map((column) => BRL(row.rubricValues[column.rubricId] ?? 0)),
+      ...dataset.dynamicColumns.map((column) => formatPdfCurrency(row.rubricValues[column.rubricId] ?? 0)),
     ]);
 
     const totalsRow = [
@@ -286,13 +294,17 @@ const ReportsCompany: React.FC = () => {
       "",
       "",
       "",
-      ...dataset.dynamicColumns.map((column) => BRL(dataset.totalsByRubricId[column.rubricId] ?? 0)),
+      ...dataset.dynamicColumns.map((column) => formatPdfCurrency(dataset.totalsByRubricId[column.rubricId] ?? 0)),
     ];
 
     const dynamicColumnCount = dataset.dynamicColumns.length;
-    const compactFontSize = dynamicColumnCount > 14 ? 5 : 6;
-    const compactCellPadding = dynamicColumnCount > 14 ? 0.6 : 0.8;
-    const enableExtremeHorizontalFallback = dynamicColumnCount > 24;
+    const compactFontSize = 4.8;
+    const compactHeadFontSize = 4.6;
+    const compactCellPadding = 0.45;
+    const fixedColumnsWidth = 18 + 12 + 14 + 14;
+    const dynamicColumnWidth = dynamicColumnCount > 0
+      ? Math.max(4.2, (pageUsableWidth - fixedColumnsWidth) / dynamicColumnCount)
+      : 0;
 
     // Comentário: o relatório somente exporta os valores já calculados na folha; não há recálculo no PDF.
     // Comentário: priorizamos manter colunas na mesma página usando compactação; quebra horizontal só em cenário extremo.
@@ -300,21 +312,19 @@ const ReportsCompany: React.FC = () => {
       startY: 16,
       head,
       body: [...body, totalsRow],
-      tableWidth: "auto",
+      tableWidth: pageUsableWidth,
       styles: { fontSize: compactFontSize, cellPadding: compactCellPadding, overflow: "linebreak", valign: "middle" },
-      headStyles: { fillColor: [226, 232, 240], textColor: 15, halign: "center", overflow: "linebreak", fontSize: compactFontSize },
+      headStyles: { fillColor: [226, 232, 240], textColor: 15, halign: "center", overflow: "linebreak", fontSize: compactHeadFontSize },
       bodyStyles: { textColor: 15 },
       columnStyles: {
-        0: { cellWidth: 24, overflow: "linebreak" },
-        1: { cellWidth: 14, overflow: "linebreak" },
-        2: { cellWidth: 16, overflow: "linebreak" },
-        3: { cellWidth: 14, overflow: "linebreak" },
+        0: { cellWidth: 18, overflow: "ellipsize" },
+        1: { cellWidth: 12, overflow: "ellipsize" },
+        2: { cellWidth: 14, overflow: "ellipsize" },
+        3: { cellWidth: 14, overflow: "ellipsize" },
         ...Object.fromEntries(
-          dataset.dynamicColumns.map((_, index) => [index + 4, { cellWidth: "wrap", minCellWidth: 8 }]),
+          dataset.dynamicColumns.map((_, index) => [index + 4, { cellWidth: dynamicColumnWidth, minCellWidth: 4.2, overflow: "hidden" }]),
         ),
       },
-      horizontalPageBreak: enableExtremeHorizontalFallback,
-      horizontalPageBreakRepeat: enableExtremeHorizontalFallback ? [0, 1, 2, 3] : undefined,
       didParseCell: (hookData) => {
         if (hookData.section === "body" && hookData.row.index === body.length) {
           hookData.cell.styles.fillColor = [241, 245, 249];
