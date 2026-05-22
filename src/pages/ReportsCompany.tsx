@@ -11,9 +11,16 @@ import { usePayroll } from "@/contexts/PayrollContext";
 import { buildReportByCompanyData } from "@/lib/reportByCompanyData";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const formatPdfCurrency = (value: number) => value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatPdfCurrency = (value: number | string) => {
+  const numericValue = typeof value === "number"
+    ? value
+    : Number(String(value).replace(/[^\d,-]/g, "").replace(/\./g, "").replace(",", "."));
+  const safeValue = Number.isFinite(numericValue) ? numericValue : 0;
+  return safeValue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
 const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br — Contato: (65) 99210-2030";
+const PDF_DIAGNOSTIC_MARK = "PDF_COMPACT_V3_SEM_RS_SEM_HORIZONTAL_BREAK";
 
 const formatAdmissionRegistrationForPrint = (value: string): string => {
   const text = String(value ?? "").trim();
@@ -95,6 +102,9 @@ const normalizePdfLabelKey = (value: string): string => {
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
+    .replace(/\s*\/\s*/g, "/")
+    .replace(/\(\+\)\s+/g, "(+) ")
+    .replace(/\(-\)\s+/g, "(-)")
     .replace(/\s+/g, " ")
     .trim();
 };
@@ -274,7 +284,9 @@ const ReportsCompany: React.FC = () => {
       doc.text(dataset.title, marginLeft, 9);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      doc.text(`Gerado em ${generatedAtLabel}`, marginLeft, 13);
+      // Comentário: marca temporária de diagnóstico para confirmar visualmente
+      // que este fluxo exportPdf é o mesmo que está gerando o PDF no ambiente testado.
+      doc.text(`Gerado em ${generatedAtLabel} — ${PDF_DIAGNOSTIC_MARK}`, marginLeft, 13);
     };
 
     const fixedColumnsPdfLabels = dataset.fixedColumns.map((column) => formatPdfColumnLabel(column.label));
