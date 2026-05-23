@@ -83,11 +83,13 @@ interface EmployeeDrawerProps {
 const NumericRubricInput: React.FC<{
   rubric: Rubric;
   value: number;
+  quantity?: number;
   disabled?: boolean;
   labelClassName?: string;
   inputClassName?: string;
   onChange: (next: RubricValueInput) => void;
-}> = ({ rubric, value, disabled, labelClassName, inputClassName, onChange }) => {
+  onQuantityChange?: (next: RubricQuantityInput) => void;
+}> = ({ rubric, value, quantity = 0, disabled, labelClassName, inputClassName, onChange, onQuantityChange }) => {
   const [text, setText] = useState(formatCurrencyDisplay(value));
   const [isFocused, setIsFocused] = useState(false);
 
@@ -109,6 +111,10 @@ const NumericRubricInput: React.FC<{
     window.setTimeout(select, 0);
   };
 
+  // PRD-07: quantidade complementar é descritiva (ex.: dias). NÃO entra em cálculo.
+  const showQuantity = !!rubric.usesComplementaryQuantity;
+  const quantityLabel = (rubric.complementaryQuantityLabel || "Qtde").trim() || "Qtde";
+
   return (
     <div className="space-y-1">
       <Label
@@ -117,27 +123,47 @@ const NumericRubricInput: React.FC<{
       >
         {rubric.code} · {rubric.name}
       </Label>
-      <Input
-        className={`h-8 text-right tabular-nums text-sm font-medium ${inputClassName || ""}`}
-        value={text}
-        disabled={disabled}
-        onChange={(event) => {
-          const nextText = event.target.value;
-          setText(nextText);
-          onChange({ rubricId: rubric.id, value: parseCurrency(nextText) });
-        }}
-        onFocus={(event) => {
-          setIsFocused(true);
-          setText(formatEditCurrency(value));
-          selectEditableValue(event.currentTarget);
-        }}
-        onBlur={() => {
-          const parsed = parseCurrency(text);
-          onChange({ rubricId: rubric.id, value: parsed });
-          setIsFocused(false);
-          setText(formatCurrencyDisplay(parsed));
-        }}
-      />
+      <div className="flex items-stretch gap-1">
+        <Input
+          className={`h-8 text-right tabular-nums text-sm font-medium flex-1 min-w-0 ${inputClassName || ""}`}
+          value={text}
+          disabled={disabled}
+          onChange={(event) => {
+            const nextText = event.target.value;
+            setText(nextText);
+            onChange({ rubricId: rubric.id, value: parseCurrency(nextText) });
+          }}
+          onFocus={(event) => {
+            setIsFocused(true);
+            setText(formatEditCurrency(value));
+            selectEditableValue(event.currentTarget);
+          }}
+          onBlur={() => {
+            const parsed = parseCurrency(text);
+            onChange({ rubricId: rubric.id, value: parsed });
+            setIsFocused(false);
+            setText(formatCurrencyDisplay(parsed));
+          }}
+        />
+        {showQuantity && onQuantityChange && (
+          <Input
+            className="h-8 w-16 text-right tabular-nums text-sm"
+            type="number"
+            min={0}
+            step={1}
+            disabled={disabled}
+            placeholder={quantityLabel}
+            title={quantityLabel}
+            value={quantity > 0 ? String(quantity) : ""}
+            onChange={(event) => {
+              const raw = event.target.value;
+              const parsed = raw === "" ? 0 : Math.max(0, Math.floor(Number(raw) || 0));
+              onQuantityChange({ rubricId: rubric.id, quantity: parsed });
+            }}
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        )}
+      </div>
     </div>
   );
 };
