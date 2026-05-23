@@ -1,4 +1,5 @@
 import { Company, Employee, PayrollBatch, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
+import { calculatePayrollFromEntry } from "@/lib/payrollSpreadsheet";
 
 export type ReportFixedColumnKey = "name" | "department" | "jobRole" | "admissionRegistration";
 
@@ -47,12 +48,25 @@ const readValueFromPayload = (entry: PayrollEntry, key: string) => {
   return null;
 };
 
-const readRubricValueFromEntry = (entry: PayrollEntry, rubric: Pick<Rubric, "id" | "code" | "classification">) => {
+const readRubricValueFromEntry = (
+  entry: PayrollEntry,
+  rubric: Pick<Rubric, "id" | "code" | "classification">,
+  canonicalComputed?: { salarioReal: number; g2Complemento: number; salarioLiquido: number }
+) => {
   // Comentário: regra crítica do relatório — NÃO recalcular folha.
-  // Ordem de leitura compatível com o ecossistema atual:
-  //  1) payload por ID técnico da rubrica (padrão atual),
-  //  2) payload por code técnico (compatibilidade histórica),
-  //  3) campos persistidos oficiais de payroll_entries apenas quando necessário.
+  // Para rubricas canônicas finais (PRD-12), priorizamos o mesmo resultado
+  // resolvido pela Central (`calculatePayrollFromEntry`) ANTES do payload,
+  // pois o payload persistido pode conter materialização legada como zero.
+  if (canonicalComputed) {
+    if (rubric.code === "salario_real") return canonicalComputed.salarioReal;
+    if (rubric.code === "g2_complemento") return canonicalComputed.g2Complemento;
+    if (rubric.code === "salario_liquido") return canonicalComputed.salarioLiquido;
+  }
+
+  // Para as demais rubricas, mantemos a ordem legada de leitura:
+  //  1) payload por ID técnico da rubrica,
+  //  2) payload por code técnico,
+  //  3) campos persistidos oficiais quando necessário.
   const byId = readValueFromPayload(entry, rubric.id);
   if (typeof byId === "number") return byId;
 
@@ -123,13 +137,15 @@ export function buildReportByCompanyData(params: {
     const jobRole = employee?.role || "-";
     const admissionRegistration = [employee?.admissionDate, employee?.registration].filter(Boolean).join(" / ") || "-";
 
+    const canonicalComputed = calculatePayrollFromEntry({ entry, rubrics });
+
     const rubricValues: Record<string, number> = {};
     activeRubrics.forEach((column) => {
       rubricValues[column.rubricId] = toNumber(readRubricValueFromEntry(entry, {
         id: column.rubricId,
         code: column.rubricCode,
         classification: rubricById.get(column.rubricId)?.classification ?? null,
-      }));
+      }, canonicalComputed));
     });
 
     return {
