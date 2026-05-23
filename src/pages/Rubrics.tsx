@@ -232,6 +232,8 @@ const Rubrics: React.FC = () => {
     setForm({
       ...rubric,
       formulaItems: [...rubric.formulaItems].sort((a, b) => a.order - b.order),
+      usesComplementaryQuantity: rubric.usesComplementaryQuantity ?? false,
+      complementaryQuantityLabel: rubric.complementaryQuantityLabel ?? "",
     });
     setActiveTab("dados");
     setOpen(true);
