@@ -445,9 +445,9 @@ const mapPayrollBatchRowToModel = (row: {
 // Comentário: a tabela de itens possui duas FKs para `rubricas`; usamos embed explícito para evitar ambiguidade no PostgREST.
 // Lista todas as colunas necessárias para o contrato canônico (PRD-02), incluindo nature/calculation_method/classification.
 const RUBRICA_SELECT_WITH_ITEMS =
-  "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, nature, calculation_method, classification, fixed_value, percentage_value, percentage_base_rubrica_id, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
+  "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, nature, calculation_method, classification, fixed_value, percentage_value, percentage_base_rubrica_id, uses_complementary_quantity, complementary_quantity_label, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
 
-const PAYROLL_ENTRY_SELECT = "id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary";
+const PAYROLL_ENTRY_SELECT = "id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary, rubric_meta";
 const PAYROLL_BATCH_SELECT = "id, company_id, month, year, status, is_archived";
 
 const isSameCompetence = (a: PayrollMonth, b: PayrollMonth) => a.month === b.month && a.year === b.year;
