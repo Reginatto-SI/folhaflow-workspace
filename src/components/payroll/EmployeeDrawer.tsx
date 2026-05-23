@@ -483,7 +483,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Salários Base</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
                 {groupedRubrics.salariosBase.map((rubric) => (
-                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
+                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} quantity={rubricQuantities[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} onQuantityChange={updateRubricQuantity} />
                 ))}
               </div>
             </section>
@@ -494,7 +494,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proventos</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
                 {groupedRubrics.proventos.map((rubric) => (
-                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
+                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} quantity={rubricQuantities[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} onQuantityChange={updateRubricQuantity} />
                 ))}
               </div>
             </section>
@@ -509,9 +509,11 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
                     key={rubric.id}
                     rubric={rubric}
                     value={rubricValues[rubric.id] || 0}
+                    quantity={rubricQuantities[rubric.id] || 0}
                     disabled={!canEditValues}
                     labelClassName="text-destructive"
                     onChange={updateRubricValue}
+                    onQuantityChange={updateRubricQuantity}
                   />
                 ))}
               </div>
