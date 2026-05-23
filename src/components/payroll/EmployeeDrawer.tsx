@@ -249,6 +249,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
     if (isCreateMode || !entry) {
       setRubricValues(emptyValues);
+      setRubricQuantities({});
       setNotes("");
       return;
     }
@@ -258,6 +259,15 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       ...emptyValues,
       ...getEntryManualValues(entry, activeRubricsOrdered),
     });
+    // PRD-07: hidrata quantidades complementares já persistidas neste lançamento.
+    const persistedMeta = entry.rubricMeta || {};
+    const nextQuantities: Record<string, number> = {};
+    activeRubricsOrdered.forEach((rubric) => {
+      if (!rubric.usesComplementaryQuantity) return;
+      const qty = Number(persistedMeta[rubric.id]?.quantity ?? 0);
+      if (Number.isFinite(qty) && qty > 0) nextQuantities[rubric.id] = qty;
+    });
+    setRubricQuantities(nextQuantities);
     setNotes(entry.notes || "");
   }, [activeRubricsOrdered, entry, isCreateMode, open]);
 
