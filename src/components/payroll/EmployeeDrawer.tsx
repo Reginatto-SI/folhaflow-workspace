@@ -343,6 +343,14 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       earningsPayload[rubric.id] = value;
     });
 
+    // PRD-07: monta rubric_meta apenas com rubricas que usam quantidade complementar e tenham valor > 0.
+    const rubricMetaPayload: Record<string, { quantity?: number }> = {};
+    activeRubricsOrdered.forEach((rubric) => {
+      if (!rubric.usesComplementaryQuantity) return;
+      const qty = Number(rubricQuantities[rubric.id] || 0);
+      if (qty > 0) rubricMetaPayload[rubric.id] = { quantity: qty };
+    });
+
     return {
       baseSalary: spreadsheetPreview.baseSalary,
       earnings: earningsPayload,
@@ -355,8 +363,9 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       deductionsTotal: spreadsheetPreview.deductionsTotal,
       inssAmount: spreadsheetPreview.inssAmount,
       netSalary: canonicalDerivedRubricIds.salarioLiquidoId ? spreadsheetPreview.salarioLiquido : spreadsheetPreview.netSalary,
+      rubricMeta: rubricMetaPayload,
     };
-  }, [activeRubricsOrdered, canonicalDerivedRubricIds.salarioLiquidoId, notes, rubricValues, spreadsheetPreview]);
+  }, [activeRubricsOrdered, canonicalDerivedRubricIds.salarioLiquidoId, notes, rubricQuantities, rubricValues, spreadsheetPreview]);
 
   useEffect(() => {
     if (!onPreviewChange) return;
@@ -373,6 +382,10 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
   const updateRubricValue = ({ rubricId, value }: RubricValueInput) => {
     setRubricValues((prev) => ({ ...prev, [rubricId]: value }));
+  };
+
+  const updateRubricQuantity = ({ rubricId, quantity }: RubricQuantityInput) => {
+    setRubricQuantities((prev) => ({ ...prev, [rubricId]: quantity }));
   };
 
   const canEditValues = isCreateMode ? !!selectedEmployeeId : true;
