@@ -847,6 +847,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...(updates.deductionsTotal !== undefined ? { deductions_total: updates.deductionsTotal } : {}),
         ...(updates.inssAmount !== undefined ? { inss_amount: updates.inssAmount } : {}),
         ...(updates.netSalary !== undefined ? { net_salary: updates.netSalary } : {}),
+        ...(updates.rubricMeta !== undefined ? { rubric_meta: updates.rubricMeta } : {}),
       };
       const { data, error } = await supabase
         .from("payroll_entries")
