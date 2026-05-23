@@ -297,7 +297,7 @@ const Index = () => {
         <p className="text-sm text-muted-foreground mt-1">Selecione empresa e competência, clique em um funcionário para editar valores.</p>
       </div>
 
-      <PayrollHeader onNewEntry={handleOpenNewEntry} onGenerateReceipts={handleGenerateReceiptsBatch} onGenerateReport={handleGenerateCompanyReport} onDuplicatePayroll={() => setDuplicationOpen(true)} />
+      <PayrollHeader onNewEntry={handleOpenNewEntry} onGenerateReceipts={handleGenerateReceiptsBatch} onGenerateReport={handleGenerateCompanyReport} onGenerateExcelReport={handleGenerateCompanyReportExcel} onDuplicatePayroll={() => setDuplicationOpen(true)} />
       <TotalsBar entriesOverride={centralEntries} />
       <PayrollFilters
         search={search}

@@ -44,3 +44,15 @@
 - **Excel vs CSV**: mantido padrão existente do produto como **CSV UTF-8 compatível com Excel** (download `.csv`), com nomenclatura de UI como "Gerar relatório Excel" para usuário final.
 - **`/relatorios/por-empresa`**: segue usando o mesmo `buildReportByCompanyData` e `generateReportByCompanyPdf`; exportação Excel/CSV continua funcional via helper compartilhado sem alteração de fluxo visual.
 - **PDF preservado**: confirmado que na Central a única mudança relacionada ao PDF foi o texto do menu para **"Gerar relatório PDF"**; handler e fluxo de geração permanecem os mesmos.
+
+
+## Correção da opção Excel desabilitada
+- **Causa encontrada**: no `Index`, o `PayrollHeader` estava recebendo `onGenerateReport` (PDF), mas não recebia a prop `onGenerateExcelReport`. Com isso, no `PayrollHeader` a condição `disabled={!currentBatch || !selectedCompany || !onGenerateExcelReport}` permanecia verdadeira pelo terceiro termo e deixava o item cinza.
+- **Arquivo corrigido**: `src/pages/Index.tsx`.
+- **Prop `onGenerateExcelReport`**: **não estava sendo passada**; foi adicionada como `onGenerateExcelReport={handleGenerateCompanyReportExcel}` na renderização do `PayrollHeader`.
+- **Confirmação sobre PDF**: nenhuma alteração no fluxo/handler do PDF; a ação de PDF continua ligada a `onGenerateReport={handleGenerateCompanyReport}` como antes.
+- **Checklist final de teste**:
+  - [ ] Menu `...` com empresa + folha ativa mostra `Gerar relatório PDF` ativo.
+  - [ ] Menu `...` com empresa + folha ativa mostra `Gerar relatório Excel` ativo.
+  - [ ] Clique em `Gerar relatório Excel` baixa CSV UTF-8 compatível com Excel.
+  - [ ] Clique em `Gerar relatório PDF` continua funcionando normalmente.
