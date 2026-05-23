@@ -80,6 +80,7 @@ interface PayrollContextType {
   setJobRoleActive: (id: string, isActive: boolean) => Promise<void>;
   addRubric: (rubric: Omit<Rubric, "id">) => Promise<void>;
   updateRubric: (id: string, updates: Partial<Rubric>) => Promise<void>;
+  reorderRubrics: (orderedRubricIds: string[]) => Promise<void>;
   deleteRubric: (id: string) => Promise<void>;
 }
 
@@ -1375,6 +1376,32 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setRubrics((prev) => prev.map((rubric) => (rubric.id === id ? mapRubricRowToModel(fullRubric as Parameters<typeof mapRubricRowToModel>[0]) : rubric)));
   }, [rubrics, validateCircularRubricDependency, validateRubricPayload]);
 
+  const reorderRubrics = useCallback(async (orderedRubricIds: string[]) => {
+    if (orderedRubricIds.length === 0) return;
+    const temporaryOffset = 100000;
+    // Comentário: reordenação operacional da listagem de rubricas.
+    // Em duas fases para evitar colisão de unicidade durante updates intermediários.
+    const temporaryPhase = orderedRubricIds.map((id, index) =>
+      supabase.from("rubricas").update({ display_order: temporaryOffset + index + 1 }).eq("id", id).select("id").single()
+    );
+    const temporaryResults = await Promise.all(temporaryPhase);
+    const temporaryError = temporaryResults.find((result) => result.error)?.error;
+    if (temporaryError) throw temporaryError;
+
+    // Comentário: sequência final única e contínua (1..N), impacta ordem visual/recibo/relatórios, sem alterar cálculo.
+    const finalPhase = orderedRubricIds.map((id, index) =>
+      supabase.from("rubricas").update({ display_order: index + 1 }).eq("id", id).select("id").single()
+    );
+    const finalResults = await Promise.all(finalPhase);
+    const finalError = finalResults.find((result) => result.error)?.error;
+    if (finalError) throw finalError;
+
+    setRubrics((prev) => {
+      const orderMap = new Map(orderedRubricIds.map((id, index) => [id, index + 1]));
+      return prev.map((rubric) => (orderMap.has(rubric.id) ? { ...rubric, order: orderMap.get(rubric.id)! } : rubric));
+    });
+  }, []);
+
   const deleteRubric = useCallback(async (id: string) => {
     const rubric = rubrics.find((item) => item.id === id);
     const nextStatus = !(rubric?.isActive ?? true);
@@ -1435,6 +1462,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setJobRoleActive,
         addRubric,
         updateRubric,
+        reorderRubrics,
         deleteRubric,
       }}
     >

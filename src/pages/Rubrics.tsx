@@ -44,6 +44,7 @@ import {
   NotebookText,
   Pencil,
   Plus,
+  GripVertical,
   Save,
   Search,
   SlidersHorizontal,
@@ -159,7 +160,9 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 };
 
 const Rubrics: React.FC = () => {
-  const { rubrics, addRubric, updateRubric, deleteRubric, isLoading } = usePayroll();
+  const { rubrics, addRubric, updateRubric, reorderRubrics, deleteRubric, isLoading } = usePayroll();
+  const [draggingRubricId, setDraggingRubricId] = useState<string | null>(null);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Rubric | null>(null);
   const [form, setForm] = useState<RubricFormState>(getInitialForm());
@@ -219,10 +222,19 @@ const Rubrics: React.FC = () => {
       return true;
     });
   }, [filters, rubrics]);
+  const sortedFilteredRubrics = useMemo(
+    () => [...filteredRubrics].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)),
+    [filteredRubrics]
+  );
+  const sortedAllRubrics = useMemo(
+    () => [...rubrics].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)),
+    [rubrics]
+  );
 
   const openNew = () => {
     setEditing(null);
-    setForm(getInitialForm());
+    const nextOrder = rubrics.reduce((max, rubric) => Math.max(max, rubric.order), 0) + 1;
+    setForm({ ...getInitialForm(), order: nextOrder });
     setActiveTab("dados");
     setOpen(true);
   };
@@ -438,9 +450,35 @@ const Rubrics: React.FC = () => {
   const handleImportExportComingSoon = () =>
     toast.info("Importação/Exportação de rubricas em desenvolvimento. Será liberada em fase futura.");
 
+  const handleDropRubric = async (targetRubricId: string) => {
+    if (!draggingRubricId || draggingRubricId === targetRubricId || isSavingOrder || hasActiveFilters) return;
+    // Comentário: reordenação só ocorre com lista completa (sem filtros ativos) para evitar reorder parcial.
+    const orderedIds = sortedAllRubrics.map((rubric) => rubric.id);
+    const fromIndex = orderedIds.indexOf(draggingRubricId);
+    const toIndex = orderedIds.indexOf(targetRubricId);
+    if (fromIndex < 0 || toIndex < 0) return;
+
+    const reorderedIds = [...orderedIds];
+    const [movedId] = reorderedIds.splice(fromIndex, 1);
+    reorderedIds.splice(toIndex, 0, movedId);
+
+    setIsSavingOrder(true);
+    try {
+      await reorderRubrics(reorderedIds);
+      toast.success("Ordem das rubricas atualizada com sucesso.");
+    } catch (error) {
+      console.error("[Rubrics] Falha ao reordenar rubricas", { error, draggingRubricId, targetRubricId });
+      toast.error(getErrorMessage(error, "Não foi possível atualizar a ordem das rubricas."));
+    } finally {
+      setDraggingRubricId(null);
+      setIsSavingOrder(false);
+    }
+  };
+
   const hasActiveFilters = Boolean(
     filters.search || filters.status || filters.type || filters.method || filters.classification
   );
+  const canDragReorder = !hasActiveFilters && !isSavingOrder;
 
   return (
     <div>
@@ -628,12 +666,11 @@ const Rubrics: React.FC = () => {
                         <Input
                           type="number"
                           min={0}
-                          disabled={editingCanonicalSystemRubric}
+                          disabled
+                          readOnly
                           value={form.order}
-                          onChange={(event) =>
-                            setForm((prev) => ({ ...prev, order: Number(event.target.value || 0) }))
-                          }
                         />
+                        <p className="text-xs text-muted-foreground">A ordem é definida pela posição da rubrica na listagem.</p>
                       </div>
                       <div className="space-y-1.5">
                         <Label>Status</Label>
@@ -1109,6 +1146,12 @@ const Rubrics: React.FC = () => {
       {isLoading ? (
         <div className="text-sm text-muted-foreground">Carregando rubricas...</div>
       ) : (
+        <div className="mb-2 text-xs text-muted-foreground">
+          {hasActiveFilters ? "Limpe os filtros para reordenar as rubricas." : "Arraste pelo ícone para reordenar as rubricas."}
+        </div>
+      )}
+
+      {!isLoading && (
         <div className="overflow-x-auto rounded-lg border bg-card">
           <table className="w-full min-w-[980px] text-sm">
             <thead>
@@ -1125,16 +1168,33 @@ const Rubrics: React.FC = () => {
             </thead>
             <tbody>
               {/* PRD-02: tiebreak por id garante ordem determinística quando admin usa o mesmo `order` em rubricas distintas. */}
-              {[...filteredRubrics]
-                .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
-                .map((rubric) => {
+              {sortedFilteredRubrics.map((rubric) => {
                   const typeBadge = getTypeBadgeProps(rubric.type);
                   const methodBadge = getMethodBadgeProps(rubric.calculationMethod);
                   const statusBadge = getStatusBadgeProps(rubric.isActive);
                   return (
-                    <tr key={rubric.id} className="border-b transition-colors hover:bg-muted/30">
+                    <tr
+                      key={rubric.id}
+                      className="border-b transition-colors hover:bg-muted/30"
+                      onDragOver={(event) => {
+                        if (!canDragReorder) return;
+                        event.preventDefault();
+                      }}
+                      onDrop={() => void handleDropRubric(rubric.id)}
+                    >
                       <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">
                         <span className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            draggable={canDragReorder}
+                            disabled={!canDragReorder}
+                            className="cursor-grab text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                            aria-label={`Reordenar rubrica ${rubric.name}`}
+                            onDragStart={() => canDragReorder && setDraggingRubricId(rubric.id)}
+                            onDragEnd={() => setDraggingRubricId(null)}
+                          >
+                            <GripVertical className="h-4 w-4" />
+                          </button>
                           {rubric.name}
                           {isCanonicalSystemRubric(rubric) && (
                             <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
