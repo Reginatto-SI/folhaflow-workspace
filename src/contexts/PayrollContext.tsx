@@ -272,6 +272,8 @@ const mapRubricRowToModel = (row: {
     source_rubrica_id: string;
     item_order: number;
   }>;
+  uses_complementary_quantity?: boolean | null;
+  complementary_quantity_label?: string | null;
 }): Rubric => {
   // Comentário: deriva calculationMethod a partir do entry_mode legado quando ainda não migrado.
   const calculationMethod = (row.calculation_method as Rubric["calculationMethod"] | null)
