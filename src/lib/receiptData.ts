@@ -29,6 +29,9 @@ type LegacyReceiptContext = {
   entry: PayrollEntry;
   rubrics: Rubric[];
   valuesByRubricId: Record<string, number>;
+  // PRD-07: rubricas com quantidade complementar (ex.: dias) são individualizadas
+  // no recibo — não entram nas agregações legadas.
+  individualizedRubricIds: Set<string>;
 };
 
 const toSafeNumber = (value: unknown) => {
