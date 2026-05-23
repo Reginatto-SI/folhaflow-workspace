@@ -23,6 +23,7 @@ interface PayrollHeaderProps {
   onNewEntry?: () => void;
   onGenerateReceipts?: () => void;
   onDuplicatePayroll?: () => void;
+  onGenerateReport?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -64,7 +65,7 @@ const normalizePayrollStatus = (status?: string | null): PayrollStatus => {
   return "em_edicao";
 };
 
-const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateReceipts, onDuplicatePayroll }) => {
+const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateReceipts, onDuplicatePayroll, onGenerateReport }) => {
   const {
     activeCompanies,
     selectedCompany,
@@ -267,7 +268,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
                 <Printer className="mr-2 h-4 w-4" />
                 Gerar recibos
               </DropdownMenuItem>
-              <DropdownMenuItem disabled>
+              <DropdownMenuItem onClick={onGenerateReport} disabled={!currentBatch || !selectedCompany || !onGenerateReport}>
                 <FileText className="mr-2 h-4 w-4" />
                 Gerar relatório
               </DropdownMenuItem>
