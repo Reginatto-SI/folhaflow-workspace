@@ -59,7 +59,21 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const marginLeft = 6;
-  const pageUsableWidth = pageWidth - marginLeft - 6;
+  const marginRight = 6;
+  const pageUsableWidth = pageWidth - marginLeft - marginRight;
+  const dynamicColumnCount = dataset.dynamicColumns.length;
+  const fixedColumnsWidth = {
+    name: 18,
+    department: 12,
+    jobRole: 14,
+    admissionRegistration: 14,
+  };
+  const reservedFixedWidth = fixedColumnsWidth.name + fixedColumnsWidth.department + fixedColumnsWidth.jobRole + fixedColumnsWidth.admissionRegistration;
+  // Comentário: colunas numéricas usam largura padronizada para manter grade visual uniforme.
+  const numericColumnWidth = dynamicColumnCount > 0
+    ? Math.max(4.4, (pageUsableWidth - reservedFixedWidth) / dynamicColumnCount)
+    : 0;
+  const bodyRowsLength = dataset.rows.length;
 
   autoTable(doc, {
     startY: 16,
@@ -69,14 +83,60 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
       ["TOTAL", "", "", "", ...dataset.dynamicColumns.map((column) => formatPdfCurrency(dataset.totalsByRubricId[column.rubricId] ?? 0))],
     ],
     tableWidth: pageUsableWidth,
-    styles: { fontSize: 4.8, cellPadding: 0.45, overflow: "linebreak", valign: "middle" },
-    headStyles: { fillColor: [226, 232, 240], textColor: 15, halign: "center", overflow: "linebreak", fontSize: 4.6 },
+    styles: {
+      fontSize: 4.9,
+      cellPadding: { top: 0.6, right: 0.45, bottom: 0.6, left: 0.45 },
+      lineColor: [203, 213, 225],
+      lineWidth: 0.1,
+      overflow: "linebreak",
+      valign: "middle",
+    },
+    headStyles: {
+      fillColor: [226, 232, 240],
+      textColor: 15,
+      fontStyle: "bold",
+      minCellHeight: 6,
+      halign: "center",
+      valign: "middle",
+      overflow: "linebreak",
+      fontSize: 4.7,
+    },
+    columnStyles: {
+      0: { cellWidth: fixedColumnsWidth.name, halign: "left" },
+      1: { cellWidth: fixedColumnsWidth.department, halign: "left" },
+      2: { cellWidth: fixedColumnsWidth.jobRole, halign: "left" },
+      3: { cellWidth: fixedColumnsWidth.admissionRegistration, halign: "center" },
+      ...Object.fromEntries(
+        dataset.dynamicColumns.map((_, index) => [index + 4, { cellWidth: numericColumnWidth, minCellWidth: 4.4, halign: "right" }]),
+      ),
+    },
+    didParseCell: (hookData) => {
+      const isTotalRow = hookData.section === "body" && hookData.row.index === bodyRowsLength;
+
+      // Comentário: a linha TOTAL recebe destaque visual (cinza + negrito + borda superior) sem alterar dados.
+      if (isTotalRow) {
+        hookData.cell.styles.fillColor = [226, 232, 240];
+        hookData.cell.styles.fontStyle = "bold";
+        hookData.cell.styles.lineWidth = { top: 0.25, right: 0.1, bottom: 0.1, left: 0.1 };
+      }
+
+      // Comentário: o PDF não recalcula valores; apenas alinha visualmente os números já consolidados da folha.
+      if (hookData.section === "body" && hookData.column.index >= 4) {
+        hookData.cell.styles.halign = "right";
+      }
+      if (hookData.section === "body" && hookData.column.index <= 2) {
+        hookData.cell.styles.halign = "left";
+      }
+      if (hookData.section === "body" && hookData.column.index === 3) {
+        hookData.cell.styles.halign = "center";
+      }
+    },
     didDrawPage: () => {
       doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text(dataset.title, marginLeft, 9);
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(`Gerado em ${generatedAtLabel}`, marginLeft, 13);
       doc.setFontSize(7); doc.text(FOOTER_TEXT, pageWidth / 2, pageHeight - 4, { align: "center" });
     },
-    margin: { top: 16, bottom: 8, left: marginLeft, right: 6 },
+    margin: { top: 16, bottom: 8, left: marginLeft, right: marginRight },
     theme: "grid",
     showHead: "everyPage",
   });
