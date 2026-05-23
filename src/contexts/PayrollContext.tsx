@@ -303,6 +303,8 @@ const mapRubricRowToModel = (row: {
         order: item.item_order,
       }))
       .sort((a, b) => a.order - b.order),
+    usesComplementaryQuantity: Boolean(row.uses_complementary_quantity),
+    complementaryQuantityLabel: row.complementary_quantity_label ?? null,
     // Compat temporária — não usar em lógica nova.
     category: row.category,
     mode: calculationMethod === "formula" ? "formula" : "manual",
