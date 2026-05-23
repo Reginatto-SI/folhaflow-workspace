@@ -176,7 +176,7 @@ const Index = () => {
 
     setIsSavingNewEntry(true);
     try {
-      await addPayrollEntry({
+      const createdEntry = await addPayrollEntry({
         employeeId: employee.id,
         companyId: selectedCompany.id,
         month: selectedMonth.month,
@@ -188,9 +188,16 @@ const Index = () => {
         deductions: {},
         notes: "",
       });
-      toast.success("Lançamento criado com sucesso.");
+      // Comentário: após criar o lançamento, abrimos automaticamente o drawer existente
+      // para reduzir atrito operacional e permitir preenchimento imediato da folha.
       setNewEntryOpen(false);
       setNewEmployeeId("");
+      setDrawerMode("edit");
+      setCreateEmployeeId("");
+      setLivePreviewEntry(null);
+      setSelectedEntry(createdEntry);
+      setDrawerOpen(true);
+      toast.success("Lançamento criado com sucesso.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message.toLowerCase().includes("duplicate") || message.toLowerCase().includes("unique")) {
