@@ -214,6 +214,8 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 }) => {
   const isCreateMode = mode === "create";
   const [rubricValues, setRubricValues] = useState<Record<string, number>>({});
+  // PRD-07: quantidade complementar (ex.: dias) por rubrica. Apenas descritiva.
+  const [rubricQuantities, setRubricQuantities] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState("");
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
