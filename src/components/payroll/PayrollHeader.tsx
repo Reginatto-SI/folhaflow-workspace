@@ -1,5 +1,5 @@
 import React from "react";
-import { usePayroll } from "@/contexts/PayrollContext";
+import { getSuggestedPaymentDate, usePayroll } from "@/contexts/PayrollContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Archive, Building2, CalendarDays, CheckCircle2, Copy, FileText, MoreHorizontal, PencilLine, Plus, Printer, RotateCcw } from "lucide-react";
@@ -124,6 +124,15 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
   const statusLabel = currentBatch ? (STATUS_LABEL[currentBatch.status] ?? STATUS_LABEL[currentStatus]) : STATUS_LABEL[currentStatus];
   const competenceLabel = new Date(selectedMonth.year, selectedMonth.month - 1, 1).toLocaleDateString("pt-BR", { month: "2-digit", year: "numeric" });
   const companyName = selectedCompany?.name || "empresa selecionada";
+  const suggestedPaymentDate = React.useMemo(() => {
+    // Comentário: header reutiliza helper oficial da folha para manter regra única da sugestão.
+    return getSuggestedPaymentDate(selectedMonth.month, selectedMonth.year);
+  }, [selectedMonth.month, selectedMonth.year]);
+  const suggestedPaymentDateLabel = React.useMemo(() => {
+    if (!suggestedPaymentDate) return "";
+    const [year, month, day] = suggestedPaymentDate.split("-");
+    return `${day}/${month}/${year}`;
+  }, [suggestedPaymentDate]);
 
   React.useEffect(() => {
     if (!currentBatch) {
@@ -163,11 +172,41 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
     }
   };
 
+  const savePaymentDateIfNeeded = React.useCallback(async () => {
+    if (!currentBatch) return;
+    const nextValue = paymentDateDraft || null;
+    const currentValue = currentBatch.paymentDate || null;
+    if (nextValue === currentValue) return;
+    await updateCurrentBatchPaymentDate(nextValue);
+  }, [currentBatch, paymentDateDraft, updateCurrentBatchPaymentDate]);
+
+  const handleGenerateReceiptsClick = async () => {
+    if (!onGenerateReceipts) return;
+    try {
+      await savePaymentDateIfNeeded();
+      onGenerateReceipts();
+    } catch {
+      toast.error("Não foi possível salvar a data de pagamento antes de gerar os recibos.");
+    }
+  };
+
+  const handleApplySuggestedPaymentDate = async () => {
+    if (!currentBatch || !suggestedPaymentDate) return;
+    try {
+      // Comentário: folhas antigas sem data só recebem payment_date após ação explícita do RH.
+      await updateCurrentBatchPaymentDate(suggestedPaymentDate);
+      setPaymentDateDraft(suggestedPaymentDate);
+      toast.success("Data de pagamento sugerida aplicada.");
+    } catch {
+      toast.error("Não foi possível aplicar a sugestão de data de pagamento.");
+    }
+  };
+
   return (
     <TooltipProvider>
-      <div className="flex flex-wrap items-center gap-2.5 mb-3">
-        {/* Comentário: faixa compacta de contexto; mantém seletores e status com a mesma lógica operacional. */}
-        <div className="flex flex-wrap items-end gap-2.5 rounded-md border bg-muted/20 px-2.5 py-2">
+      <div className="mb-3 rounded-md border bg-muted/20 px-2.5 py-2">
+        {/* Comentário: card único centraliza configurações operacionais e ações da folha para evitar blocos soltos. */}
+        <div className="flex flex-wrap items-end gap-2.5">
           <div className="w-full space-y-1 sm:w-[220px]">
             <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               <Building2 className="h-3 w-3" />
@@ -242,16 +281,36 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
               disabled={!currentBatch || currentBatch.isArchived}
               className="h-8"
               onChange={(e) => setPaymentDateDraft(e.target.value)}
-              onBlur={() => {
+              onBlur={async () => {
                 if (!currentBatch) return;
-                void updateCurrentBatchPaymentDate(paymentDateDraft || null);
+                try {
+                  await savePaymentDateIfNeeded();
+                } catch {
+                  toast.error("Não foi possível salvar a data de pagamento.");
+                }
               }}
             />
             <p className="text-[10px] text-muted-foreground">Usada nos recibos de pagamento.</p>
+            {!paymentDateDraft && currentBatch && (
+              <div className="flex items-center gap-2 text-[10px]">
+                {/* Comentário: sugestão visual não grava automaticamente; o RH decide ao clicar no botão. */}
+                <span className="text-muted-foreground">Sugestão: {suggestedPaymentDateLabel}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 px-1.5 text-[10px]"
+                  onClick={() => void handleApplySuggestedPaymentDate()}
+                  disabled={currentBatch.isArchived}
+                >
+                  Usar sugestão
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <Button
             size="sm"
             variant="outline"
@@ -271,7 +330,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
             size="sm"
             variant="outline"
             className="h-8 px-3"
-            onClick={onGenerateReceipts}
+            onClick={() => void handleGenerateReceiptsClick()}
             disabled={!currentBatch || !onGenerateReceipts}
           >
             <Printer className="h-4 w-4 mr-1" />

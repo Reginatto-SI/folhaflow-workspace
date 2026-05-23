@@ -106,7 +106,7 @@ const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; add
   state: row.state || "",
   isActive: row.is_active,
 });
-const getSuggestedPaymentDate = (month: number, year: number) => {
+export const getSuggestedPaymentDate = (month: number, year: number) => {
   // Comentário: sugestão padrão da folha é sempre dia 5 do mês seguinte à competência.
   const nextMonth = month === 12 ? 1 : month + 1;
   const nextYear = month === 12 ? year + 1 : year;
