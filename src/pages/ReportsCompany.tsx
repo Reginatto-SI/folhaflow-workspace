@@ -8,20 +8,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { usePayroll } from "@/contexts/PayrollContext";
 import { buildReportByCompanyData } from "@/lib/reportByCompanyData";
 import { generateReportByCompanyPdf } from "@/lib/reportByCompanyPdf";
+import { exportReportByCompanyExcel } from "@/lib/reportByCompanyExcel";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const safeCsvCell = (value: unknown): string => {
-  if (value === null || value === undefined) return "\"\"";
-
-  // Comentário: mantemos números como números para preservar uso em soma no Excel.
-  if (typeof value === "number") return `"${String(value).replace(/"/g, '""')}"`;
-
-  const text = String(value);
-  const formulaRisk = /^[=+\-@]/.test(text);
-  const safeText = `${formulaRisk ? "'" : ""}${text}`;
-  return `"${safeText.replace(/"/g, '""')}"`;
-};
-
 const ReportsCompany: React.FC = () => {
   const {
     activeCompanies,
@@ -98,40 +87,9 @@ const ReportsCompany: React.FC = () => {
 
   const exportCsv = React.useCallback(() => {
     if (!dataset) return;
-    const header = [...dataset.fixedColumns.map((column) => column.label), ...dataset.dynamicColumns.map((column) => column.rubricName)];
-    const lines = [
-      [dataset.title],
-      [],
-      header,
-      ...dataset.rows.map((row) => [
-        row.name,
-        row.department,
-        row.jobRole,
-        row.admissionRegistration,
-        ...dataset.dynamicColumns.map((column) => row.rubricValues[column.rubricId] ?? 0),
-      ]),
-      [
-        "TOTAL",
-        "",
-        "",
-        "",
-        ...dataset.dynamicColumns.map((column) => dataset.totalsByRubricId[column.rubricId] ?? 0),
-      ],
-    ];
 
-    const csv = lines.map((line) => line.map((cell) => safeCsvCell(cell)).join(";")).join("\n");
-
-    // Comentário: não há biblioteca .xlsx no projeto nesta fase; exportamos CSV UTF-8
-    // compatível com Excel para manter implementação simples e segura.
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    // Comentário: padroniza nome amigável com empresa + competência sem alterar os dados exportados.
-    a.download = buildReportFileName(dataset.companyName, dataset.month, dataset.year, "csv");
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Exportação CSV concluída.");
+    // Comentário: página de relatórios e Central reutilizam a mesma rotina de exportação Excel (CSV compatível).
+    exportReportByCompanyExcel(dataset);
   }, [dataset]);
 
   const exportPdf = React.useCallback(() => {
