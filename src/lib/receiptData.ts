@@ -22,6 +22,7 @@ export type ReceiptData = {
 type LegacyReceiptLineDefinition = {
   label: string;
   prefix: ReceiptLine["prefix"];
+  fallbackOrder: number;
   getValue: (context: LegacyReceiptContext) => number;
 };
 
@@ -109,6 +110,7 @@ const sumRubrics = (context: LegacyReceiptContext, predicate: (rubric: Rubric) =
     return sum + toSafeNumber(context.valuesByRubricId[rubric.id]);
   }, 0);
 
+
 const sumByClassifications = (context: LegacyReceiptContext, classifications: RubricClassification[]) => {
   const allowed = new Set<RubricClassification>(classifications);
   return sumRubrics(context, (rubric) => !!rubric.classification && allowed.has(rubric.classification));
@@ -118,11 +120,13 @@ const LEGACY_RECEIPT_LINES: LegacyReceiptLineDefinition[] = [
   {
     label: "Salário Bruto",
     prefix: "",
+    fallbackOrder: 1,
     getValue: (context) => getLegacyGrossSalaryValue(context),
   },
   {
     label: "Diarias/Gratificações",
     prefix: "(+)",
+    fallbackOrder: 4,
     getValue: (context) =>
       sumRubrics(
         context,
@@ -139,16 +143,19 @@ const LEGACY_RECEIPT_LINES: LegacyReceiptLineDefinition[] = [
   {
     label: "1/3 de férias",
     prefix: "(+)",
+    fallbackOrder: 6,
     getValue: (context) => sumByClassifications(context, ["ferias_terco"]),
   },
   {
     label: "Hora extras",
     prefix: "(+)",
+    fallbackOrder: 7,
     getValue: (context) => sumByClassifications(context, ["horas_extras"]),
   },
   {
     label: "Premio/Desemp.",
     prefix: "(+)",
+    fallbackOrder: 8,
     getValue: (context) =>
       sumRubrics(
         context,
@@ -158,26 +165,31 @@ const LEGACY_RECEIPT_LINES: LegacyReceiptLineDefinition[] = [
   {
     label: "INSS",
     prefix: "(-)",
+    fallbackOrder: 10,
     getValue: (context) => sumByClassifications(context, ["inss"]),
   },
   {
     label: "Emprést. Consig.",
     prefix: "(-)",
+    fallbackOrder: 11,
     getValue: (context) => sumByClassifications(context, ["emprestimos"]),
   },
   {
     label: "Adiant. Gerencial",
     prefix: "(-)",
+    fallbackOrder: 12,
     getValue: (context) => sumByClassifications(context, ["adiantamentos"]),
   },
   {
     label: "Vale/Desconto",
     prefix: "(-)",
+    fallbackOrder: 13,
     getValue: (context) => sumByClassifications(context, ["vales"]),
   },
   {
     label: "Descontos/Faltas",
     prefix: "(-)",
+    fallbackOrder: 14,
     getValue: (context) => sumByClassifications(context, ["faltas"]),
   },
 ];
@@ -206,25 +218,37 @@ export function buildReceiptData(entry: PayrollEntry, rubrics: Rubric[]): Receip
   // Comentário: recibo legado é simplificado. Mantemos sempre as mesmas linhas,
   // agregando rubricas por classificação/cadastro e nunca exibindo rubricas técnicas
   // individualmente (salário real, G2 complemento, salário líquido etc.).
-  const lines: ReceiptLine[] = LEGACY_RECEIPT_LINES.map((line) => ({
-    label: line.label,
-    prefix: line.prefix,
-    value: line.getValue(context),
-  }));
-
-  // PRD-07: insere linhas individualizadas (uma por rubrica com quantidade).
-  individualized
-    .sort((a, b) => a.order - b.order)
-    .forEach((rubric) => {
+  const orderedLines = [
+    ...LEGACY_RECEIPT_LINES.map((line, index) => ({
+      index,
+      sortOrder: line.fallbackOrder,
+      line: {
+        label: line.label,
+        prefix: line.prefix,
+        value: line.getValue(context),
+      } as ReceiptLine,
+    })),
+    // Comentário: rubricas com quantidade complementar continuam individualizadas,
+    // porém agora entram na ordenação por "order" do cadastro para respeitar a sequência oficial do recibo.
+    ...individualized.map((rubric, index) => {
       const qty = Number(rubricMeta[rubric.id]?.quantity ?? 0);
       const unit = (rubric.complementaryQuantityLabel || "dias").trim() || "dias";
       const value = toSafeNumber(result.valuesByRubricId[rubric.id]);
-      lines.push({
-        label: `${rubric.name} (${qty} ${unit})`,
-        prefix: rubric.type === "desconto" ? "(-)" : "(+)",
-        value,
-      });
-    });
+      return {
+        index: LEGACY_RECEIPT_LINES.length + index,
+        sortOrder: rubric.order,
+        line: {
+          label: `${rubric.name} (${qty} ${unit})`,
+          prefix: rubric.type === "desconto" ? "(-)" : "(+)",
+          value,
+        } as ReceiptLine,
+      };
+    }),
+  ]
+    .sort((a, b) => (a.sortOrder === b.sortOrder ? a.index - b.index : a.sortOrder - b.sortOrder))
+    .map((item) => item.line);
+
+  const lines: ReceiptLine[] = orderedLines;
 
   const baseSalary = lines[0]?.value || 0;
 

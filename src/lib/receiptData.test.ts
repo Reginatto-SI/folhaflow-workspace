@@ -67,6 +67,8 @@ describe("buildReceiptData", () => {
 
     const data = buildReceiptData(entry, rubrics);
 
+    expect(data.baseSalary).toBe(3284.07);
+
     expect(data.lines.map((line) => `${line.prefix} ${line.label}`.trim())).toEqual([
       "Salário Bruto",
       "(+) Diarias/Gratificações",
@@ -80,8 +82,7 @@ describe("buildReceiptData", () => {
       "(-) Descontos/Faltas",
       "(=) Líquido a receber",
     ]);
-    expect(data.lines.map((line) => line.label)).not.toEqual(expect.arrayContaining(["Salário Real", "Salário G2 Complemento", "Salário Líquido"]));
-    expect(data.baseSalary).toBe(3284.07);
+
     expect(data.lines[0].value).toBe(3284.07);
     expect(data.lines[1].value).toBe(150);
     expect(data.lines[2].value).toBe(0);
@@ -89,7 +90,80 @@ describe("buildReceiptData", () => {
     expect(data.lines[4].value).toBe(200);
     expect(data.lines[5].value).toBe(446.78);
     expect(data.lines[6].value).toBe(878.32);
+    expect(data.lines[7].value).toBe(0);
     expect(data.lines[8].value).toBe(4160);
-    expect(data.lines.at(-1)).toMatchObject({ label: "Líquido a receber", prefix: "(=)", value: 1514.9, highlight: true });
+    expect(data.lines[9].value).toBe(0);
+    expect(data.lines.at(-1)).toMatchObject({
+      label: "Líquido a receber",
+      prefix: "(=)",
+      value: 1514.9,
+      highlight: true,
+    });
+
+    const labels = data.lines.map((line) => line.label.toLowerCase());
+    expect(labels.some((label) => label.includes("salário real"))).toBe(false);
+    expect(labels.some((label) => label.includes("g2 complemento"))).toBe(false);
+    expect(labels.some((label) => label.includes("salário líquido"))).toBe(false);
+  });
+
+  it("ordena rubrica individualizada por quantidade entre Premio/Desemp. e INSS sem afetar cálculo", () => {
+    const receiptEntry: PayrollEntry = {
+      ...entry,
+      earnings: {
+        ...entry.earnings,
+        premio: 200,
+        compra_ferias: 600,
+      },
+      deductions: {
+        ...entry.deductions,
+        inss: 446.78,
+      },
+      netSalary: 1514.9,
+      rubricMeta: {
+        compra_ferias: { quantity: 10 },
+      },
+    };
+
+    const rubrics = [
+      makeRubric({ id: "salario_fiscal", name: "Salário Fiscal", code: "SALARIO_FISCAL", classification: null, order: 3 }),
+      makeRubric({ id: "diaria", name: "Diária", code: "DIARIA", classification: "outros_rendimentos", order: 4 }),
+      makeRubric({ id: "he", name: "(+) Horas Extras", code: "HE", classification: "horas_extras", order: 6 }),
+      makeRubric({ id: "premio", name: "Prêmio/Desemp.", code: "PREMIO", classification: "outros_rendimentos", order: 8 }),
+      makeRubric({
+        id: "compra_ferias",
+        name: "Compra de Férias",
+        code: "COMPRA_FERIAS",
+        classification: "outros_rendimentos",
+        order: 9,
+        usesComplementaryQuantity: true,
+        complementaryQuantityLabel: "dias",
+      }),
+      makeRubric({ id: "inss", name: "INSS", code: "INSS", type: "desconto", classification: "inss", order: 10 }),
+      makeRubric({ id: "emprestimo", name: "Empréstimo", code: "EMPRESTIMO", type: "desconto", classification: "emprestimos", order: 11 }),
+      makeRubric({ id: "vales", name: "Vales", code: "VALES", type: "desconto", classification: "vales", order: 13 }),
+    ];
+
+    const data = buildReceiptData(receiptEntry, rubrics);
+
+    const labels = data.lines.map((line) => `${line.prefix} ${line.label}`.trim());
+    const premioIndex = labels.indexOf("(+) Premio/Desemp.");
+    const compraFeriasIndex = labels.indexOf("(+) Compra de Férias (10 dias)");
+    const inssIndex = labels.indexOf("(-) INSS");
+
+    expect(premioIndex).toBeGreaterThan(-1);
+    expect(compraFeriasIndex).toBeGreaterThan(-1);
+    expect(inssIndex).toBeGreaterThan(-1);
+    expect(premioIndex).toBeLessThan(compraFeriasIndex);
+    expect(compraFeriasIndex).toBeLessThan(inssIndex);
+
+    expect(data.lines[compraFeriasIndex].value).toBe(600);
+    expect(data.netSalary).toBe(1514.9);
+    expect(data.lines.at(-1)?.value).toBe(1514.9);
+
+    const diariaLine = data.lines.find((line) => line.label === "Diarias/Gratificações");
+    expect(diariaLine?.value).toBe(150);
+
+    expect(labels.includes("(+) Diarias/Gratificações (10 dias)")).toBe(false);
+    expect(data.lines.filter((line) => line.label.includes("Compra de Férias")).length).toBe(1);
   });
 });
