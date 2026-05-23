@@ -1126,6 +1126,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const address = (company.address || "").trim();
     if (!address) throw new Error("Endereço é obrigatório.");
     // Comentário: persistência continua normalizada (somente dígitos), sem pontuação de máscara.
+    // Comentário: CPF/CNPJ pode se repetir entre empresas para estruturas gerenciais distintas.
     if (!isValidCpfOrCnpj(cnpjDigits)) throw new Error("CPF/CNPJ inválido.");
 
     const { data, error } = await supabase
@@ -1140,13 +1141,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       })
       .select("id, name, cnpj, address, city, state, is_active")
       .single();
-    if (error || !data) {
-      // Comentário: 23505 = unique_violation (CPF/CNPJ duplicado no campo legado cnpj).
-      if ((error as { code?: string } | null)?.code === "23505") {
-        throw new Error("CPF/CNPJ já cadastrado.");
-      }
-      throw error;
-    }
+    if (error || !data) throw error;
     const mapped = mapCompanyRowToModel(data);
     setCompanies((prev) => [...prev, mapped]);
     setSelectedCompany((prev) => prev ?? (mapped.isActive ? mapped : prev));
@@ -1158,6 +1153,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (updates.cnpj !== undefined) {
       const cnpjDigits = updates.cnpj.replace(/\D/g, "");
       if (!isValidCpfOrCnpj(cnpjDigits)) throw new Error("CPF/CNPJ inválido.");
+      // Comentário: CPF/CNPJ pode se repetir entre empresas para estruturas gerenciais distintas.
       payload.cnpj = cnpjDigits;
     }
     if (updates.address !== undefined) {
@@ -1175,12 +1171,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .eq("id", id)
       .select("id, name, cnpj, address, city, state, is_active")
       .single();
-    if (error || !data) {
-      if ((error as { code?: string } | null)?.code === "23505") {
-        throw new Error("CPF/CNPJ já cadastrado.");
-      }
-      throw error;
-    }
+    if (error || !data) throw error;
 
     const mapped = mapCompanyRowToModel(data);
     setCompanies((prev) => prev.map((company) => (company.id === id ? mapped : company)));
