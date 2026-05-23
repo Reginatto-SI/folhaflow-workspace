@@ -105,7 +105,7 @@ const isPremioDesempRubric = (rubric: Rubric) => {
 
 const sumRubrics = (context: LegacyReceiptContext, predicate: (rubric: Rubric) => boolean) =>
   context.rubrics.reduce((sum, rubric) => {
-    if (!rubric.isActive || !predicate(rubric)) return sum;
+    if (!rubric.isActive || context.individualizedRubricIds.has(rubric.id) || !predicate(rubric)) return sum;
     return sum + toSafeNumber(context.valuesByRubricId[rubric.id]);
   }, 0);
 
