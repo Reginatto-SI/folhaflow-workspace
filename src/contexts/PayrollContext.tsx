@@ -57,6 +57,7 @@ interface PayrollContextType {
   allPayrollBatches: PayrollBatch[];
   duplicatePayroll: (input: PayrollDuplicationInput) => Promise<PayrollDuplicationResult>;
   updateCurrentBatchStatus: (status: PayrollBatch["status"]) => Promise<void>;
+  updateCurrentBatchPaymentDate: (paymentDate: string | null) => Promise<void>;
   archiveCurrentBatch: () => Promise<void>;
   restoreCurrentBatch: () => Promise<void>;
   payrollCatalogErrors: { departments?: string; jobRoles?: string; payrollEntries?: string };
@@ -96,13 +97,21 @@ const normalizeRequiredText = (value: string) => value.trim().replace(/\s+/g, " 
 // Mantemos somente dígitos para alinhar validação/consulta e regra de unicidade global no banco.
 const normalizeCpf = (value: string) => value.replace(/\D/g, "");
 
-const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; address: string | null; is_active: boolean }): Company => ({
+const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; address: string | null; city?: string | null; state?: string | null; is_active: boolean }): Company => ({
   id: row.id,
   name: row.name,
   cnpj: row.cnpj,
   address: row.address || "",
+  city: row.city || "",
+  state: row.state || "",
   isActive: row.is_active,
 });
+const getSuggestedPaymentDate = (month: number, year: number) => {
+  // Comentário: sugestão padrão da folha é sempre dia 5 do mês seguinte à competência.
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  return `${String(nextYear)}-${String(nextMonth).padStart(2, "0")}-05`;
+};
 
 // Comentário: máscara visual padrão BR para CNPJ usada na exibição.
 export const formatCnpj = (digits: string) => {
@@ -434,6 +443,7 @@ const mapPayrollBatchRowToModel = (row: {
   year: number;
   status: string;
   is_archived?: boolean | null;
+  payment_date?: string | null;
 }): PayrollBatch => ({
   id: row.id,
   companyId: row.company_id,
@@ -441,6 +451,7 @@ const mapPayrollBatchRowToModel = (row: {
   year: row.year,
   status: row.status as PayrollBatch["status"],
   isArchived: Boolean(row.is_archived),
+  paymentDate: row.payment_date ?? null,
 });
 
 // Comentário: a tabela de itens possui duas FKs para `rubricas`; usamos embed explícito para evitar ambiguidade no PostgREST.
@@ -449,7 +460,7 @@ const RUBRICA_SELECT_WITH_ITEMS =
   "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, nature, calculation_method, classification, fixed_value, percentage_value, percentage_base_rubrica_id, uses_complementary_quantity, complementary_quantity_label, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
 
 const PAYROLL_ENTRY_SELECT = "id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary, rubric_meta";
-const PAYROLL_BATCH_SELECT = "id, company_id, month, year, status, is_archived";
+const PAYROLL_BATCH_SELECT = "id, company_id, month, year, status, is_archived, payment_date";
 
 const isSameCompetence = (a: PayrollMonth, b: PayrollMonth) => a.month === b.month && a.year === b.year;
 
@@ -660,7 +671,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // Comentário: mantemos os demais cadastros na mesma origem para preservar o padrão já existente no provider.
     const [companiesRes, employeesRes, departmentsRes, rolesRes, rubricsRes, payrollBatchesRes, payrollEntriesRes] = await Promise.all([
-      supabase.from("companies").select("id, name, cnpj, address, is_active").order("name", { ascending: true }),
+      supabase.from("companies").select("id, name, cnpj, address, city, state, is_active").order("name", { ascending: true }),
       employeesRequest,
       departmentsRequest,
       jobRolesRequest,
@@ -795,6 +806,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         month: selectedMonth.month,
         year: selectedMonth.year,
         status: "em_edicao",
+        payment_date: getSuggestedPaymentDate(selectedMonth.month, selectedMonth.year),
       })
       .select(PAYROLL_BATCH_SELECT)
       .single();
@@ -907,6 +919,19 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .single();
     if (error || !data) throw error;
 
+    const mapped = mapPayrollBatchRowToModel(data);
+    setAllPayrollBatches((prev) => prev.map((batch) => (batch.id === mapped.id ? mapped : batch)));
+  }, [currentBatch]);
+
+  const updateCurrentBatchPaymentDate = useCallback(async (paymentDate: string | null) => {
+    if (!currentBatch) throw new Error("Nenhuma folha selecionada para atualizar data de pagamento.");
+    const { data, error } = await supabase
+      .from("payroll_batches")
+      .update({ payment_date: paymentDate || null })
+      .eq("id", currentBatch.id)
+      .select(PAYROLL_BATCH_SELECT)
+      .single();
+    if (error || !data) throw error;
     const mapped = mapPayrollBatchRowToModel(data);
     setAllPayrollBatches((prev) => prev.map((batch) => (batch.id === mapped.id ? mapped : batch)));
   }, [currentBatch]);
@@ -1031,6 +1056,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
             // Nova folha duplicada nasce em `em_edicao` (rascunho conceitual do PRD-09),
             // sem criar novo status e sem interferir nos cálculos/lançamentos copiados.
             status: "em_edicao",
+            payment_date: getSuggestedPaymentDate(input.targetMonth.month, input.targetMonth.year),
           })
           .select(PAYROLL_BATCH_SELECT)
           .single();
@@ -1106,9 +1132,11 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         name: normalizeRequiredText(company.name),
         cnpj: cnpjDigits,
         address,
+        city: normalizeText(company.city),
+        state: normalizeText(company.state)?.toUpperCase() ?? null,
         is_active: company.isActive ?? true,
       })
-      .select("id, name, cnpj, address, is_active")
+      .select("id, name, cnpj, address, city, state, is_active")
       .single();
     if (error || !data) {
       // Comentário: 23505 = unique_violation (CPF/CNPJ duplicado no campo legado cnpj).
@@ -1135,13 +1163,15 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!address) throw new Error("Endereço é obrigatório.");
       payload.address = address;
     }
+    if (updates.city !== undefined) payload.city = normalizeText(updates.city);
+    if (updates.state !== undefined) payload.state = normalizeText(updates.state)?.toUpperCase() ?? null;
     if (updates.isActive !== undefined) payload.is_active = updates.isActive;
 
     const { data, error } = await supabase
       .from("companies")
       .update(payload)
       .eq("id", id)
-      .select("id, name, cnpj, address, is_active")
+      .select("id, name, cnpj, address, city, state, is_active")
       .single();
     if (error || !data) {
       if ((error as { code?: string } | null)?.code === "23505") {
@@ -1161,7 +1191,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .from("companies")
       .update({ is_active: isActive })
       .eq("id", id)
-      .select("id, name, cnpj, address, is_active")
+      .select("id, name, cnpj, address, city, state, is_active")
       .single();
     if (error || !data) throw error;
 
@@ -1439,6 +1469,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         allPayrollBatches,
         duplicatePayroll,
         updateCurrentBatchStatus,
+        updateCurrentBatchPaymentDate,
         archiveCurrentBatch,
         restoreCurrentBatch,
         payrollCatalogErrors,

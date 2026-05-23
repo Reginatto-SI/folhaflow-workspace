@@ -101,6 +101,8 @@ type FormState = {
   name: string;
   cnpj: string;
   address: string;
+  city: string;
+  state: string;
   isActive: boolean;
 };
 
@@ -125,7 +127,7 @@ const Companies: React.FC = () => {
   } = usePayroll();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Company | null>(null);
-  const [form, setForm] = useState<FormState>({ name: "", cnpj: "", address: "", isActive: true });
+  const [form, setForm] = useState<FormState>({ name: "", cnpj: "", address: "", city: "", state: "", isActive: true });
   const [filters, setFilters] = useState<FilterState>(getInitialFilters());
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -160,7 +162,7 @@ const Companies: React.FC = () => {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ name: "", cnpj: "", address: "", isActive: true });
+    setForm({ name: "", cnpj: "", address: "", city: "", state: "", isActive: true });
     setOpen(true);
   };
 
@@ -170,6 +172,8 @@ const Companies: React.FC = () => {
       name: company.name,
       cnpj: formatCpfOrCnpj(company.cnpj),
       address: company.address || "",
+      city: company.city || "",
+      state: company.state || "",
       isActive: company.isActive,
     });
     setOpen(true);
@@ -179,6 +183,8 @@ const Companies: React.FC = () => {
     const cnpjDigits = sanitizeDigits(form.cnpj);
     const name = normalizeText(form.name);
     const address = normalizeText(form.address);
+    const city = normalizeText(form.city);
+    const state = normalizeText(form.state).toUpperCase();
 
     if (!name) {
       toast.error("Informe o nome da empresa.");
@@ -200,10 +206,10 @@ const Companies: React.FC = () => {
     setSaving(true);
     try {
       if (editing) {
-        await updateCompany(editing.id, { name, cnpj: cnpjDigits, address, isActive: form.isActive });
+        await updateCompany(editing.id, { name, cnpj: cnpjDigits, address, city, state, isActive: form.isActive });
         toast.success("Empresa atualizada.");
       } else {
-        await addCompany({ name, cnpj: cnpjDigits, address, isActive: true });
+        await addCompany({ name, cnpj: cnpjDigits, address, city, state, isActive: true });
         toast.success("Empresa cadastrada.");
       }
       setOpen(false);
@@ -386,6 +392,16 @@ const Companies: React.FC = () => {
                       onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
                       maxLength={255}
                     />
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>Cidade</Label>
+                      <Input value={form.city} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} maxLength={120} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>UF</Label>
+                      <Input value={form.state} onChange={(event) => setForm((prev) => ({ ...prev, state: event.target.value.toUpperCase().slice(0, 2) }))} maxLength={2} />
+                    </div>
                   </div>
                   {editing && (
                     <div className="space-y-1.5">

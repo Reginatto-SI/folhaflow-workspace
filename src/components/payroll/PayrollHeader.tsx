@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 interface PayrollHeaderProps {
   onNewEntry?: () => void;
@@ -73,6 +74,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
     availableCompetences,
     currentBatch,
     updateCurrentBatchStatus,
+    updateCurrentBatchPaymentDate,
     archiveCurrentBatch,
   } = usePayroll();
   const [statusDialogOpen, setStatusDialogOpen] = React.useState(false);
@@ -80,6 +82,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
   const [isSavingStatus, setIsSavingStatus] = React.useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = React.useState(false);
   const [isSavingArchiveState, setIsSavingArchiveState] = React.useState(false);
+  const [paymentDateDraft, setPaymentDateDraft] = React.useState("");
 
   // Comentário: PRD-05 §5.4 — apenas empresas ATIVAS aparecem no seletor da Central de Folha.
   const companyItems = React.useMemo(
@@ -129,6 +132,10 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
     }
     setStatusDraft(normalizePayrollStatus(currentBatch.status));
   }, [currentBatch]);
+
+  React.useEffect(() => {
+    setPaymentDateDraft(currentBatch?.paymentDate || "");
+  }, [currentBatch?.id, currentBatch?.paymentDate]);
 
   const handleSaveStatus = async () => {
     try {
@@ -227,6 +234,21 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
               <Badge variant="secondary" className="h-8 px-2.5 text-xs font-medium">Arquivada</Badge>
             </div>
           )}
+          <div className="w-full space-y-1 sm:w-[190px]">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Data de pagamento</div>
+            <Input
+              type="date"
+              value={paymentDateDraft}
+              disabled={!currentBatch || currentBatch.isArchived}
+              className="h-8"
+              onChange={(e) => setPaymentDateDraft(e.target.value)}
+              onBlur={() => {
+                if (!currentBatch) return;
+                void updateCurrentBatchPaymentDate(paymentDateDraft || null);
+              }}
+            />
+            <p className="text-[10px] text-muted-foreground">Usada nos recibos de pagamento.</p>
+          </div>
         </div>
 
         <div className="ml-auto flex items-center gap-2">
