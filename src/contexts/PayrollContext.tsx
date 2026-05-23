@@ -423,6 +423,7 @@ const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
   earnings: entry.earnings,
   deductions: entry.deductions,
   notes: normalizeText(entry.notes),
+  rubric_meta: entry.rubricMeta ?? {},
 });
 
 const mapPayrollBatchRowToModel = (row: {
