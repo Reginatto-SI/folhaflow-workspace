@@ -55,6 +55,11 @@ type RubricValueInput = {
   value: number;
 };
 
+type RubricQuantityInput = {
+  rubricId: string;
+  quantity: number;
+};
+
 interface EmployeeDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
