@@ -410,6 +410,7 @@ const mapPayrollEntryRowToModel = (row: PayrollEntryRow): PayrollEntry => ({
   deductionsTotal: row.deductions_total !== null ? Number(row.deductions_total) : undefined,
   inssAmount: row.inss_amount !== null ? Number(row.inss_amount) : undefined,
   netSalary: row.net_salary !== null ? Number(row.net_salary) : undefined,
+  rubricMeta: row.rubric_meta || {},
 });
 
 const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
