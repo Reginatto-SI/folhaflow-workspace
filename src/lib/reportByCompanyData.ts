@@ -1,5 +1,5 @@
 import { Company, Employee, PayrollBatch, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
-import { calculatePayrollFromEntry } from "@/lib/payrollSpreadsheet";
+import { calculatePayrollFromEntry, resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
 
 export type ReportFixedColumnKey = "name" | "department" | "jobRole" | "admissionRegistration";
 
@@ -51,16 +51,18 @@ const readValueFromPayload = (entry: PayrollEntry, key: string) => {
 const readRubricValueFromEntry = (
   entry: PayrollEntry,
   rubric: Pick<Rubric, "id" | "code" | "classification">,
+  canonicalIds: { salarioRealId: string | null; g2ComplementoId: string | null; salarioLiquidoId: string | null },
   canonicalComputed?: { salarioReal: number; g2Complemento: number; salarioLiquido: number }
 ) => {
   // Comentário: regra crítica do relatório — NÃO recalcular folha.
   // Para rubricas canônicas finais (PRD-12), priorizamos o mesmo resultado
-  // resolvido pela Central (`calculatePayrollFromEntry`) ANTES do payload,
-  // pois o payload persistido pode conter materialização legada como zero.
+  // resolvido pela Central (`calculatePayrollFromEntry`) ANTES do payload.
+  // A identificação usa o mesmo resolvedor canônico da Central por ID de rubrica,
+  // cobrindo códigos legados (inclusive numéricos) sem heurística paralela no relatório.
   if (canonicalComputed) {
-    if (rubric.code === "salario_real") return canonicalComputed.salarioReal;
-    if (rubric.code === "g2_complemento") return canonicalComputed.g2Complemento;
-    if (rubric.code === "salario_liquido") return canonicalComputed.salarioLiquido;
+    if (canonicalIds.salarioRealId && rubric.id === canonicalIds.salarioRealId) return canonicalComputed.salarioReal;
+    if (canonicalIds.g2ComplementoId && rubric.id === canonicalIds.g2ComplementoId) return canonicalComputed.g2Complemento;
+    if (canonicalIds.salarioLiquidoId && rubric.id === canonicalIds.salarioLiquidoId) return canonicalComputed.salarioLiquido;
   }
 
   // Para as demais rubricas, mantemos a ordem legada de leitura:
@@ -98,6 +100,7 @@ export function buildReportByCompanyData(params: {
   const rubrics = params.rubrics ?? [];
 
   const rubricById = new Map(rubrics.map((rubric) => [rubric.id, rubric]));
+  const canonicalIds = resolveCanonicalDerivedRubricIds(rubrics);
 
   const activeRubrics = [...rubrics]
     .filter((rubric) => rubric.isActive)
@@ -145,7 +148,7 @@ export function buildReportByCompanyData(params: {
         id: column.rubricId,
         code: column.rubricCode,
         classification: rubricById.get(column.rubricId)?.classification ?? null,
-      }, canonicalComputed));
+      }, canonicalIds, canonicalComputed));
     });
 
     return {

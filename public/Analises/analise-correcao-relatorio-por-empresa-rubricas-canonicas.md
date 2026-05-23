@@ -56,3 +56,34 @@
   1. usar `canonicalComputed` (mesma resolução da Central);
   2. somente para não canônicas, manter leitura por payload (`id`/`code`) e campos legados quando aplicável.
 - Motivo técnico: impedir que valores legados/materializados como `0` no payload sobrescrevam os valores corretos já resolvidos pela Central de Folha.
+
+## Refinamento — identificação real das rubricas canônicas no relatório
+
+### Códigos/campos inspecionados no fluxo
+
+- A inspeção do fluxo de montagem do relatório confirma que cada coluna dinâmica leva:
+  - `column.rubricId = rubric.id`
+  - `column.rubricCode = rubric.code`
+  - `column.rubricName = rubric.name`
+- No resolvedor da Central (`resolveCanonicalDerivedRubricIds`), a identificação canônica não depende só do code canônico estrito; ela também cobre códigos legados e nome legado controlado, resolvendo para um `rubric.id` canônico final.
+
+### Resultado da investigação
+
+- O risco de divergência por `rubric.code` não canônico (ex.: legado/numérico) era real quando o relatório testava somente `rubric.code === salario_real|g2_complemento|salario_liquido`.
+- Para eliminar esse risco sem nova heurística local, o relatório passou a usar o **mesmo critério de resolução da Central**:
+  1. resolve IDs canônicos com `resolveCanonicalDerivedRubricIds(rubrics)`;
+  2. identifica coluna canônica por `rubric.id` comparando com esses IDs resolvidos;
+  3. para as três canônicas, prioriza `canonicalComputed` antes do payload.
+
+### Critério final de identificação adotado
+
+- `salario_real` → `rubric.id === canonicalIds.salarioRealId`
+- `g2_complemento` → `rubric.id === canonicalIds.g2ComplementoId`
+- `salario_liquido` → `rubric.id === canonicalIds.salarioLiquidoId`
+
+Esse critério reaproveita a resolução canônica oficial já usada pela Central e evita duplicação de lógica.
+
+### Validação (PDF)
+
+- Por código, PDF/CSV/tabela continuam consumindo o mesmo `dataset` do relatório.
+- Assim, ao corrigir a identificação canônica na construção do `dataset`, os valores e totalizadores passam a ficar coerentes entre tela e exportações.
