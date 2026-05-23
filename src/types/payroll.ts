@@ -68,6 +68,9 @@ export interface PayrollEntry {
   deductionsTotal?: number;
   inssAmount?: number;
   netSalary?: number;
+  // PRD-07: metadados descritivos por rubrica neste lançamento (ex.: dias).
+  // Não interfere em cálculo nem em totalizadores.
+  rubricMeta?: Record<string, { quantity?: number }>;
 }
 
 export interface RubricFormulaItem {
