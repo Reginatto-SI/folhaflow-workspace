@@ -116,6 +116,10 @@ export interface Rubric {
   percentageValue?: number | null;
   percentageBaseRubricId?: string | null;
   formulaItems: RubricFormulaItem[];
+  // PRD-07: quando true, o lançamento pode armazenar uma quantidade complementar
+  // (ex.: "dias" para Compra de Férias). Apenas descritiva — NÃO entra em cálculo.
+  usesComplementaryQuantity?: boolean;
+  complementaryQuantityLabel?: string | null;
   allowManualOverride: boolean;
   /**
    * @deprecated PRD-02: use `classification`. Mantido apenas para compatibilidade da coluna legada.
