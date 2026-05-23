@@ -70,7 +70,7 @@ const isTechnicalSalaryRubric = (rubric: Rubric) =>
 
 const getFirstRubricValue = (context: LegacyReceiptContext, predicate: (rubric: Rubric) => boolean) => {
   const rubric = [...context.rubrics]
-    .filter((item) => item.isActive && predicate(item))
+    .filter((item) => item.isActive && !context.individualizedRubricIds.has(item.id) && predicate(item))
     .sort((a, b) => a.order - b.order)[0];
 
   return rubric ? toSafeNumber(context.valuesByRubricId[rubric.id]) : null;
