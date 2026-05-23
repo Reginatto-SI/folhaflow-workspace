@@ -110,6 +110,8 @@ const getInitialForm = (): RubricFormState => ({
   percentageBaseRubricId: null,
   formulaItems: [],
   allowManualOverride: false,
+  usesComplementaryQuantity: false,
+  complementaryQuantityLabel: "",
 });
 
 const getInitialFilters = (): RubricFilterState => ({
