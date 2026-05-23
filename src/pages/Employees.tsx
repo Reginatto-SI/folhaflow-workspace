@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
+import * as XLSX from "xlsx";
 
 type EmployeeTab = "dados-funcionario" | "dados-funcionais" | "dados-bancarios" | "observacoes";
 
@@ -79,6 +80,23 @@ const normalizeBankField = (value?: string) => {
   const normalized = normalizeText(value);
   return normalized.length >= 2 ? normalized : "";
 };
+const formatCpf = (value: string) => maskCpf(value || "");
+
+const toIsoDate = (value: unknown): string => {
+  if (typeof value === "number") {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (!parsed) return "";
+    return `${parsed.y}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
+  }
+  const text = normalizeText(String(value || ""));
+  if (!text) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const matchBr = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (matchBr) return `${matchBr[3]}-${matchBr[2]}-${matchBr[1]}`;
+  const fromDate = new Date(text);
+  if (Number.isNaN(fromDate.getTime())) return "";
+  return `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, "0")}-${String(fromDate.getDate()).padStart(2, "0")}`;
+};
 
 const Employees: React.FC = () => {
   const {
@@ -102,6 +120,8 @@ const Employees: React.FC = () => {
   const [filters, setFilters] = useState<EmployeeFilterState>(getInitialFilters());
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [selectedImportFile, setSelectedImportFile] = useState<File | null>(null);
+  const [importSummary, setImportSummary] = useState<string[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   // Departments/jobRoles for the filter card (selected company)
@@ -303,10 +323,31 @@ const Employees: React.FC = () => {
     }
   };
 
-  // Comentário: preparação de UX para exportação sem backend, mantendo ponto único para futura integração com API.
+  // Comentário: exporta os dados já filtrados/listados na tela para manter aderência ao contexto visível do usuário.
   const handleExport = (type: "xlsx" | "pdf") => {
-    const label = type === "xlsx" ? "Excel (.xlsx)" : "PDF";
-    toast.success(`Exportação ${label} iniciada (simulação).`);
+    if (type === "pdf") {
+      toast.info("Exportação PDF ainda não implementada para Funcionários.");
+      return;
+    }
+    const rows = filteredEmployees.map((employee) => {
+      const company = companies.find((item) => item.id === employee.companyId);
+      const department = allDepartments.find((item) => item.id === employee.departmentId);
+      const jobRole = allJobRoles.find((item) => item.id === employee.jobRoleId);
+      return {
+        "Nome": employee.name,
+        "CPF": formatCpf(employee.cpf),
+        "Empresa Registrada": company?.name || "",
+        "Setor": department?.name || employee.department || "",
+        "Função/Cargo": jobRole?.name || employee.role || "",
+        "Data de Admissão": employee.admissionDate,
+        "Status": employee.isOnLeave ? "Afastado" : employee.isActive ? "Ativo" : "Inativo",
+      };
+    });
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Funcionarios");
+    XLSX.writeFile(workbook, `funcionarios-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success("Exportação Excel concluída.");
   };
 
   // Comentário: aceitamos somente planilhas nesta fase para reforçar o padrão de importação por modelo.
@@ -327,20 +368,148 @@ const Employees: React.FC = () => {
       return;
     }
     setSelectedImportFile(file);
+    setImportSummary([]);
   };
 
   const resetImportModal = () => {
     setSelectedImportFile(null);
+    setImportSummary([]);
     setImportModalOpen(false);
   };
 
-  const handleImportSubmit = () => {
+  const handleDownloadTemplate = () => {
+    const workbook = XLSX.utils.book_new();
+    const employeesTemplate = XLSX.utils.aoa_to_sheet([
+      ["Nome", "CPF", "Empresa ID", "Empresa", "Setor ID", "Setor", "Função ID", "Função/Cargo", "Data de Admissão", "Status"],
+    ]);
+    const instructionsSheet = XLSX.utils.aoa_to_sheet([
+      ["Instruções de preenchimento"],
+      ["Preencha somente a aba Funcionarios."],
+      ["Use preferencialmente os IDs das abas auxiliares (Empresa ID, Setor ID, Função ID)."],
+      ["Não altere os nomes das colunas da aba Funcionarios."],
+      ["Empresas, setores e funções/cargos devem existir previamente no sistema."],
+      ["A importação não cria empresas, setores ou funções/cargos automaticamente."],
+      ["CPF repetido é permitido quando representar outro vínculo funcional."],
+      ["Registros idênticos (CPF + empresa + setor + função + admissão) podem ser bloqueados por duplicidade."],
+    ]);
+    const companiesSheet = XLSX.utils.json_to_sheet(companies.map((company) => ({ "ID": company.id, "Nome/Razão social": company.name, "CNPJ": company.cnpj })));
+    const departmentsSheet = XLSX.utils.json_to_sheet(allDepartments.map((department) => {
+      const company = companies.find((item) => item.id === department.companyId);
+      return { "ID": department.id, "Setor": department.name, "Empresa ID": department.companyId, "Empresa": company?.name || "" };
+    }));
+    const jobRolesSheet = XLSX.utils.json_to_sheet(allJobRoles.map((jobRole) => {
+      const company = companies.find((item) => item.id === jobRole.companyId);
+      return { "ID": jobRole.id, "Função/Cargo": jobRole.name, "Empresa ID": jobRole.companyId, "Empresa": company?.name || "" };
+    }));
+    XLSX.utils.book_append_sheet(workbook, employeesTemplate, "Funcionarios");
+    XLSX.utils.book_append_sheet(workbook, instructionsSheet, "Instrucoes");
+    XLSX.utils.book_append_sheet(workbook, companiesSheet, "Empresas");
+    XLSX.utils.book_append_sheet(workbook, departmentsSheet, "Setores");
+    XLSX.utils.book_append_sheet(workbook, jobRolesSheet, "Funcoes");
+    XLSX.writeFile(workbook, "modelo-importacao-funcionarios.xlsx");
+    toast.success("Modelo Excel gerado.");
+  };
+
+  const handleImportSubmit = async () => {
+    if (isImporting) return;
     if (!selectedImportFile) {
       toast.error("Selecione um arquivo para importar.");
       return;
     }
-    toast.success(`Importação de "${selectedImportFile.name}" enviada para processamento (simulação).`);
-    resetImportModal();
+    setIsImporting(true);
+    try {
+      const normalizeLookup = (value: string) => normalizeText(value).toLowerCase();
+      const buffer = await selectedImportFile.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets["Funcionarios"] || workbook.Sheets[workbook.SheetNames[0]];
+      if (!sheet) {
+        toast.error("Planilha sem aba de funcionários.");
+        return;
+      }
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+      let imported = 0;
+      let ignored = 0;
+      const errorsList: string[] = [];
+      const warningsList: string[] = [];
+      const seenImportKeys = new Set<string>();
+
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index];
+        const line = index + 2;
+        const name = normalizeText(String(row["Nome"] || ""));
+        const cpf = sanitizeDigits(String(row["CPF"] || ""));
+        const companyIdRaw = normalizeText(String(row["Empresa ID"] || ""));
+        const companyNameRaw = normalizeText(String(row["Empresa"] || ""));
+        const departmentIdRaw = normalizeText(String(row["Setor ID"] || ""));
+        const departmentNameRaw = normalizeText(String(row["Setor"] || ""));
+        const jobRoleIdRaw = normalizeText(String(row["Função ID"] || ""));
+        const jobRoleNameRaw = normalizeText(String(row["Função/Cargo"] || ""));
+        const admissionDate = toIsoDate(row["Data de Admissão"]);
+        const statusRaw = normalizeText(String(row["Status"] || "Ativo")).toLowerCase();
+        if (!name && !cpf && !companyIdRaw && !companyNameRaw) { ignored += 1; continue; }
+        if (!name) { errorsList.push(`Linha ${line}: nome obrigatório.`); continue; }
+        if (!isValidCpf(cpf)) { errorsList.push(`Linha ${line}: CPF inválido.`); continue; }
+
+        // Comentário: vínculo por ID é prioridade; por nome usamos comparação normalizada (trim + espaços + minúsculas), sem aproximação.
+        const company = companyIdRaw
+          ? companies.find((item) => item.id === companyIdRaw)
+          : companies.find((item) => normalizeLookup(item.name) === normalizeLookup(companyNameRaw));
+        if (!company) { errorsList.push(`Linha ${line}: empresa não encontrada.`); continue; }
+        const department = departmentIdRaw
+          ? allDepartments.find((item) => item.id === departmentIdRaw && item.companyId === company.id)
+          : allDepartments.find((item) => normalizeLookup(item.name) === normalizeLookup(departmentNameRaw) && item.companyId === company.id);
+        if (!department) { errorsList.push(`Linha ${line}: setor não encontrado para a empresa informada.`); continue; }
+        const jobRole = jobRoleIdRaw
+          ? allJobRoles.find((item) => item.id === jobRoleIdRaw && item.companyId === company.id)
+          : allJobRoles.find((item) => normalizeLookup(item.name) === normalizeLookup(jobRoleNameRaw) && item.companyId === company.id);
+        if (!jobRole) { errorsList.push(`Linha ${line}: função/cargo não encontrada para a empresa informada.`); continue; }
+        if (!admissionDate) { errorsList.push(`Linha ${line}: data de admissão inválida.`); continue; }
+        if (!["ativo", "inativo", "afastado"].includes(statusRaw)) { errorsList.push(`Linha ${line}: status inválido.`); continue; }
+
+        // Comentário: bloqueamos somente duplicidade idêntica (CPF+empresa+setor+função+admissão), não CPF repetido isolado.
+        const fullKey = `${cpf}|${company.id}|${department.id}|${jobRole.id}|${admissionDate}`;
+        if (seenImportKeys.has(fullKey)) {
+          errorsList.push(`Linha ${line}: registro duplicado dentro da própria planilha com mesmo CPF, empresa, setor, função e data de admissão.`);
+          continue;
+        }
+        seenImportKeys.add(fullKey);
+
+        const duplicateExact = employees.some((item) =>
+          item.cpf === cpf
+          && item.companyId === company.id
+          && item.departmentId === department.id
+          && item.jobRoleId === jobRole.id
+          && item.admissionDate === admissionDate
+        );
+        if (duplicateExact) {
+          errorsList.push(`Linha ${line}: possível duplicidade idêntica já cadastrada para CPF, empresa, setor, função e admissão.`);
+          continue;
+        }
+
+        const cpfInOtherBond = employees.some((item) => item.cpf === cpf);
+        if (cpfInOtherBond) {
+          warningsList.push(`Linha ${line}: CPF já existe em outro vínculo. Registro importado como novo vínculo funcional.`);
+        }
+
+        const statusMap = statusRaw === "afastado" ? { isOnLeave: true, isActive: true } : statusRaw === "inativo" ? { isOnLeave: false, isActive: false } : { isOnLeave: false, isActive: true };
+        await addEmployee({ companyId: company.id, name, cpf, admissionDate, registration: "", workCardNumber: "", notes: "", departmentId: department.id, department: department.name, jobRoleId: jobRole.id, role: jobRole.name, isMonthly: false, isOnLeave: statusMap.isOnLeave, isActive: statusMap.isActive, bankName: "", bankBranch: "", bankAccount: "", bankPixKey: "" });
+        imported += 1;
+      }
+
+      const summary = [
+        `Total de linhas lidas: ${rows.length}.`,
+        `Total importado: ${imported}.`,
+        `Total ignorado: ${ignored}.`,
+        `Total com erro: ${errorsList.length}.`,
+        `Total com aviso: ${warningsList.length}.`,
+        ...errorsList.slice(0, 20).map((item) => `Erro: ${item}`),
+        ...warningsList.slice(0, 20).map((item) => `Aviso: ${item}`),
+      ];
+      setImportSummary(summary);
+      toast.success(`Importação finalizada. ${imported} funcionário(s) importado(s).`);
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const fieldClass = (field: keyof EmployeeFormErrors) => cn(errors[field] && "border-destructive focus-visible:ring-destructive/40");
@@ -391,12 +560,12 @@ const Employees: React.FC = () => {
               <DialogHeader className="space-y-2">
                 <DialogTitle className="text-xl">Importar funcionários</DialogTitle>
                 <p className="text-sm text-muted-foreground">
-                  Faça upload da planilha no modelo padrão para cadastrar ou atualizar funcionários em lote.
+                  Faça upload da planilha no modelo padrão para cadastrar novos vínculos de funcionários em lote.
                 </p>
               </DialogHeader>
 
               <div className="space-y-4">
-                <Button variant="secondary" className="w-full sm:w-auto" onClick={() => toast.info("Download do modelo Excel disponível em breve.")}>
+                <Button variant="secondary" className="w-full sm:w-auto" onClick={handleDownloadTemplate}>
                   <Download className="mr-1 h-4 w-4" /> Baixar modelo Excel
                 </Button>
 
@@ -423,7 +592,7 @@ const Employees: React.FC = () => {
                   onChange={(event) => handleImportFileSelection(event.target.files?.[0])}
                 />
 
-                <Button type="button" variant="outline" onClick={() => importInputRef.current?.click()}>
+                <Button type="button" variant="outline" onClick={() => importInputRef.current?.click()} disabled={isImporting}>
                   Selecionar arquivo
                 </Button>
 
@@ -431,14 +600,19 @@ const Employees: React.FC = () => {
                   <p>Formato suportado: Excel (.xlsx, .xls).</p>
                   <p>{selectedImportFile ? `Arquivo selecionado: ${selectedImportFile.name}` : "Nenhum arquivo selecionado."}</p>
                 </div>
+                {importSummary.length > 0 && (
+                  <div className="max-h-40 overflow-auto rounded border bg-muted/20 p-3 text-xs">
+                    {importSummary.map((item) => <p key={item}>{item}</p>)}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 border-t pt-4">
-                <Button variant="outline" onClick={resetImportModal}>
+                <Button variant="outline" onClick={resetImportModal} disabled={isImporting}>
                   <X className="mr-1 h-4 w-4" /> Cancelar
                 </Button>
-                <Button onClick={handleImportSubmit}>
-                  <Upload className="mr-1 h-4 w-4" /> Importar
+                <Button onClick={handleImportSubmit} disabled={isImporting}>
+                  <Upload className="mr-1 h-4 w-4" /> {isImporting ? "Importando..." : "Importar"}
                 </Button>
               </div>
             </DialogContent>
