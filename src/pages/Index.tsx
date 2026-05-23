@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { buildReportByCompanyData } from "@/lib/reportByCompanyData";
 import { generateReportByCompanyPdf } from "@/lib/reportByCompanyPdf";
+import { exportReportByCompanyExcel } from "@/lib/reportByCompanyExcel";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import ReceiptPrintView from "@/components/payroll/ReceiptPrintView";
 
@@ -150,6 +151,8 @@ const Index = () => {
       batch: currentBatch,
       allBatches: allPayrollBatches,
       allEmployees,
+      // Comentário: `payrollEntries` já representa exatamente a folha ativa da Central
+      // (empresa+competência e, quando existe, batch atual), conforme filtro oficial do PayrollContext.
       allEntries: payrollEntries,
       rubrics,
     });
@@ -161,6 +164,32 @@ const Index = () => {
 
     generateReportByCompanyPdf(dataset);
     toast.success("PDF gerado e baixado com sucesso.");
+  }, [selectedCompany, currentBatch, selectedMonth, allPayrollBatches, allEmployees, payrollEntries, rubrics]);
+
+
+  const handleGenerateCompanyReportExcel = useCallback(() => {
+    if (!selectedCompany || !currentBatch) {
+      toast.error("Selecione empresa e folha ativa para gerar o relatório.");
+      return;
+    }
+
+    // Comentário: Central reaproveita a mesma base de dados operacional e exportador Excel da tela de relatórios.
+    const dataset = buildReportByCompanyData({
+      company: selectedCompany,
+      month: selectedMonth,
+      batch: currentBatch,
+      allBatches: allPayrollBatches,
+      allEmployees,
+      allEntries: payrollEntries,
+      rubrics,
+    });
+
+    if (!dataset.rows.length) {
+      toast.error("Não há dados para gerar o relatório nesta competência.");
+      return;
+    }
+
+    exportReportByCompanyExcel(dataset);
   }, [selectedCompany, currentBatch, selectedMonth, allPayrollBatches, allEmployees, payrollEntries, rubrics]);
 
   const availableEmployeesForEntry = useMemo(() => {

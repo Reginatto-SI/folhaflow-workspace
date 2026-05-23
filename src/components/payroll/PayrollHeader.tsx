@@ -2,7 +2,7 @@ import React from "react";
 import { getSuggestedPaymentDate, usePayroll } from "@/contexts/PayrollContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Archive, Building2, CalendarDays, CheckCircle2, Copy, FileText, MoreHorizontal, PencilLine, Plus, Printer, RotateCcw } from "lucide-react";
+import { AlertTriangle, Archive, Building2, CalendarDays, CheckCircle2, Copy, FileSpreadsheet, FileText, MoreHorizontal, PencilLine, Plus, Printer, RotateCcw } from "lucide-react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -24,6 +24,7 @@ interface PayrollHeaderProps {
   onGenerateReceipts?: () => void;
   onDuplicatePayroll?: () => void;
   onGenerateReport?: () => void;
+  onGenerateExcelReport?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -65,7 +66,7 @@ const normalizePayrollStatus = (status?: string | null): PayrollStatus => {
   return "em_edicao";
 };
 
-const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateReceipts, onDuplicatePayroll, onGenerateReport }) => {
+const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateReceipts, onDuplicatePayroll, onGenerateReport, onGenerateExcelReport }) => {
   const {
     activeCompanies,
     selectedCompany,
@@ -270,7 +271,13 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onGenerateReport} disabled={!currentBatch || !selectedCompany || !onGenerateReport}>
                 <FileText className="mr-2 h-4 w-4" />
-                Gerar relatório
+                {/* Comentário: PDF preservado; apenas renomeado no menu, mantendo handler original intacto. */}
+                Gerar relatório PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onGenerateExcelReport} disabled={!currentBatch || !selectedCompany || !onGenerateExcelReport}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                {/* Comentário: nova ação reutiliza a exportação Excel já existente em /relatorios/por-empresa. */}
+                Gerar relatório Excel
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onDuplicatePayroll} disabled={!currentBatch}>
                 <Copy className="mr-2 h-4 w-4" />
