@@ -856,6 +856,51 @@ const Rubrics: React.FC = () => {
                         <Label htmlFor="allow-manual-override">Permitir edição manual na folha</Label>
                       </div>
                     )}
+
+                    {/* PRD-07: campo descritivo opcional (ex.: dias para Compra de Férias). NÃO entra em cálculo. */}
+                    {form.calculationMethod === "manual" && form.nature !== "calculada" && (
+                      <div className="space-y-2 rounded-md border border-dashed bg-background p-3">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="uses-complementary-quantity"
+                            checked={!!form.usesComplementaryQuantity}
+                            onCheckedChange={(checked) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                usesComplementaryQuantity: checked === true,
+                                complementaryQuantityLabel:
+                                  checked === true ? prev.complementaryQuantityLabel || "dias" : "",
+                              }))
+                            }
+                          />
+                          <Label htmlFor="uses-complementary-quantity" className="text-sm">
+                            Solicitar quantidade/dias junto com o valor (apenas descritivo)
+                          </Label>
+                        </div>
+                        {form.usesComplementaryQuantity && (
+                          <div className="space-y-1.5">
+                            <Label htmlFor="complementary-quantity-label" className="text-xs">
+                              Rótulo da quantidade
+                            </Label>
+                            <Input
+                              id="complementary-quantity-label"
+                              value={form.complementaryQuantityLabel ?? ""}
+                              placeholder="ex.: dias, horas, vezes"
+                              maxLength={24}
+                              onChange={(event) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  complementaryQuantityLabel: event.target.value,
+                                }))
+                              }
+                            />
+                            <p className="text-[11px] text-muted-foreground">
+                              Esse valor aparece no drawer e no recibo (ex.: “(+) Compra de Férias (10 dias)”). Não altera o cálculo.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </section>
                 </TabsContent>
 
