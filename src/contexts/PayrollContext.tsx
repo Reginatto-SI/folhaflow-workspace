@@ -65,7 +65,7 @@ interface PayrollContextType {
   loadError: string | null;
   reloadData: () => Promise<void>;
   updatePayrollEntry: (id: string, updates: Partial<PayrollEntry>) => Promise<void>;
-  addPayrollEntry: (entry: Omit<PayrollEntry, "id">) => Promise<void>;
+  addPayrollEntry: (entry: Omit<PayrollEntry, "id">) => Promise<PayrollEntry>;
   deletePayrollEntry: (id: string) => Promise<void>;
   addCompany: (company: Omit<Company, "id">) => Promise<void>;
   updateCompany: (id: string, updates: Partial<Company>) => Promise<void>;
@@ -878,7 +878,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const addPayrollEntry = useCallback(
-    async (entry: Omit<PayrollEntry, "id">) => {
+    async (entry: Omit<PayrollEntry, "id">): Promise<PayrollEntry> => {
       // Bloco 2 / Fase 1: novos lançamentos devem nascer vinculados à folha formal.
       // Mantemos company/month/year no payload por compatibilidade com o modelo transitório atual.
       const batch = await ensureCurrentBatch();
@@ -893,7 +893,9 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .single();
       if (error || !data) throw error;
 
-      setAllPayrollEntries((prev) => [mapPayrollEntryRowToModel(data as PayrollEntryRow), ...prev]);
+      const createdEntry = mapPayrollEntryRowToModel(data as PayrollEntryRow);
+      setAllPayrollEntries((prev) => [createdEntry, ...prev]);
+      return createdEntry;
     },
     [ensureCurrentBatch]
   );
