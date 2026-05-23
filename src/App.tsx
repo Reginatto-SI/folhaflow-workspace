@@ -36,7 +36,7 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <PayrollProvider>
-                    <SidebarProvider>
+                    <SidebarProvider defaultOpen={false}>
                       <AppLayout>
                         <Routes>
                           <Route path="/" element={<Navigate to="/central-de-folha" replace />} />

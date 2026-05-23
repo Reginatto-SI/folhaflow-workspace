@@ -111,7 +111,7 @@ const BUILD_ID = __BUILD_ID__;
 const BUILD_DATETIME = formatBuildDateTime(BUILD_TIME_ISO);
 
 function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpen, isMobile } = useSidebar();
   const location = useLocation();
   const { hasPermission } = useAuth();
   const collapsed = state === "collapsed";
@@ -130,8 +130,18 @@ function AppSidebar() {
     }
   }, [isCadastrosRoute]);
 
+  // Sidebar mantém o estado colapsado como padrão.
+  // No desktop, usamos hover apenas como expansão temporária para revelar os labels.
+  const handleMouseEnter = () => {
+    if (!isMobile) setOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (!isMobile) setOpen(false);
+  };
+
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
       <SidebarHeader className="border-b border-sidebar-border px-4 py-3 group-data-[collapsible=icon]:px-2">
         {/* O logo colapsado ficava deslocado porque o header mantinha padding horizontal de layout expandido (px-4). */}
         {/* Ajuste mínimo: no modo icon, reaproveitamos o mesmo "encaixe" horizontal (px-2) usado pelos botões do menu. */}
