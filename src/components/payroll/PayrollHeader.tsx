@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Archive, Building2, CalendarDays, CheckCircle2, Copy, FileText, MoreHorizontal, PencilLine, Plus, Printer, RotateCcw } from "lucide-react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -128,12 +128,6 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
     // Comentário: header reutiliza helper oficial da folha para manter regra única da sugestão.
     return getSuggestedPaymentDate(selectedMonth.month, selectedMonth.year);
   }, [selectedMonth.month, selectedMonth.year]);
-  const suggestedPaymentDateLabel = React.useMemo(() => {
-    if (!suggestedPaymentDate) return "";
-    const [year, month, day] = suggestedPaymentDate.split("-");
-    return `${day}/${month}/${year}`;
-  }, [suggestedPaymentDate]);
-
   React.useEffect(() => {
     if (!currentBatch) {
       setStatusDraft("em_edicao");
@@ -143,8 +137,9 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
   }, [currentBatch]);
 
   React.useEffect(() => {
-    setPaymentDateDraft(currentBatch?.paymentDate || "");
-  }, [currentBatch?.id, currentBatch?.paymentDate]);
+    // Comentário: para folhas sem payment_date, o campo já nasce visualmente preenchido com a sugestão oficial (dia 5 do mês seguinte).
+    setPaymentDateDraft(currentBatch?.paymentDate || suggestedPaymentDate || "");
+  }, [currentBatch?.id, currentBatch?.paymentDate, suggestedPaymentDate]);
 
   const handleSaveStatus = async () => {
     try {
@@ -190,24 +185,13 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
     }
   };
 
-  const handleApplySuggestedPaymentDate = async () => {
-    if (!currentBatch || !suggestedPaymentDate) return;
-    try {
-      // Comentário: folhas antigas sem data só recebem payment_date após ação explícita do RH.
-      await updateCurrentBatchPaymentDate(suggestedPaymentDate);
-      setPaymentDateDraft(suggestedPaymentDate);
-      toast.success("Data de pagamento sugerida aplicada.");
-    } catch {
-      toast.error("Não foi possível aplicar a sugestão de data de pagamento.");
-    }
-  };
-
   return (
     <TooltipProvider>
       <div className="mb-3 rounded-md border bg-muted/20 px-2.5 py-2">
-        {/* Comentário: card único centraliza configurações operacionais e ações da folha para evitar blocos soltos. */}
-        <div className="flex flex-wrap items-end gap-2.5">
-          <div className="w-full space-y-1 sm:w-[220px]">
+        {/* Comentário: header em duas áreas horizontais — esquerda (campos) e direita (ação principal + menu), mantendo leitura limpa e profissional. */}
+        <div className="flex flex-col gap-2.5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="flex flex-1 flex-wrap items-end gap-2.5">
+            <div className="w-full space-y-1 sm:w-[220px]">
             <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               <Building2 className="h-3 w-3" />
               Empresa
@@ -225,9 +209,9 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
                 if (c) setSelectedCompany(c);
               }}
             />
-          </div>
+            </div>
 
-          <div className="w-full space-y-1 sm:w-[190px]">
+            <div className="w-full space-y-1 sm:w-[190px]">
             <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               <CalendarDays className="h-3 w-3" />
               Competência
@@ -246,121 +230,65 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
                 setSelectedMonth({ month: m, year: y });
               }}
             />
+            </div>
+            <div className="w-full space-y-1 sm:w-[190px]">
+              <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Data de pagamento</div>
+              <Input
+                type="date"
+                value={paymentDateDraft}
+                disabled={!currentBatch || currentBatch.isArchived}
+                className="h-8"
+                onChange={(e) => setPaymentDateDraft(e.target.value)}
+                onBlur={async () => {
+                  if (!currentBatch) return;
+                  try {
+                    await savePaymentDateIfNeeded();
+                  } catch {
+                    toast.error("Não foi possível salvar a data de pagamento.");
+                  }
+                }}
+              />
+            </div>
           </div>
 
-          <div className="w-full space-y-1 sm:w-auto">
-            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Status da folha
-            </div>
-            {/* Comentário: badge segue como controle operacional simples do status da folha. */}
-            <Button
-              type="button"
-              variant="outline"
-              className={cn("h-8 w-full justify-start px-2.5 py-0 sm:w-auto", currentStatusVisual.buttonClassName)}
-              onClick={() => setStatusDialogOpen(true)}
-              disabled={!currentBatch || currentBatch.isArchived}
-            >
-              <Badge variant="outline" className={cn("h-5 gap-1.5 text-xs font-medium", currentStatusVisual.badgeClassName)}>
-                <CurrentStatusIcon className="h-3 w-3" />
-                {statusLabel}
-              </Badge>
+          <div className="flex items-center gap-2 self-start xl:self-end">
+            <Button size="sm" onClick={onNewEntry} className="h-8 px-3" disabled={!currentBatch}>
+              <Plus className="h-4 w-4 mr-1" />
+              Novo lançamento
             </Button>
-          </div>
-
-          {currentBatch?.isArchived && (
-            <div className="w-full space-y-1 sm:w-auto">
-              <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Arquivamento</div>
-              <Badge variant="secondary" className="h-8 px-2.5 text-xs font-medium">Arquivada</Badge>
-            </div>
-          )}
-          <div className="w-full space-y-1 sm:w-[190px]">
-            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Data de pagamento</div>
-            <Input
-              type="date"
-              value={paymentDateDraft}
-              disabled={!currentBatch || currentBatch.isArchived}
-              className="h-8"
-              onChange={(e) => setPaymentDateDraft(e.target.value)}
-              onBlur={async () => {
-                if (!currentBatch) return;
-                try {
-                  await savePaymentDateIfNeeded();
-                } catch {
-                  toast.error("Não foi possível salvar a data de pagamento.");
-                }
-              }}
-            />
-            <p className="text-[10px] text-muted-foreground">Usada nos recibos de pagamento.</p>
-            {!paymentDateDraft && currentBatch && (
-              <div className="flex items-center gap-2 text-[10px]">
-                {/* Comentário: sugestão visual não grava automaticamente; o RH decide ao clicar no botão. */}
-                <span className="text-muted-foreground">Sugestão: {suggestedPaymentDateLabel}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-5 px-1.5 text-[10px]"
-                  onClick={() => void handleApplySuggestedPaymentDate()}
-                  disabled={currentBatch.isArchived}
-                >
-                  Usar sugestão
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onDuplicatePayroll}
-            className="h-8 px-3"
-          >
-            <Copy className="h-4 w-4 mr-1" />
-            Criar nova folha
-          </Button>
-          <Button size="sm" onClick={onNewEntry} className="h-8 px-3" disabled={!currentBatch}>
-            <Plus className="h-4 w-4 mr-1" />
-            Novo lançamento
-          </Button>
-          {/* Comentário: recibos em lote — reutiliza o mesmo componente do recibo
-              individual; cada funcionário ocupa uma página A4 própria. */}
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 px-3"
-            onClick={() => void handleGenerateReceiptsClick()}
-            disabled={!currentBatch || !onGenerateReceipts}
-          >
-            <Printer className="h-4 w-4 mr-1" />
-            Gerar recibos
-          </Button>
-          {/* Tooltip explica que relatório é PRD-08, fora do escopo desta sprint. */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span tabIndex={0}>
-                <Button size="sm" variant="outline" disabled className="h-8 px-3">
-                  <FileText className="h-4 w-4 mr-1" />
-                  Gerar relatório
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Disponível em sprint futura (PRD-08).</TooltipContent>
-          </Tooltip>
-          <DropdownMenu>
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" className="h-8 w-8 p-0" aria-label="Mais ações da folha">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => void handleGenerateReceiptsClick()} disabled={!currentBatch || !onGenerateReceipts}>
+                <Printer className="mr-2 h-4 w-4" />
+                Gerar recibos
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled>
+                <FileText className="mr-2 h-4 w-4" />
+                Gerar relatório
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDuplicatePayroll} disabled={!currentBatch}>
+                <Copy className="mr-2 h-4 w-4" />
+                Criar nova folha
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusDialogOpen(true)} disabled={!currentBatch || currentBatch.isArchived}>
+                <CurrentStatusIcon className="mr-2 h-4 w-4" />
+                Status da folha: {statusLabel}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setArchiveDialogOpen(true)} disabled={!currentBatch}>
                 <Archive className="mr-2 h-4 w-4" />
                 Arquivar folha atual
               </DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>
+            </DropdownMenu>
+            {currentBatch?.isArchived && (
+              <Badge variant="secondary" className="h-8 px-2.5 text-xs font-medium">Arquivada</Badge>
+            )}
+          </div>
         </div>
       </div>
       <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
