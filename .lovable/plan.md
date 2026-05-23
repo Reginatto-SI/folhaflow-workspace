@@ -1,71 +1,81 @@
-# Plano — Geração de Recibos de Pagamento
+## Objetivo
 
-## Princípio
-O recibo apenas **exibe** os valores que já estão calculados em memória pela mesma função `calculatePayroll` usada hoje pelo drawer e pela Central. Sem novo motor, sem recálculo paralelo, sem mudança de banco.
+Permitir que uma rubrica manual tenha uma **quantidade complementar opcional** (ex.: "dias" para Compra de Férias), persistida por lançamento/competência, exibida no drawer e refletida no recibo. O número é **apenas descritivo** — não entra em cálculo algum.
 
-## Arquivos novos
+## Escopo das alterações
 
-1. **`src/lib/numberToWords.ts`**
-   - Utilitário isolado `valorPorExtenso(valor: number): string` em pt-BR ("R$ 2.996,57" → "dois mil novecentos e noventa e seis reais e cinquenta e sete centavos").
-   - Apenas para exibição no recibo. Não usado em cálculo.
+### 1. Banco (migration)
 
-2. **`src/components/payroll/Receipt.tsx`**
-   - Componente único reutilizável que renderiza **um** recibo fiel ao modelo legado:
-     - Cabeçalho com nome da empresa em caixa alta (bloco cinza).
-     - Tabela superior com: NOME, EMPRESA, SETOR, FUNÇÃO, MÊS (ex: "ABRIL-26"), VALOR RECEBIDO, Valor por Extenso, Observação.
-     - Bloco central "DISCRIMINAÇÃO DAS VERBAS" com bordas, listando todas as rubricas com valor ≠ 0 (proventos com `(+)`, descontos com `(-)`), salário base como "Salário Bruto", e linha final `(=) Líquido a receber` em destaque cinza.
-     - Texto "Declaro ter recebido a importância discriminada neste recibo."
-     - Linha de cidade/data + linha de assinatura + nome do funcionário.
-   - Props: `{ entry, employee, company, department, jobRole, rubrics, competence }`. Recebe valores já calculados; não chama `calculatePayroll` (a página pai monta os valores via `getEntryManualValues` + `calculatePayroll`, igual ao drawer).
-   - CSS dedicado em escopo `.receipt-sheet` (cores cinza claras `#dcdcdc`/`#eeeeee`, bordas pretas finas, fonte Arial/sans-serif compacta) — visual fiel ao legado, sem cards modernos / sombras / radius.
-   - Quebra de página: classe `print:break-after-page` (Tailwind) + CSS `page-break-after: always` em cada recibo.
+**Tabela `rubricas`** — duas colunas novas:
+- `uses_complementary_quantity boolean not null default false`
+- `complementary_quantity_label text` (ex.: `"dias"`)
 
-3. **`src/components/payroll/ReceiptPrintView.tsx`**
-   - Página/visualização **fora do Drawer**: ocupa tela cheia (rota ou `Dialog` em modo full-screen sem chrome). Renderiza uma lista de `<Receipt />` (1 para individual, N para lote).
-   - Botões topo (escondidos no print via `print:hidden`): "Imprimir / Salvar PDF" (chama `window.print()`) e "Fechar".
-   - `@media print`: A4, margens 1cm, `body { background: white }`, oculta chrome do app.
-   - Abertura: via estado controlado por `Index.tsx` (`receiptsOpen`, `receiptsData`).
+**Tabela `payroll_entries`** — uma coluna nova:
+- `rubric_meta jsonb not null default '{}'::jsonb`
+  - formato: `{ "<rubricId>": { "quantity": 10 } }`
+  - mantida separada de `earnings`/`deductions` para não impactar o motor de cálculo e os totalizadores existentes.
 
-4. **`src/lib/receiptData.ts`**
-   - Função `buildReceiptData(entry, rubrics)` → retorna `{ baseSalary, lines: [{label, type:'+'|'-'|'=', value}], netSalary, valorExtenso }` usando `calculatePayroll(...)` sobre os valores manuais já persistidos. Compartilhada por individual e lote.
+Sem novos triggers, sem CHECK constraints. RLS herdada (sem mudança).
 
-## Arquivos alterados
+### 2. Tipos (`src/types/payroll.ts`)
 
-5. **`src/components/payroll/EmployeeDrawer.tsx`**
-   - Reativar o botão "Gerar recibo" (hoje desabilitado com tooltip PRD-07).
-   - Nova prop `onGenerateReceipt?: (entry: PayrollEntry) => void`. Ao clicar, fecha o drawer (opcional) e chama o handler com o `entry` atual já com a prévia aplicada (mesma fonte da `livePreviewEntry` usada hoje).
-   - Comentário: drawer apenas dispara; render do recibo é fora.
+- `Rubric`: `usesComplementaryQuantity?: boolean`, `complementaryQuantityLabel?: string | null`.
+- `PayrollEntry`: `rubricMeta?: Record<string, { quantity?: number }>`.
 
-6. **`src/components/payroll/PayrollHeader.tsx`**
-   - Adicionar botão "Gerar recibos" ao lado do "Gerar relatório" (este último permanece desabilitado). Ícone `Printer`. Disparar callback `onGenerateBatchReceipts` (prop nova) ou consumir do contexto via prop drilling a partir de `Index.tsx`.
+### 3. Contexto (`src/contexts/PayrollContext.tsx`)
 
-7. **`src/pages/Index.tsx`**
-   - Novo estado `receiptsState: { open: boolean; entries: PayrollEntry[] } | null`.
-   - `handleGenerateReceiptIndividual(entry)` → preenche com `[entry]` (usando `centralEntries` que já reflete prévia do drawer).
-   - `handleGenerateBatchReceipts()` → usa `centralEntries` filtrados apenas por empresa+competência atual (ignora busca/setor/cargo? **Decisão default: respeita os filtros aplicados na tela**, pois o usuário pode querer recortar; comentário no código deixa explícito).
-   - Renderiza `<ReceiptPrintView />` quando aberto.
-   - Passa handlers para `PayrollHeader` e `EmployeeDrawer`.
+- Mapear as novas colunas em todos os pontos de leitura/escrita de rubricas e entries (load, add, update). Persistir `rubric_meta` no `addPayrollEntry`/`updatePayrollEntry`. Sem mudança em cálculo.
 
-## Dados usados (já existentes)
-- Funcionário: `allEmployees` (nome, cpf).
-- Empresa: `selectedCompany.name`.
-- Setor: `allDepartments` via `employee.departmentId` (fallback `employee.department`).
-- Função: `allJobRoles` via `employee.jobRoleId` (fallback `employee.role`).
-- Competência: formato "MÊS-AA" derivado de `selectedMonth` (`"ABRIL-26"`).
-- Valores das verbas: `entry.earnings`/`deductions` + `rubrics` ativos.
-- Observação: padrão `"Saldo salário - <COMPETÊNCIA>"`, **substituível por `entry.notes`** se preenchido.
-- Cidade na assinatura: hard-coded `"Sorriso - MT"` (igual ao modelo). **Pendência sinalizada no resumo final** — não há campo de cidade da empresa no schema.
+### 4. Cadastro de rubricas (`src/pages/Rubrics.tsx`)
 
-## Impressão
-- Apenas `window.print()` + CSS `@page { size: A4; margin: 1cm }`. Sem dependência nova (jspdf/html2pdf).
-- Cada `<Receipt />` envolto em `<div class="receipt-sheet">` com `page-break-after: always` exceto o último.
+- Adicionar, no formulário/diálogo de rubrica, um checkbox "Usar quantidade complementar" e, quando marcado, um input "Rótulo" (default `"dias"`). Sem reorganizar a tela.
 
-## Restrições respeitadas
-- Sem mudança em `payrollSpreadsheet.ts`, rubricas, banco, RLS, fórmulas, salvamento.
-- Sem nova rota obrigatória (usa overlay full-screen) — se preferir rota dedicada `/recibos`, é trivial trocar depois.
-- Mesmo componente `Receipt` serve individual e lote.
+### 5. Drawer da Central (`src/components/payroll/EmployeeDrawer.tsx`)
 
-## Pendências a comunicar no resumo final
-- Cidade "Sorriso - MT" fixa (não há cadastro de cidade da empresa).
-- "Observação" usa `entry.notes` se houver; senão, padrão "Saldo salário - <COMPETÊNCIA>".
-- Lote respeita filtros ativos da Central (busca/setor/cargo) — comportamento documentado.
+- Em `NumericRubricInput`, quando `rubric.usesComplementaryQuantity` for true, exibir um segundo input compacto à direita do valor, com largura curta (`w-20`), tipo numérico inteiro ≥ 0, label "Dias" (ou o rótulo configurado).
+- Estado local adicional `rubricQuantities: Record<string, number>`; inicialização lê de `entry.rubricMeta`.
+- `buildPayrollEntryDraft` adiciona `rubricMeta` ao payload com apenas as rubricas que têm quantidade definida (>0).
+- Cálculo (`calculatePayroll`) e canônicas **não** recebem nada de quantidade.
+
+### 6. Recibo
+
+- `src/lib/receiptData.ts`:
+  - `ReceiptLine` ganha `quantity?: number` e `quantityLabel?: string`.
+  - Após construir as linhas legadas (agregadas), inserir **linhas extras dedicadas** para cada rubrica ativa que:
+    - tenha `usesComplementaryQuantity = true`,
+    - tenha valor > 0 no lançamento,
+    - tenha quantidade > 0 em `entry.rubricMeta`.
+  - Posicionamento: insere logo antes da linha "INSS" (final do bloco de proventos) para não quebrar a ordem visual dos descontos. Prefixo segue o tipo da rubrica (`(+)` provento, `(-)` desconto).
+  - Para evitar dupla contagem visual, **subtrair** o mesmo valor da linha agregada onde a rubrica entraria (por `classification`). Os totais "Líquido a receber" não mudam, porque vêm da entry persistida.
+- `src/components/payroll/Receipt.tsx`:
+  - `formatReceiptLineLabel` passa a anexar `(N dias)` quando `line.quantity` e `line.quantityLabel` existirem. Ex.: `(+) Compra de Férias (10 dias)`.
+
+### 7. Relatório PDF (`src/pages/ReportsCompany.tsx` e `src/lib/reportByCompanyData.ts`)
+
+- **Nenhuma alteração**. O relatório continua lendo apenas valores monetários.
+
+### 8. Testes manuais (após build)
+
+1. Marcar a rubrica "Compra de Férias" como `uses_complementary_quantity = true`, rótulo `dias`.
+2. No drawer, lançar R$ 1.200 + 10 dias, salvar, reabrir → persistência ok.
+3. Salário Líquido e totais inalterados quando só os dias mudam.
+4. Recibo mostra `(+) Compra de Férias (10 dias)  1.200,00`, separado da linha agregada.
+5. Relatório PDF mostra apenas o valor.
+6. Outras rubricas (Horas Extras, Prêmio, INSS, Faltas) continuam idênticas.
+
+## Fora de escopo (explícito)
+
+- Sem motor de cálculo por quantidade.
+- Sem alteração em rubricas canônicas (`salario_real`, `g2_complemento`, `salario_liquido`).
+- Sem mudança em AppLayout, navegação, demais páginas, ou relatórios.
+- Sem refactor do drawer ou do template do recibo.
+
+## Arquivos tocados
+
+- Migration nova (rubricas + payroll_entries)
+- `src/types/payroll.ts`
+- `src/contexts/PayrollContext.tsx`
+- `src/pages/Rubrics.tsx`
+- `src/components/payroll/EmployeeDrawer.tsx`
+- `src/lib/receiptData.ts`
+- `src/components/payroll/Receipt.tsx`

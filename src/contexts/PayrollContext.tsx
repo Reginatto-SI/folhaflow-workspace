@@ -272,6 +272,8 @@ const mapRubricRowToModel = (row: {
     source_rubrica_id: string;
     item_order: number;
   }>;
+  uses_complementary_quantity?: boolean | null;
+  complementary_quantity_label?: string | null;
 }): Rubric => {
   // Comentário: deriva calculationMethod a partir do entry_mode legado quando ainda não migrado.
   const calculationMethod = (row.calculation_method as Rubric["calculationMethod"] | null)
@@ -301,6 +303,8 @@ const mapRubricRowToModel = (row: {
         order: item.item_order,
       }))
       .sort((a, b) => a.order - b.order),
+    usesComplementaryQuantity: Boolean(row.uses_complementary_quantity),
+    complementaryQuantityLabel: row.complementary_quantity_label ?? null,
     // Compat temporária — não usar em lógica nova.
     category: row.category,
     mode: calculationMethod === "formula" ? "formula" : "manual",
@@ -334,6 +338,8 @@ const mapRubricInsertToRow = (rubric: Omit<Rubric, "id">) => ({
   fixed_value: rubric.calculationMethod === "valor_fixo" ? (rubric.fixedValue ?? 0) : null,
   percentage_value: rubric.calculationMethod === "percentual" ? (rubric.percentageValue ?? 0) : null,
   percentage_base_rubrica_id: rubric.calculationMethod === "percentual" ? (rubric.percentageBaseRubricId ?? null) : null,
+  uses_complementary_quantity: rubric.usesComplementaryQuantity ?? false,
+  complementary_quantity_label: rubric.usesComplementaryQuantity ? normalizeText(rubric.complementaryQuantityLabel ?? "") : null,
 });
 
 const mapRubricUpdateToRow = (updates: Partial<Rubric>) => {
@@ -354,6 +360,13 @@ const mapRubricUpdateToRow = (updates: Partial<Rubric>) => {
   if (updates.fixedValue !== undefined) out.fixed_value = updates.fixedValue;
   if (updates.percentageValue !== undefined) out.percentage_value = updates.percentageValue;
   if (updates.percentageBaseRubricId !== undefined) out.percentage_base_rubrica_id = updates.percentageBaseRubricId;
+  if (updates.usesComplementaryQuantity !== undefined) {
+    out.uses_complementary_quantity = updates.usesComplementaryQuantity;
+    if (!updates.usesComplementaryQuantity) out.complementary_quantity_label = null;
+  }
+  if (updates.complementaryQuantityLabel !== undefined) {
+    out.complementary_quantity_label = normalizeText(updates.complementaryQuantityLabel ?? "");
+  }
   return out;
 };
 
@@ -379,6 +392,7 @@ type PayrollEntryRow = {
   deductions_total: number | null;
   inss_amount: number | null;
   net_salary: number | null;
+  rubric_meta: Record<string, { quantity?: number }> | null;
 };
 
 const mapPayrollEntryRowToModel = (row: PayrollEntryRow): PayrollEntry => ({
@@ -396,6 +410,7 @@ const mapPayrollEntryRowToModel = (row: PayrollEntryRow): PayrollEntry => ({
   deductionsTotal: row.deductions_total !== null ? Number(row.deductions_total) : undefined,
   inssAmount: row.inss_amount !== null ? Number(row.inss_amount) : undefined,
   netSalary: row.net_salary !== null ? Number(row.net_salary) : undefined,
+  rubricMeta: row.rubric_meta || {},
 });
 
 const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
@@ -408,6 +423,7 @@ const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
   earnings: entry.earnings,
   deductions: entry.deductions,
   notes: normalizeText(entry.notes),
+  rubric_meta: entry.rubricMeta ?? {},
 });
 
 const mapPayrollBatchRowToModel = (row: {
@@ -429,9 +445,9 @@ const mapPayrollBatchRowToModel = (row: {
 // Comentário: a tabela de itens possui duas FKs para `rubricas`; usamos embed explícito para evitar ambiguidade no PostgREST.
 // Lista todas as colunas necessárias para o contrato canônico (PRD-02), incluindo nature/calculation_method/classification.
 const RUBRICA_SELECT_WITH_ITEMS =
-  "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, nature, calculation_method, classification, fixed_value, percentage_value, percentage_base_rubrica_id, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
+  "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, nature, calculation_method, classification, fixed_value, percentage_value, percentage_base_rubrica_id, uses_complementary_quantity, complementary_quantity_label, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
 
-const PAYROLL_ENTRY_SELECT = "id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary";
+const PAYROLL_ENTRY_SELECT = "id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary, rubric_meta";
 const PAYROLL_BATCH_SELECT = "id, company_id, month, year, status, is_archived";
 
 const isSameCompetence = (a: PayrollMonth, b: PayrollMonth) => a.month === b.month && a.year === b.year;
@@ -831,6 +847,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...(updates.deductionsTotal !== undefined ? { deductions_total: updates.deductionsTotal } : {}),
         ...(updates.inssAmount !== undefined ? { inss_amount: updates.inssAmount } : {}),
         ...(updates.netSalary !== undefined ? { net_salary: updates.netSalary } : {}),
+        ...(updates.rubricMeta !== undefined ? { rubric_meta: updates.rubricMeta } : {}),
       };
       const { data, error } = await supabase
         .from("payroll_entries")

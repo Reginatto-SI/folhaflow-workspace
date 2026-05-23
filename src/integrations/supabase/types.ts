@@ -265,6 +265,7 @@ export type Database = {
           net_salary: number
           notes: string | null
           payroll_batch_id: string | null
+          rubric_meta: Json
           updated_at: string
           year: number
         }
@@ -283,6 +284,7 @@ export type Database = {
           net_salary?: number
           notes?: string | null
           payroll_batch_id?: string | null
+          rubric_meta?: Json
           updated_at?: string
           year: number
         }
@@ -301,6 +303,7 @@ export type Database = {
           net_salary?: number
           notes?: string | null
           payroll_batch_id?: string | null
+          rubric_meta?: Json
           updated_at?: string
           year?: number
         }
@@ -432,6 +435,7 @@ export type Database = {
             | Database["public"]["Enums"]["rubric_classification"]
             | null
           code: string
+          complementary_quantity_label: string | null
           created_at: string
           display_order: number
           entry_mode: string
@@ -444,6 +448,7 @@ export type Database = {
           percentage_value: number | null
           type: string
           updated_at: string
+          uses_complementary_quantity: boolean
         }
         Insert: {
           allow_manual_override?: boolean
@@ -455,6 +460,7 @@ export type Database = {
             | Database["public"]["Enums"]["rubric_classification"]
             | null
           code: string
+          complementary_quantity_label?: string | null
           created_at?: string
           display_order?: number
           entry_mode: string
@@ -467,6 +473,7 @@ export type Database = {
           percentage_value?: number | null
           type: string
           updated_at?: string
+          uses_complementary_quantity?: boolean
         }
         Update: {
           allow_manual_override?: boolean
@@ -478,6 +485,7 @@ export type Database = {
             | Database["public"]["Enums"]["rubric_classification"]
             | null
           code?: string
+          complementary_quantity_label?: string | null
           created_at?: string
           display_order?: number
           entry_mode?: string
@@ -490,6 +498,7 @@ export type Database = {
           percentage_value?: number | null
           type?: string
           updated_at?: string
+          uses_complementary_quantity?: boolean
         }
         Relationships: [
           {
@@ -568,6 +577,7 @@ export type Database = {
           net_salary: number
           notes: string | null
           payroll_batch_id: string | null
+          rubric_meta: Json
           updated_at: string
           year: number
         }[]

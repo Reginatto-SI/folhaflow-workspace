@@ -55,6 +55,11 @@ type RubricValueInput = {
   value: number;
 };
 
+type RubricQuantityInput = {
+  rubricId: string;
+  quantity: number;
+};
+
 interface EmployeeDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -78,11 +83,13 @@ interface EmployeeDrawerProps {
 const NumericRubricInput: React.FC<{
   rubric: Rubric;
   value: number;
+  quantity?: number;
   disabled?: boolean;
   labelClassName?: string;
   inputClassName?: string;
   onChange: (next: RubricValueInput) => void;
-}> = ({ rubric, value, disabled, labelClassName, inputClassName, onChange }) => {
+  onQuantityChange?: (next: RubricQuantityInput) => void;
+}> = ({ rubric, value, quantity = 0, disabled, labelClassName, inputClassName, onChange, onQuantityChange }) => {
   const [text, setText] = useState(formatCurrencyDisplay(value));
   const [isFocused, setIsFocused] = useState(false);
 
@@ -104,6 +111,10 @@ const NumericRubricInput: React.FC<{
     window.setTimeout(select, 0);
   };
 
+  // PRD-07: quantidade complementar é descritiva (ex.: dias). NÃO entra em cálculo.
+  const showQuantity = !!rubric.usesComplementaryQuantity;
+  const quantityLabel = (rubric.complementaryQuantityLabel || "Qtde").trim() || "Qtde";
+
   return (
     <div className="space-y-1">
       <Label
@@ -112,27 +123,47 @@ const NumericRubricInput: React.FC<{
       >
         {rubric.code} · {rubric.name}
       </Label>
-      <Input
-        className={`h-8 text-right tabular-nums text-sm font-medium ${inputClassName || ""}`}
-        value={text}
-        disabled={disabled}
-        onChange={(event) => {
-          const nextText = event.target.value;
-          setText(nextText);
-          onChange({ rubricId: rubric.id, value: parseCurrency(nextText) });
-        }}
-        onFocus={(event) => {
-          setIsFocused(true);
-          setText(formatEditCurrency(value));
-          selectEditableValue(event.currentTarget);
-        }}
-        onBlur={() => {
-          const parsed = parseCurrency(text);
-          onChange({ rubricId: rubric.id, value: parsed });
-          setIsFocused(false);
-          setText(formatCurrencyDisplay(parsed));
-        }}
-      />
+      <div className="flex items-stretch gap-1">
+        <Input
+          className={`h-8 text-right tabular-nums text-sm font-medium flex-1 min-w-0 ${inputClassName || ""}`}
+          value={text}
+          disabled={disabled}
+          onChange={(event) => {
+            const nextText = event.target.value;
+            setText(nextText);
+            onChange({ rubricId: rubric.id, value: parseCurrency(nextText) });
+          }}
+          onFocus={(event) => {
+            setIsFocused(true);
+            setText(formatEditCurrency(value));
+            selectEditableValue(event.currentTarget);
+          }}
+          onBlur={() => {
+            const parsed = parseCurrency(text);
+            onChange({ rubricId: rubric.id, value: parsed });
+            setIsFocused(false);
+            setText(formatCurrencyDisplay(parsed));
+          }}
+        />
+        {showQuantity && onQuantityChange && (
+          <Input
+            className="h-8 w-16 text-right tabular-nums text-sm"
+            type="number"
+            min={0}
+            step={1}
+            disabled={disabled}
+            placeholder={quantityLabel}
+            title={quantityLabel}
+            value={quantity > 0 ? String(quantity) : ""}
+            onChange={(event) => {
+              const raw = event.target.value;
+              const parsed = raw === "" ? 0 : Math.max(0, Math.floor(Number(raw) || 0));
+              onQuantityChange({ rubricId: rubric.id, quantity: parsed });
+            }}
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        )}
+      </div>
     </div>
   );
 };
@@ -183,6 +214,8 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 }) => {
   const isCreateMode = mode === "create";
   const [rubricValues, setRubricValues] = useState<Record<string, number>>({});
+  // PRD-07: quantidade complementar (ex.: dias) por rubrica. Apenas descritiva.
+  const [rubricQuantities, setRubricQuantities] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState("");
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -216,6 +249,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
     if (isCreateMode || !entry) {
       setRubricValues(emptyValues);
+      setRubricQuantities({});
       setNotes("");
       return;
     }
@@ -225,6 +259,15 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       ...emptyValues,
       ...getEntryManualValues(entry, activeRubricsOrdered),
     });
+    // PRD-07: hidrata quantidades complementares já persistidas neste lançamento.
+    const persistedMeta = entry.rubricMeta || {};
+    const nextQuantities: Record<string, number> = {};
+    activeRubricsOrdered.forEach((rubric) => {
+      if (!rubric.usesComplementaryQuantity) return;
+      const qty = Number(persistedMeta[rubric.id]?.quantity ?? 0);
+      if (Number.isFinite(qty) && qty > 0) nextQuantities[rubric.id] = qty;
+    });
+    setRubricQuantities(nextQuantities);
     setNotes(entry.notes || "");
   }, [activeRubricsOrdered, entry, isCreateMode, open]);
 
@@ -300,6 +343,14 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       earningsPayload[rubric.id] = value;
     });
 
+    // PRD-07: monta rubric_meta apenas com rubricas que usam quantidade complementar e tenham valor > 0.
+    const rubricMetaPayload: Record<string, { quantity?: number }> = {};
+    activeRubricsOrdered.forEach((rubric) => {
+      if (!rubric.usesComplementaryQuantity) return;
+      const qty = Number(rubricQuantities[rubric.id] || 0);
+      if (qty > 0) rubricMetaPayload[rubric.id] = { quantity: qty };
+    });
+
     return {
       baseSalary: spreadsheetPreview.baseSalary,
       earnings: earningsPayload,
@@ -312,8 +363,9 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       deductionsTotal: spreadsheetPreview.deductionsTotal,
       inssAmount: spreadsheetPreview.inssAmount,
       netSalary: canonicalDerivedRubricIds.salarioLiquidoId ? spreadsheetPreview.salarioLiquido : spreadsheetPreview.netSalary,
+      rubricMeta: rubricMetaPayload,
     };
-  }, [activeRubricsOrdered, canonicalDerivedRubricIds.salarioLiquidoId, notes, rubricValues, spreadsheetPreview]);
+  }, [activeRubricsOrdered, canonicalDerivedRubricIds.salarioLiquidoId, notes, rubricQuantities, rubricValues, spreadsheetPreview]);
 
   useEffect(() => {
     if (!onPreviewChange) return;
@@ -330,6 +382,10 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
   const updateRubricValue = ({ rubricId, value }: RubricValueInput) => {
     setRubricValues((prev) => ({ ...prev, [rubricId]: value }));
+  };
+
+  const updateRubricQuantity = ({ rubricId, quantity }: RubricQuantityInput) => {
+    setRubricQuantities((prev) => ({ ...prev, [rubricId]: quantity }));
   };
 
   const canEditValues = isCreateMode ? !!selectedEmployeeId : true;
@@ -427,7 +483,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Salários Base</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
                 {groupedRubrics.salariosBase.map((rubric) => (
-                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
+                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} quantity={rubricQuantities[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} onQuantityChange={updateRubricQuantity} />
                 ))}
               </div>
             </section>
@@ -438,7 +494,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proventos</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
                 {groupedRubrics.proventos.map((rubric) => (
-                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} />
+                  <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} quantity={rubricQuantities[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} onQuantityChange={updateRubricQuantity} />
                 ))}
               </div>
             </section>
@@ -453,9 +509,11 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
                     key={rubric.id}
                     rubric={rubric}
                     value={rubricValues[rubric.id] || 0}
+                    quantity={rubricQuantities[rubric.id] || 0}
                     disabled={!canEditValues}
                     labelClassName="text-destructive"
                     onChange={updateRubricValue}
+                    onQuantityChange={updateRubricQuantity}
                   />
                 ))}
               </div>
