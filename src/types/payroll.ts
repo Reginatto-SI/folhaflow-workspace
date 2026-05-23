@@ -124,6 +124,10 @@ export interface Rubric {
   usesComplementaryQuantity?: boolean;
   complementaryQuantityLabel?: string | null;
   allowManualOverride: boolean;
+  // PRD-07: campos opcionais para rubricas manuais que precisam capturar uma
+  // quantidade descritiva (ex.: dias de Compra de Férias). Não afeta cálculo.
+  usesComplementaryQuantity?: boolean;
+  complementaryQuantityLabel?: string | null;
   /**
    * @deprecated PRD-02: use `classification`. Mantido apenas para compatibilidade da coluna legada.
    * Não usar em lógica nova — nome/categoria livre nunca define comportamento.
