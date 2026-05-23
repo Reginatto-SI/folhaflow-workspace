@@ -20,7 +20,6 @@ const formatPdfCurrency = (value: number | string) => {
 };
 
 const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br — Contato: (65) 99210-2030";
-const PDF_DIAGNOSTIC_MARK = "PDF_COMPACT_V3_SEM_RS_SEM_HORIZONTAL_BREAK";
 
 const formatAdmissionRegistrationForPrint = (value: string): string => {
   const text = String(value ?? "").trim();
@@ -284,9 +283,7 @@ const ReportsCompany: React.FC = () => {
       doc.text(dataset.title, marginLeft, 9);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      // Comentário: marca temporária de diagnóstico para confirmar visualmente
-      // que este fluxo exportPdf é o mesmo que está gerando o PDF no ambiente testado.
-      doc.text(`Gerado em ${generatedAtLabel} — ${PDF_DIAGNOSTIC_MARK}`, marginLeft, 13);
+      doc.text(`Gerado em ${generatedAtLabel}`, marginLeft, 13);
     };
 
     const fixedColumnsPdfLabels = dataset.fixedColumns.map((column) => formatPdfColumnLabel(column.label));
