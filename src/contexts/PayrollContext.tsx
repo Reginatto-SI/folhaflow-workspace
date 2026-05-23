@@ -338,6 +338,8 @@ const mapRubricInsertToRow = (rubric: Omit<Rubric, "id">) => ({
   fixed_value: rubric.calculationMethod === "valor_fixo" ? (rubric.fixedValue ?? 0) : null,
   percentage_value: rubric.calculationMethod === "percentual" ? (rubric.percentageValue ?? 0) : null,
   percentage_base_rubrica_id: rubric.calculationMethod === "percentual" ? (rubric.percentageBaseRubricId ?? null) : null,
+  uses_complementary_quantity: rubric.usesComplementaryQuantity ?? false,
+  complementary_quantity_label: rubric.usesComplementaryQuantity ? normalizeText(rubric.complementaryQuantityLabel ?? "") : null,
 });
 
 const mapRubricUpdateToRow = (updates: Partial<Rubric>) => {
