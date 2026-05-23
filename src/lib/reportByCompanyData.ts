@@ -1,4 +1,5 @@
 import { Company, Employee, PayrollBatch, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
+import { calculatePayrollFromEntry, resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
 
 export type ReportFixedColumnKey = "name" | "department" | "jobRole" | "admissionRegistration";
 
@@ -47,12 +48,27 @@ const readValueFromPayload = (entry: PayrollEntry, key: string) => {
   return null;
 };
 
-const readRubricValueFromEntry = (entry: PayrollEntry, rubric: Pick<Rubric, "id" | "code" | "classification">) => {
+const readRubricValueFromEntry = (
+  entry: PayrollEntry,
+  rubric: Pick<Rubric, "id" | "code" | "classification">,
+  canonicalIds: { salarioRealId: string | null; g2ComplementoId: string | null; salarioLiquidoId: string | null },
+  canonicalComputed?: { salarioReal: number; g2Complemento: number; salarioLiquido: number }
+) => {
   // Comentário: regra crítica do relatório — NÃO recalcular folha.
-  // Ordem de leitura compatível com o ecossistema atual:
-  //  1) payload por ID técnico da rubrica (padrão atual),
-  //  2) payload por code técnico (compatibilidade histórica),
-  //  3) campos persistidos oficiais de payroll_entries apenas quando necessário.
+  // Para rubricas canônicas finais (PRD-12), priorizamos o mesmo resultado
+  // resolvido pela Central (`calculatePayrollFromEntry`) ANTES do payload.
+  // A identificação usa o mesmo resolvedor canônico da Central por ID de rubrica,
+  // cobrindo códigos legados (inclusive numéricos) sem heurística paralela no relatório.
+  if (canonicalComputed) {
+    if (canonicalIds.salarioRealId && rubric.id === canonicalIds.salarioRealId) return canonicalComputed.salarioReal;
+    if (canonicalIds.g2ComplementoId && rubric.id === canonicalIds.g2ComplementoId) return canonicalComputed.g2Complemento;
+    if (canonicalIds.salarioLiquidoId && rubric.id === canonicalIds.salarioLiquidoId) return canonicalComputed.salarioLiquido;
+  }
+
+  // Para as demais rubricas, mantemos a ordem legada de leitura:
+  //  1) payload por ID técnico da rubrica,
+  //  2) payload por code técnico,
+  //  3) campos persistidos oficiais quando necessário.
   const byId = readValueFromPayload(entry, rubric.id);
   if (typeof byId === "number") return byId;
 
@@ -84,6 +100,7 @@ export function buildReportByCompanyData(params: {
   const rubrics = params.rubrics ?? [];
 
   const rubricById = new Map(rubrics.map((rubric) => [rubric.id, rubric]));
+  const canonicalIds = resolveCanonicalDerivedRubricIds(rubrics);
 
   const activeRubrics = [...rubrics]
     .filter((rubric) => rubric.isActive)
@@ -123,13 +140,15 @@ export function buildReportByCompanyData(params: {
     const jobRole = employee?.role || "-";
     const admissionRegistration = [employee?.admissionDate, employee?.registration].filter(Boolean).join(" / ") || "-";
 
+    const canonicalComputed = calculatePayrollFromEntry({ entry, rubrics });
+
     const rubricValues: Record<string, number> = {};
     activeRubrics.forEach((column) => {
       rubricValues[column.rubricId] = toNumber(readRubricValueFromEntry(entry, {
         id: column.rubricId,
         code: column.rubricCode,
         classification: rubricById.get(column.rubricId)?.classification ?? null,
-      }));
+      }, canonicalIds, canonicalComputed));
     });
 
     return {
