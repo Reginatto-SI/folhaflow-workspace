@@ -4,6 +4,9 @@ export interface Company {
   cnpj: string;
   // Comentário: endereço passou a ser obrigatório por exigência do PRD-05.
   address: string;
+  // Comentário: cidade/UF estruturadas alimentam exibição do recibo; não inferimos de endereço livre.
+  city?: string;
+  state?: string;
   // Comentário: status lógico para inativação sem exclusão física (PRD-05 §5.5).
   isActive: boolean;
 }
@@ -147,6 +150,8 @@ export interface PayrollBatch {
   year: number;
   // Comentário: status operacional simples da folha na Central.
   status: "em_edicao" | "em_revisao" | "finalizado";
+  // Comentário: fonte oficial da data do recibo (PRD-07), editável na Central.
+  paymentDate?: string | null;
   // Comentário: arquivamento é estado lógico separado do status operacional; não exclui dados.
   isArchived: boolean;
 }

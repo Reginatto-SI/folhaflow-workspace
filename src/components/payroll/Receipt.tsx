@@ -27,6 +27,13 @@ const formatCompetencia = (month: number, year: number) => {
   return `${m}-${y}`;
 };
 
+const formatLongPtBrDate = (dateIso?: string | null) => {
+  if (!dateIso) return "____ de ______________ de ______";
+  const dt = new Date(`${dateIso}T00:00:00`);
+  if (Number.isNaN(dt.getTime())) return "____ de ______________ de ______";
+  return dt.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+};
+
 export interface ReceiptProps {
   entry: PayrollEntry;
   employee: Employee;
@@ -35,13 +42,18 @@ export interface ReceiptProps {
   jobRole?: JobRole | null;
   rubrics: Rubric[];
   isLast?: boolean;
+  paymentDate?: string | null;
 }
 
-const Receipt: React.FC<ReceiptProps> = ({ entry, employee, company, department, jobRole, rubrics, isLast }) => {
+const Receipt: React.FC<ReceiptProps> = ({ entry, employee, company, department, jobRole, rubrics, isLast, paymentDate }) => {
   const data = buildReceiptData(entry, rubrics);
   const competencia = formatCompetencia(entry.month, entry.year);
   // Comentário: observação do recibo é fixa por competência; não vem do Drawer/lançamento.
   const observacao = `Saldo salário - ${competencia}`;
+  // Comentário: cidade/UF vêm do cadastro da empresa; recibo apenas exibe os dados já existentes.
+  const location = `${company?.city?.trim() || "____"} - ${company?.state?.trim() || "____"}`;
+  // Comentário: data do recibo vem da folha (payment_date), não da data atual do computador.
+  const paymentDateLabel = formatLongPtBrDate(paymentDate);
 
   return (
     <div
@@ -86,9 +98,7 @@ const Receipt: React.FC<ReceiptProps> = ({ entry, employee, company, department,
 
         <p className="receipt-decl">Declaro ter recebido a importância discriminada neste recibo.</p>
 
-        {/* Comentário: cidade fixa ("Sorriso - MT") por exigência operacional;
-            não há cadastro de cidade por empresa no schema atual. */}
-        <p className="receipt-local">Sorriso - MT, Data: ______/______/______</p>
+        <p className="receipt-local">{location}, {paymentDateLabel}</p>
 
         <div className="receipt-sign">
           <div className="sign-line" />

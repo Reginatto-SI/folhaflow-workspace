@@ -216,6 +216,7 @@ export type Database = {
           is_archived: boolean
           month: number
           status: string
+          payment_date: string | null
           updated_at: string
           year: number
         }
@@ -226,6 +227,7 @@ export type Database = {
           is_archived?: boolean
           month: number
           status?: string
+          payment_date?: string | null
           updated_at?: string
           year: number
         }
@@ -236,6 +238,7 @@ export type Database = {
           is_archived?: boolean
           month?: number
           status?: string
+          payment_date?: string | null
           updated_at?: string
           year?: number
         }

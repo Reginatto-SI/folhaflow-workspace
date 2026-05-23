@@ -299,6 +299,7 @@ const Index = () => {
         company={selectedCompany}
         rubrics={rubrics}
         title={receiptsState?.title}
+        paymentDate={currentBatch?.paymentDate ?? null}
       />
       <Dialog open={newEntryOpen} onOpenChange={setNewEntryOpen}>
         <DialogContent className="sm:max-w-md">

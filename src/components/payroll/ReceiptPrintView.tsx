@@ -19,6 +19,7 @@ export interface ReceiptPrintViewProps {
   company?: Company | null;
   rubrics: Rubric[];
   title?: string;
+  paymentDate?: string | null;
 }
 
 const ReceiptPrintView: React.FC<ReceiptPrintViewProps> = ({
@@ -31,6 +32,7 @@ const ReceiptPrintView: React.FC<ReceiptPrintViewProps> = ({
   company,
   rubrics,
   title,
+  paymentDate,
 }) => {
   useEffect(() => {
     if (!open) return;
@@ -90,6 +92,7 @@ const ReceiptPrintView: React.FC<ReceiptPrintViewProps> = ({
               jobRole={item.jobRole}
               rubrics={rubrics}
               isLast={idx === items.length - 1}
+              paymentDate={paymentDate}
             />
           ))
         )}
