@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { buildReportByCompanyData } from "@/lib/reportByCompanyData";
+import { generateReportByCompanyPdf } from "@/lib/reportByCompanyPdf";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import ReceiptPrintView from "@/components/payroll/ReceiptPrintView";
 
@@ -31,6 +33,7 @@ const Index = () => {
     selectedMonth,
     currentBatch,
     availableCompetences,
+    allPayrollBatches,
   } = usePayroll();
 
   const [search, setSearch] = useState("");
@@ -132,6 +135,34 @@ const Index = () => {
   }, [competenceLabel, filteredEntries]);
 
 
+
+  const handleGenerateCompanyReport = useCallback(() => {
+    if (!selectedCompany || !currentBatch) {
+      toast.error("Selecione empresa e folha ativa para gerar o relatório.");
+      return;
+    }
+
+    // Comentário: a Central só dispara a geração oficial do relatório por empresa
+    // com a empresa/competência já selecionadas, sem cálculo paralelo no header.
+    const dataset = buildReportByCompanyData({
+      company: selectedCompany,
+      month: selectedMonth,
+      batch: currentBatch,
+      allBatches: allPayrollBatches,
+      allEmployees,
+      allEntries: payrollEntries,
+      rubrics,
+    });
+
+    if (!dataset.rows.length) {
+      toast.error("Não há dados para gerar o relatório nesta competência.");
+      return;
+    }
+
+    generateReportByCompanyPdf(dataset);
+    toast.success("PDF gerado e baixado com sucesso.");
+  }, [selectedCompany, currentBatch, selectedMonth, allPayrollBatches, allEmployees, payrollEntries, rubrics]);
+
   const availableEmployeesForEntry = useMemo(() => {
     const alreadyInPayroll = new Set(payrollEntries.map((entry) => entry.employeeId));
     // Comentário: empresa registrante é referência cadastral.
@@ -230,7 +261,7 @@ const Index = () => {
         <p className="text-sm text-muted-foreground mt-1">Selecione empresa e competência, clique em um funcionário para editar valores.</p>
       </div>
 
-      <PayrollHeader onNewEntry={handleOpenNewEntry} onGenerateReceipts={handleGenerateReceiptsBatch} onDuplicatePayroll={() => setDuplicationOpen(true)} />
+      <PayrollHeader onNewEntry={handleOpenNewEntry} onGenerateReceipts={handleGenerateReceiptsBatch} onGenerateReport={handleGenerateCompanyReport} onDuplicatePayroll={() => setDuplicationOpen(true)} />
       <TotalsBar entriesOverride={centralEntries} />
       <PayrollFilters
         search={search}
