@@ -184,10 +184,23 @@ const LEGACY_RECEIPT_LINES: LegacyReceiptLineDefinition[] = [
 
 export function buildReceiptData(entry: PayrollEntry, rubrics: Rubric[]): ReceiptData {
   const result = calculatePayrollFromEntry({ entry, rubrics });
+
+  // PRD-07: identifica rubricas com quantidade complementar para exibir linhas dedicadas
+  // (ex.: "(+) Compra de Férias (10 dias)"). Apenas visual — não altera totais.
+  const rubricMeta = entry.rubricMeta || {};
+  const individualized = rubrics.filter((rubric) => {
+    if (!rubric.isActive || !rubric.usesComplementaryQuantity) return false;
+    const qty = Number(rubricMeta[rubric.id]?.quantity ?? 0);
+    const value = toSafeNumber(result.valuesByRubricId[rubric.id]);
+    return qty > 0 && value !== 0;
+  });
+  const individualizedRubricIds = new Set(individualized.map((rubric) => rubric.id));
+
   const context: LegacyReceiptContext = {
     entry,
     rubrics,
     valuesByRubricId: result.valuesByRubricId,
+    individualizedRubricIds,
   };
 
   // Comentário: recibo legado é simplificado. Mantemos sempre as mesmas linhas,
@@ -198,6 +211,20 @@ export function buildReceiptData(entry: PayrollEntry, rubrics: Rubric[]): Receip
     prefix: line.prefix,
     value: line.getValue(context),
   }));
+
+  // PRD-07: insere linhas individualizadas (uma por rubrica com quantidade).
+  individualized
+    .sort((a, b) => a.order - b.order)
+    .forEach((rubric) => {
+      const qty = Number(rubricMeta[rubric.id]?.quantity ?? 0);
+      const unit = (rubric.complementaryQuantityLabel || "dias").trim() || "dias";
+      const value = toSafeNumber(result.valuesByRubricId[rubric.id]);
+      lines.push({
+        label: `${rubric.name} (${qty} ${unit})`,
+        prefix: rubric.type === "desconto" ? "(-)" : "(+)",
+        value,
+      });
+    });
 
   const baseSalary = lines[0]?.value || 0;
 
