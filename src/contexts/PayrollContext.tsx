@@ -360,6 +360,13 @@ const mapRubricUpdateToRow = (updates: Partial<Rubric>) => {
   if (updates.fixedValue !== undefined) out.fixed_value = updates.fixedValue;
   if (updates.percentageValue !== undefined) out.percentage_value = updates.percentageValue;
   if (updates.percentageBaseRubricId !== undefined) out.percentage_base_rubrica_id = updates.percentageBaseRubricId;
+  if (updates.usesComplementaryQuantity !== undefined) {
+    out.uses_complementary_quantity = updates.usesComplementaryQuantity;
+    if (!updates.usesComplementaryQuantity) out.complementary_quantity_label = null;
+  }
+  if (updates.complementaryQuantityLabel !== undefined) {
+    out.complementary_quantity_label = normalizeText(updates.complementaryQuantityLabel ?? "");
+  }
   return out;
 };
 
