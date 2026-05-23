@@ -392,6 +392,7 @@ type PayrollEntryRow = {
   deductions_total: number | null;
   inss_amount: number | null;
   net_salary: number | null;
+  rubric_meta: Record<string, { quantity?: number }> | null;
 };
 
 const mapPayrollEntryRowToModel = (row: PayrollEntryRow): PayrollEntry => ({
