@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { ReportSummaryDataset } from "@/lib/reportSummaryData";
+import { buildManagerialSummary } from "@/lib/reportSummaryManagerial";
 
 // Comentário: PDF do Resumo Completo da Folha — fiel ao modelo legado "Resumo Completo DF.pdf".
 // Reaproveita jsPDF + autoTable (mesma stack do relatório por empresa). Não recalcula nada;
@@ -215,6 +216,54 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
       }
     },
     margin: { bottom: 8, left: marginLeft, right: marginRight },
+    theme: "grid",
+  });
+
+
+  // Comentário: seção gerencial reutiliza exclusivamente o dataset já consolidado, sem recalcular a folha.
+  const managerial = buildManagerialSummary(dataset);
+  const pct = (value: number) => `${(Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  const startY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 5 : 40;
+
+  autoTable(doc, {
+    startY,
+    head: [["Resumo Gerencial para Aprovação", "Valor"]],
+    body: [
+      ["Total de Funcionários", String(managerial.totalEmployees)],
+      ["Rendimentos", formatBRL(managerial.rendimentos)],
+      ["Descontos", formatBRL(managerial.descontos)],
+      ["Salário Líquido", formatBRL(managerial.salarioLiquido)],
+      ["Custo Médio por Func.", formatBRL(managerial.custoMedioPorFuncionario)],
+    ],
+    tableWidth: usableWidth,
+    margin: { left: marginLeft, right: marginRight },
+    styles: { fontSize: 6, cellPadding: 1 },
+    headStyles: { fillColor: DARK_HIGHLIGHT, textColor: TEXT_LIGHT, fontStyle: "bold" },
+    columnStyles: { 1: { halign: "right" } },
+    theme: "grid",
+  });
+
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 3 : startY + 25,
+    head: [["#", "Setor / Empresa", "Funcionários", "Salário Líquido", "% do Total"]],
+    body: managerial.ranking.slice(0, 5).map((item, index) => [String(index + 1), item.name, String(item.employees), formatBRL(item.salarioLiquido), pct(item.percentOfTotal)]),
+    tableWidth: usableWidth,
+    margin: { left: marginLeft, right: marginRight },
+    styles: { fontSize: 6, cellPadding: 1 },
+    headStyles: { fillColor: DARK_HIGHLIGHT, textColor: TEXT_LIGHT, fontStyle: "bold" },
+    columnStyles: { 2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right" } },
+    theme: "grid",
+  });
+
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 3 : startY + 45,
+    head: [["Grupo", "Valor", "%"]],
+    body: managerial.composition.map((item) => [item.label, formatBRL(item.value), pct(item.percent)]),
+    tableWidth: usableWidth,
+    margin: { left: marginLeft, right: marginRight, bottom: 8 },
+    styles: { fontSize: 6, cellPadding: 1 },
+    headStyles: { fillColor: DARK_HIGHLIGHT, textColor: TEXT_LIGHT, fontStyle: "bold" },
+    columnStyles: { 1: { halign: "right" }, 2: { halign: "right" } },
     theme: "grid",
   });
 
