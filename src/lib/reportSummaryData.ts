@@ -20,14 +20,13 @@ export type SummaryRow = {
   isInteger?: boolean;    // headcount renderiza inteiro, demais como BRL
   valuesByCompanyId: Record<string, number>;
   total: number;
-  semMov: number;         // soma das empresas sem movimento na competência
+  semImob: number;        // TOTAL - IMOBILIÁRIA (não é "sem movimento")
 };
 
 export type SummaryCompanyColumn = {
   id: string;
   name: string;
   headcount: number;
-  semMov: boolean;        // empresa sem nenhum lançamento na competência
 };
 
 export type ReportSummaryDataset = {
@@ -92,10 +91,22 @@ export function buildReportSummaryData(params: {
   const columns: SummaryCompanyColumn[] = companies.map((company) => {
     const ds = datasetByCompany.get(company.id)!;
     const headcount = ds.rows.length;
-    return { id: company.id, name: company.name, headcount, semMov: headcount === 0 };
+    return { id: company.id, name: company.name, headcount };
   });
 
-  const semMovIds = new Set(columns.filter((c) => c.semMov).map((c) => c.id));
+  // Regra de apresentação do legado: "SEM IMOB." = TOTAL - IMOBILIÁRIA.
+  // Não é "empresa sem movimento" e não recalcula a folha; apenas subtrai uma coluna existente.
+  const normalize = (value: string) =>
+    String(value ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toUpperCase();
+  const imobCompanyId =
+    columns.find((c) => {
+      const normalizedName = normalize(c.name);
+      return normalizedName === "IMOBILIARIA";
+    })?.id ?? null;
 
   const makeRow = (
     key: string,
@@ -106,14 +117,14 @@ export function buildReportSummaryData(params: {
   ): SummaryRow => {
     const valuesByCompanyId: Record<string, number> = {};
     let total = 0;
-    let semMov = 0;
+    let imobValue = 0;
     columns.forEach((col) => {
       const v = toNumber(getValue(col.id));
       valuesByCompanyId[col.id] = v;
       total += v;
-      if (semMovIds.has(col.id)) semMov += v;
+      if (imobCompanyId && col.id === imobCompanyId) imobValue = v;
     });
-    return { key, label, kind, valuesByCompanyId, total, semMov, ...extras };
+    return { key, label, kind, valuesByCompanyId, total, semImob: total - imobValue, ...extras };
   };
 
   const rows: SummaryRow[] = [];
@@ -190,29 +201,30 @@ export function buildReportSummaryData(params: {
     ),
   );
 
-  // Custo médio por funcionário = salário real / headcount (por empresa).
-  // Total e Sem Mov. são recalculados após (média ponderada simples).
-  const salarioRealRow = canonical.salarioRealId
-    ? rows.find((r) => r.rubricId === canonical.salarioRealId)
-    : undefined;
+  // Custo médio por funcionário no legado = Salário G / headcount (por empresa).
+  // A linha base já existe no próprio resumo (linha de rubrica "Salário G").
+  // Não recalculamos rubrica: apenas reaproveitamos o valor consolidado já montado acima.
+  const salarioGRow = rows.find((r) => normalize(r.label) === "SALARIO G");
 
   const custoMedioValues: Record<string, number> = {};
   columns.forEach((col) => {
-    const salarioReal = salarioRealRow?.valuesByCompanyId[col.id] ?? 0;
-    custoMedioValues[col.id] = col.headcount > 0 ? salarioReal / col.headcount : 0;
+    const salarioG = salarioGRow?.valuesByCompanyId[col.id] ?? 0;
+    custoMedioValues[col.id] = col.headcount > 0 ? salarioG / col.headcount : 0;
   });
-  const totalSalarioReal = salarioRealRow?.total ?? 0;
+  const totalSalarioG = salarioGRow?.total ?? 0;
   const totalHeadcount = columns.reduce((acc, c) => acc + c.headcount, 0);
-  const semMovSalarioReal = salarioRealRow?.semMov ?? 0;
-  const semMovHeadcount = columns.filter((c) => c.semMov).reduce((acc, c) => acc + c.headcount, 0);
+  const imobHeadcount = imobCompanyId ? (columns.find((c) => c.id === imobCompanyId)?.headcount ?? 0) : 0;
+  const imobSalarioG = imobCompanyId ? (salarioGRow?.valuesByCompanyId[imobCompanyId] ?? 0) : 0;
 
   rows.push({
     key: "__custo_medio__",
     label: "Custo médio por Func.",
     kind: "custo_medio",
     valuesByCompanyId: custoMedioValues,
-    total: totalHeadcount > 0 ? totalSalarioReal / totalHeadcount : 0,
-    semMov: semMovHeadcount > 0 ? semMovSalarioReal / semMovHeadcount : 0,
+    total: totalHeadcount > 0 ? totalSalarioG / totalHeadcount : 0,
+    // Para média, SEM IMOB. não é subtração direta da média da IMOBILIÁRIA.
+    // Regra correta: (Salário G total - Salário G IMOB) / (Headcount total - Headcount IMOB).
+    semImob: totalHeadcount - imobHeadcount > 0 ? (totalSalarioG - imobSalarioG) / (totalHeadcount - imobHeadcount) : 0,
     isBold: true,
   });
 
