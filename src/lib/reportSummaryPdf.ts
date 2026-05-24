@@ -7,6 +7,10 @@ import type { ReportSummaryDataset } from "@/lib/reportSummaryData";
 // apenas consolida visualmente o dataset já agregado por `buildReportSummaryData`.
 
 const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br — Contato: (65) 99210-2030";
+const DARK_HIGHLIGHT: [number, number, number] = [71, 85, 105];
+const LIGHT_ROW_HIGHLIGHT: [number, number, number] = [226, 232, 240];
+const TEXT_LIGHT: [number, number, number] = [255, 255, 255];
+const TEXT_DARK: [number, number, number] = [31, 41, 55];
 
 const formatBRL = (value: number) =>
   `R$${(Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", {
@@ -55,6 +59,8 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   const totalNumericCols = companyColumns.length + 2;
   const firstColWidth = 32; // primeira coluna mais larga (modelo legado).
   const numericColWidth = Math.max(8, (usableWidth - firstColWidth) / totalNumericCols);
+  const totalColIndex = totalNumericCols - 1;
+  const semImobColIndex = totalNumericCols;
 
   const head = [
     [
@@ -99,8 +105,8 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
       valign: "middle",
     },
     headStyles: {
-      fillColor: [71, 85, 105],         // cinza escuro (slate-600)
-      textColor: [255, 255, 255],
+      fillColor: DARK_HIGHLIGHT,         // cinza escuro (slate-600)
+      textColor: TEXT_LIGHT,
       fontStyle: "bold",
       halign: "center",
       valign: "middle",
@@ -109,7 +115,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
       overflow: "linebreak",
     },
     columnStyles: {
-      0: { cellWidth: firstColWidth, halign: "left", fontStyle: "bold", fillColor: [71, 85, 105], textColor: [255, 255, 255] },
+      0: { cellWidth: firstColWidth, halign: "left", fontStyle: "bold", fillColor: DARK_HIGHLIGHT, textColor: TEXT_LIGHT },
       ...Object.fromEntries(
         Array.from({ length: totalNumericCols }).map((_, i) => [
           i + 1,
@@ -130,13 +136,16 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
 
       // Linhas com destaque: fundo cinza claro + negrito.
       if (boldRowIndexes.has(rowIndex)) {
-        hookData.cell.styles.fillColor = [226, 232, 240];
+        hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
+        hookData.cell.styles.textColor = TEXT_DARK;
         hookData.cell.styles.fontStyle = "bold";
       }
 
-      // Coluna TOTAL (penúltima) e SEM IMOB. (última) sempre em negrito.
-      const lastIndex = totalNumericCols; // 0=label, depois empresas, depois TOTAL, SEM IMOB.
-      if (hookData.column.index === lastIndex - 1 || hookData.column.index === lastIndex) {
+      // TOTAL e SEM IMOB. recebem o mesmo destaque da coluna Renda por legibilidade e aderência ao legado.
+      // Também garantimos contraste: texto claro apenas quando o fundo está escuro.
+      if (hookData.column.index === totalColIndex || hookData.column.index === semImobColIndex) {
+        hookData.cell.styles.fillColor = DARK_HIGHLIGHT;
+        hookData.cell.styles.textColor = TEXT_LIGHT;
         hookData.cell.styles.fontStyle = "bold";
       }
     },
@@ -180,7 +189,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
       valign: "middle",
     },
     columnStyles: {
-      0: { cellWidth: firstColWidth, halign: "left", fontStyle: "bold", fillColor: [71, 85, 105], textColor: [255, 255, 255] },
+      0: { cellWidth: firstColWidth, halign: "left", fontStyle: "bold", fillColor: DARK_HIGHLIGHT, textColor: TEXT_LIGHT },
       ...Object.fromEntries(
         Array.from({ length: totalNumericCols }).map((_, i) => [
           i + 1,
@@ -192,10 +201,14 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
       if (hookData.section !== "body") return;
       const rowIndex = hookData.row.index;
       if (summaryBoldRows.has(rowIndex)) {
+        hookData.cell.styles.textColor = TEXT_DARK;
         hookData.cell.styles.fontStyle = "bold";
       }
-      const lastIndex = totalNumericCols;
-      if (hookData.column.index === lastIndex - 1 || hookData.column.index === lastIndex) {
+
+      // TOTAL e SEM IMOB. com o mesmo destaque da primeira coluna, mantendo contraste forte para leitura.
+      if (hookData.column.index === totalColIndex || hookData.column.index === semImobColIndex) {
+        hookData.cell.styles.fillColor = DARK_HIGHLIGHT;
+        hookData.cell.styles.textColor = TEXT_LIGHT;
         hookData.cell.styles.fontStyle = "bold";
       }
     },
