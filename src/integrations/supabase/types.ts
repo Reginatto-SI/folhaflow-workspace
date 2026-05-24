@@ -17,29 +17,35 @@ export type Database = {
       companies: {
         Row: {
           address: string
+          city: string | null
           cnpj: string
           created_at: string
           id: string
           is_active: boolean
           name: string
+          state: string | null
           updated_at: string
         }
         Insert: {
           address: string
+          city?: string | null
           cnpj: string
           created_at?: string
           id?: string
           is_active?: boolean
           name: string
+          state?: string | null
           updated_at?: string
         }
         Update: {
           address?: string
+          city?: string | null
           cnpj?: string
           created_at?: string
           id?: string
           is_active?: boolean
           name?: string
+          state?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -215,8 +221,8 @@ export type Database = {
           id: string
           is_archived: boolean
           month: number
-          status: string
           payment_date: string | null
+          status: string
           updated_at: string
           year: number
         }
@@ -226,8 +232,8 @@ export type Database = {
           id?: string
           is_archived?: boolean
           month: number
-          status?: string
           payment_date?: string | null
+          status?: string
           updated_at?: string
           year: number
         }
@@ -237,8 +243,8 @@ export type Database = {
           id?: string
           is_archived?: boolean
           month?: number
-          status?: string
           payment_date?: string | null
+          status?: string
           updated_at?: string
           year?: number
         }
