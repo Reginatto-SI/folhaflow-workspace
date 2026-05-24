@@ -198,6 +198,43 @@ function AppSidebar() {
                 </SidebarMenuItem>
               ))}
 
+              {/* Grupo "Relatórios" colapsável (Por Empresa + Resumo Completo). */}
+              {visibleRelatorios.length > 0 && (
+                <Collapsible open={relatoriosOpen} onOpenChange={setRelatoriosOpen}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        tooltip="Relatórios"
+                        isActive={isRelatoriosRoute}
+                        className="text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                      >
+                        <FileText className="h-4 w-4 shrink-0" />
+                        {!collapsed && <span>Relatórios</span>}
+                        {!collapsed && (
+                          <ChevronDown
+                            className={`ml-auto h-4 w-4 transition-transform ${relatoriosOpen ? "rotate-180" : ""}`}
+                          />
+                        )}
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {visibleRelatorios.map((item) => (
+                          <SidebarMenuSubItem key={item.to}>
+                            <SidebarMenuSubButton asChild isActive={location.pathname === item.to}>
+                              <NavLink to={item.to} className="text-sidebar-foreground/70 hover:text-sidebar-foreground">
+                                <item.icon className="h-4 w-4 shrink-0" />
+                                <span>{item.label}</span>
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )}
+
               {/* Grupo "Cadastros" oculto se o usuário não tem nenhum item permitido. */}
               {visibleCadastros.length > 0 && (
                 <Collapsible open={cadastrosOpen} onOpenChange={setCadastrosOpen}>
