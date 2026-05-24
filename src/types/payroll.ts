@@ -74,6 +74,8 @@ export interface PayrollEntry {
   // PRD-07: metadados descritivos por rubrica neste lançamento (ex.: dias).
   // Não interfere em cálculo nem em totalizadores.
   rubricMeta?: Record<string, { quantity?: number }>;
+  // Comentário: controle operacional de conferência (PRD-03) — não interfere em cálculo.
+  conferido?: boolean;
 }
 
 export interface RubricFormulaItem {
