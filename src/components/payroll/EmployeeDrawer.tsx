@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +76,7 @@ interface EmployeeDrawerProps {
   onDelete?: (id: string) => Promise<void>;
   canDelete?: boolean;
   onPreviewChange?: (entry: PayrollEntry | null) => void;
+  isConferido?: boolean;
   // Comentário: drawer apenas dispara a geração; recibo é renderizado fora (PRD-07).
   onGenerateReceipt?: (entry: PayrollEntry) => void;
   onToggleConferido?: (entry: PayrollEntry) => void;
@@ -211,6 +212,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   onDelete,
   canDelete = true,
   onPreviewChange,
+  isConferido = false,
   onGenerateReceipt,
   onToggleConferido,
 }) => {
@@ -219,6 +221,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   // PRD-07: quantidade complementar (ex.: dias) por rubrica. Apenas descritiva.
   const [rubricQuantities, setRubricQuantities] = useState<Record<string, number>>({});
   const [notes, setNotes] = useState("");
+  const hydratedEntryIdRef = useRef<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -264,6 +267,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       setRubricValues(emptyValues);
       setRubricQuantities({});
       setNotes("");
+      hydratedEntryIdRef.current = null;
       return;
     }
 
@@ -282,6 +286,9 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     });
     setRubricQuantities(nextQuantities);
     setNotes(entry.notes || "");
+    // Comentário: barreira de hidratação para não emitir preview antes
+    // do formulário do entry atual estar completamente inicializado.
+    hydratedEntryIdRef.current = entry.id;
   }, [activeRubricsOrdered, entryFormSeed, isCreateMode, open]);
 
   // Cálculo único da tela: usado para prévia, derivados readonly e totais persistidos.
@@ -383,15 +390,17 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   useEffect(() => {
     if (!onPreviewChange) return;
     if (!open || isCreateMode || !entry) {
+      hydratedEntryIdRef.current = null;
       onPreviewChange(null);
       return;
     }
+    if (hydratedEntryIdRef.current !== entry.id) return;
 
     onPreviewChange({
       ...entry,
       ...buildPayrollEntryDraft(),
     });
-  }, [buildPayrollEntryDraft, entry?.id, entry?.conferido, isCreateMode, onPreviewChange, open]);
+  }, [buildPayrollEntryDraft, entry?.id, isCreateMode, onPreviewChange, open]);
 
   const updateRubricValue = ({ rubricId, value }: RubricValueInput) => {
     setRubricValues((prev) => ({ ...prev, [rubricId]: value }));
@@ -452,17 +461,17 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
 
           <div className="mt-1.5 flex w-full flex-wrap justify-end gap-1.5">
             {!isCreateMode && entry && (
-              entry.conferido ? (
+              isConferido ? (
                 <Button
                   variant="outline"
                   size="sm"
                   className="h-8 rounded-md px-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                  onClick={() => onToggleConferido?.(entry)}
+                  onClick={() => onToggleConferido?.({ ...entry, conferido: isConferido })}
                 >
                   Desmarcar conferência
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" className="h-8 rounded-md px-3" onClick={() => onToggleConferido?.(entry)}>
+                <Button variant="outline" size="sm" className="h-8 rounded-md px-3" onClick={() => onToggleConferido?.({ ...entry, conferido: isConferido })}>
                   Marcar como conferido
                 </Button>
               )

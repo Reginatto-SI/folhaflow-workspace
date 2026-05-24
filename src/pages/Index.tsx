@@ -106,10 +106,12 @@ const Index = () => {
     resetToFirstPage();
   }, [search, filterDept, filterRole, conferenceStatus, selectedCompany?.id, selectedMonth.month, selectedMonth.year, resetToFirstPage]);
   const checkedCount = useMemo(() => centralEntries.filter((entry) => entry.conferido).length, [centralEntries]);
-  const selectedEntryForDrawer = useMemo(() => {
-    if (!selectedEntry) return null;
-    return centralEntries.find((entry) => entry.id === selectedEntry.id) ?? selectedEntry;
-  }, [centralEntries, selectedEntry]);
+  const selectedEntryConferido = useMemo(() => {
+    if (!selectedEntry) return false;
+    const optimisticConferido = optimisticConferidoByEntryId[selectedEntry.id];
+    if (optimisticConferido !== undefined) return optimisticConferido;
+    return centralEntries.find((entry) => entry.id === selectedEntry.id)?.conferido ?? selectedEntry.conferido ?? false;
+  }, [centralEntries, optimisticConferidoByEntryId, selectedEntry]);
 
   const handleRowClick = useCallback((entry: PayrollEntry) => {
     setDrawerMode("edit");
@@ -397,7 +399,8 @@ const Index = () => {
         open={drawerOpen}
         onOpenChange={handleDrawerOpenChange}
         mode={drawerMode}
-        entry={selectedEntryForDrawer}
+        entry={selectedEntry}
+        isConferido={selectedEntryConferido}
         employee={drawerEmployee}
         employees={availableCreateEmployees}
         selectedEmployeeId={createEmployeeId}
