@@ -241,6 +241,17 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     };
   }, [activeRubricsOrdered]);
 
+  const entryFormSeed = useMemo(() => {
+    if (!entry) return null;
+    return JSON.stringify({
+      id: entry.id,
+      notes: entry.notes || "",
+      earnings: entry.earnings || {},
+      deductions: entry.deductions || {},
+      rubricMeta: entry.rubricMeta || {},
+    });
+  }, [entry]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -271,7 +282,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     });
     setRubricQuantities(nextQuantities);
     setNotes(entry.notes || "");
-  }, [activeRubricsOrdered, entry, isCreateMode, open]);
+  }, [activeRubricsOrdered, entryFormSeed, isCreateMode, open]);
 
   // Cálculo único da tela: usado para prévia, derivados readonly e totais persistidos.
   const spreadsheetPreview = useMemo(
@@ -380,7 +391,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       ...entry,
       ...buildPayrollEntryDraft(),
     });
-  }, [buildPayrollEntryDraft, entry, isCreateMode, onPreviewChange, open]);
+  }, [buildPayrollEntryDraft, entry?.id, entry?.conferido, isCreateMode, onPreviewChange, open]);
 
   const updateRubricValue = ({ rubricId, value }: RubricValueInput) => {
     setRubricValues((prev) => ({ ...prev, [rubricId]: value }));
