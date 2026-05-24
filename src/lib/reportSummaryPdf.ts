@@ -225,7 +225,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   // Comentário: seção gerencial reutiliza exclusivamente o dataset já consolidado, sem recalcular a folha.
   const managerial = buildManagerialSummary(dataset);
   const pct = (value: number) => `${(Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-  const requiredHeightForSection = 88;
+  const requiredHeightForSection = 76;
   const mainFinalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY : 40;
   const availableHeight = pageHeight - 10 - mainFinalY;
   let sectionStartY = mainFinalY + 6;
@@ -243,11 +243,11 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   doc.setFontSize(9);
   doc.text("Resumo Gerencial para Aprovação", marginLeft + 2, sectionStartY);
 
-  const cardsTopY = sectionStartY + 3;
-  const cardGap = 2.4;
+  const cardsTopY = sectionStartY + 2.5;
+  const cardGap = 2;
   const cardsPerRow = 5;
   const cardWidth = (usableWidth - cardGap * (cardsPerRow - 1)) / cardsPerRow;
-  const cardHeight = 16;
+  const cardHeight = 12;
   const metrics = [
     { label: "Total de Funcionários", value: String(managerial.totalEmployees) },
     { label: "Rendimentos", value: formatBRL(managerial.rendimentos) },
@@ -265,35 +265,49 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
     doc.setDrawColor(...BORDER_LIGHT);
     doc.roundedRect(x, y, cardWidth, cardHeight, 1, 1, "FD");
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.6);
+    doc.setFontSize(6.2);
     doc.setTextColor(71, 85, 105);
-    doc.text(metric.label, x + 1.8, y + 4.8);
+    doc.text(metric.label, x + 1.3, y + 4.1);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.2);
+    doc.setFontSize(8.3);
     doc.setTextColor(...TEXT_DARK);
-    doc.text(metric.value, x + 1.8, y + 11.6);
+    doc.text(metric.value, x + 1.3, y + 8.8);
   });
 
-  const tablesStartY = cardsTopY + cardHeight + 4;
-  const blockGap = 3;
-  const leftBlockWidth = (usableWidth - blockGap) * 0.58;
-  const rightBlockWidth = usableWidth - blockGap - leftBlockWidth;
-  const rankingBody = managerial.ranking.slice(0, 5).map((item, index) => [String(index + 1), item.name, String(item.employees), formatBRL(item.salarioLiquido), pct(item.percentOfTotal)]);
-  const hasTotalRow = managerial.ranking.some((item) => item.name.toUpperCase() === "TOTAL");
-  if (hasTotalRow) {
-    const totalRow = managerial.ranking.find((item) => item.name.toUpperCase() === "TOTAL");
-    if (totalRow) rankingBody.push(["", "TOTAL", String(totalRow.employees), formatBRL(totalRow.salarioLiquido), pct(totalRow.percentOfTotal)]);
-  }
+  // Grid fixo de duas colunas para manter alinhamento e evitar "vazio" exagerado entre blocos.
+  const blocksGap = 6;
+  const leftBlockWidth = usableWidth * 0.56;
+  const rightBlockWidth = usableWidth - leftBlockWidth - blocksGap;
+  const leftBlockX = marginLeft;
+  const rightBlockX = marginLeft + leftBlockWidth + blocksGap;
+  const tablesStartY = cardsTopY + cardHeight + 6;
+  const rankingBody = managerial.ranking
+    .slice(0, 5)
+    .map((item, index) => [String(index + 1), item.name, String(item.employees), formatBRL(item.salarioLiquido), pct(item.percentOfTotal)]);
+  // Linha TOTAL no PDF deve ser explícita para não depender de item "TOTAL" no ranking de origem.
+  rankingBody.push([
+    "",
+    "TOTAL",
+    String(managerial.totalEmployees),
+    formatBRL(managerial.salarioLiquido),
+    managerial.salarioLiquido > 0 ? "100,0%" : "0,0%",
+  ]);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.2);
+  doc.setTextColor(...TEXT_DARK);
+  doc.text("Ranking por Setor / Empresa", leftBlockX, tablesStartY - 1.7);
+  doc.text("Composição da Folha", rightBlockX, tablesStartY - 1.7);
 
   autoTable(doc, {
     startY: tablesStartY,
     head: [["#", "Setor / Empresa", "Funcionários", "Salário Líquido", "% do Total"]],
     body: rankingBody,
     tableWidth: leftBlockWidth,
-    margin: { left: marginLeft, right: marginRight },
+    margin: { left: leftBlockX, right: marginRight },
     styles: { fontSize: 6.1, cellPadding: { top: 1.1, right: 1, bottom: 1.1, left: 1 }, lineColor: BORDER_LIGHT, lineWidth: 0.1 },
     headStyles: { fillColor: LIGHT_ROW_HIGHLIGHT, textColor: TEXT_DARK, fontStyle: "bold" },
-    columnStyles: { 0: { cellWidth: 8, halign: "center" }, 1: { cellWidth: 49 }, 2: { cellWidth: 20, halign: "right" }, 3: { cellWidth: 28, halign: "right" }, 4: { cellWidth: 17, halign: "right" } },
+    columnStyles: { 0: { cellWidth: leftBlockWidth * 0.07, halign: "center" }, 1: { cellWidth: leftBlockWidth * 0.41 }, 2: { cellWidth: leftBlockWidth * 0.17, halign: "right" }, 3: { cellWidth: leftBlockWidth * 0.22, halign: "right" }, 4: { cellWidth: leftBlockWidth * 0.13, halign: "right" } },
     theme: "grid",
     didDrawPage: () => {
       doc.setFont("helvetica", "bold");
@@ -308,17 +322,11 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
     head: [["Grupo", "Valor", "%"]],
     body: managerial.composition.map((item) => [item.label, formatBRL(item.value), pct(item.percent)]),
     tableWidth: rightBlockWidth,
-    margin: { left: marginLeft + leftBlockWidth + blockGap, right: marginRight, bottom: 8 },
+    margin: { left: rightBlockX, right: marginRight, bottom: 8 },
     styles: { fontSize: 6.1, cellPadding: { top: 1.1, right: 1, bottom: 1.1, left: 1 }, lineColor: BORDER_LIGHT, lineWidth: 0.1 },
     headStyles: { fillColor: LIGHT_ROW_HIGHLIGHT, textColor: TEXT_DARK, fontStyle: "bold" },
-    columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 25, halign: "right" }, 2: { cellWidth: 14, halign: "right" } },
+    columnStyles: { 0: { cellWidth: rightBlockWidth * 0.50 }, 1: { cellWidth: rightBlockWidth * 0.32, halign: "right" }, 2: { cellWidth: rightBlockWidth * 0.18, halign: "right" } },
     theme: "grid",
-    didDrawPage: () => {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.4);
-      doc.setTextColor(...TEXT_DARK);
-      doc.text("Composição da Folha", marginLeft + leftBlockWidth + blockGap + 0.6, tablesStartY - 1.6);
-    },
     didParseCell: (hookData) => {
       if (hookData.section !== "body") return;
       const label = String(hookData.row.raw?.[0] ?? "");

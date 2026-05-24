@@ -49,3 +49,20 @@
 - Build frontend (`npm run build`) executado.
 - Revisão resumida de escopo com `git diff --stat`.
 - Verificação de arquivos modificados com `git status --short`.
+
+## Refinamento de alinhamento no PDF (grid executivo)
+- Foi aplicado um novo ajuste **somente no PDF** para corrigir desalinhamentos visuais da seção `Resumo Gerencial para Aprovação`.
+- Os cards de indicadores foram **compactados** (menor altura e padding interno reduzido), mantendo os mesmos 5 indicadores e os mesmos dados.
+- `Ranking por Setor / Empresa` e `Composição da Folha` passaram a usar **grid fixo de duas colunas** (larguras proporcionais, gap fixo e mesmo eixo Y de início).
+- Os títulos dos dois blocos foram alinhados ao mesmo grid horizontal das tabelas, evitando sensação de blocos soltos.
+- **Tela web não foi alterada** e **Excel não foi alterado**.
+- **Não houve alteração de cálculo** nem mudança em helpers de consolidação de dados.
+
+## Ajuste final: linha TOTAL do ranking no PDF e versionamento
+- A linha `TOTAL` do bloco `Ranking por Setor / Empresa` no PDF passou a ser montada **explicitamente** com base no resumo gerencial:
+  - Funcionários: `managerial.totalEmployees`
+  - Salário Líquido: `managerial.salarioLiquido`
+  - Percentual: `100,0%` quando `managerial.salarioLiquido > 0`; caso contrário `0,0%`
+- Com isso, o PDF não depende mais da existência de um item `TOTAL` dentro de `managerial.ranking`.
+- **Não houve alteração de cálculo** da folha nem mudança de helper; o ajuste é somente de apresentação no PDF.
+- Sobre `public/version.json`: a alteração automática de build foi **removida do escopo deste ajuste** para evitar ruído de versão sem impacto funcional direto.
