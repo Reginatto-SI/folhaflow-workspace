@@ -75,3 +75,9 @@
   - correção da sobreposição no título `Ranking por Setor / Empresa` com unificação do ponto de renderização do título;
   - ajuste de espaçamento vertical entre cards e blocos inferiores (`Ranking` e `Composição`) para dar mais respiro e acabamento;
   - manutenção do grid já corrigido (cards em linha e blocos inferiores lado a lado), apenas com refinamento de distâncias.
+
+## Refinamento final: integração visual dos cards no bloco gerencial (PDF)
+- Foi realizado um ajuste final de acabamento **somente no PDF** para reduzir a sensação de que os 5 cards eram elementos desconectados.
+- A linha de indicadores passou a ter um **container sutil único** (fundo leve, borda leve e cantos arredondados), mantendo os cards individuais dentro desse agrupamento visual.
+- Também foram refinados gap e proporções dos cards para que a faixa de indicadores fique mais coesa e executiva, sem alterar dados exibidos.
+- **Não houve alteração de cálculo da folha, tela web ou exportação Excel**.

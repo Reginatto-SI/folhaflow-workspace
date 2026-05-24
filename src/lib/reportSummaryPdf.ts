@@ -11,6 +11,7 @@ const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br �
 const DARK_HIGHLIGHT: [number, number, number] = [71, 85, 105];
 const LIGHT_ROW_HIGHLIGHT: [number, number, number] = [226, 232, 240];
 const CARD_BACKGROUND: [number, number, number] = [248, 250, 252];
+const CARD_STRIP_BACKGROUND: [number, number, number] = [241, 245, 249];
 const BORDER_LIGHT: [number, number, number] = [203, 213, 225];
 const TEXT_LIGHT: [number, number, number] = [255, 255, 255];
 const TEXT_DARK: [number, number, number] = [31, 41, 55];
@@ -243,11 +244,28 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   doc.setFontSize(9);
   doc.text("Resumo Gerencial para Aprovação", marginLeft + 2, sectionStartY - 0.2);
 
-  const cardsTopY = sectionStartY + 1.8;
-  const cardGap = 2;
+  const cardsTopY = sectionStartY + 1.7;
+  const cardGap = 1.2;
   const cardsPerRow = 5;
   const cardWidth = (usableWidth - cardGap * (cardsPerRow - 1)) / cardsPerRow;
-  const cardHeight = 12;
+  const cardHeight = 11.4;
+  const cardsStripPaddingX = 0.9;
+  const cardsStripPaddingTop = 0.8;
+  const cardsStripPaddingBottom = 0.8;
+  const cardsStripY = cardsTopY - cardsStripPaddingTop;
+  const cardsStripHeight = cardHeight + cardsStripPaddingTop + cardsStripPaddingBottom;
+  // Comentário: container sutil para integrar visualmente a linha inteira de indicadores ao bloco gerencial.
+  doc.setFillColor(...CARD_STRIP_BACKGROUND);
+  doc.setDrawColor(...BORDER_LIGHT);
+  doc.roundedRect(
+    marginLeft + cardsStripPaddingX,
+    cardsStripY,
+    usableWidth - cardsStripPaddingX * 2,
+    cardsStripHeight,
+    1,
+    1,
+    "FD",
+  );
   const metrics = [
     { label: "Total de Funcionários", value: String(managerial.totalEmployees) },
     { label: "Rendimentos", value: formatBRL(managerial.rendimentos) },
@@ -280,7 +298,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   const rightBlockWidth = usableWidth - leftBlockWidth - blocksGap;
   const leftBlockX = marginLeft;
   const rightBlockX = marginLeft + leftBlockWidth + blocksGap;
-  const tablesStartY = cardsTopY + cardHeight + 9;
+  const tablesStartY = cardsStripY + cardsStripHeight + 8.2;
   const rankingBody = managerial.ranking
     .slice(0, 5)
     .map((item, index) => [String(index + 1), item.name, String(item.employees), formatBRL(item.salarioLiquido), pct(item.percentOfTotal)]);
