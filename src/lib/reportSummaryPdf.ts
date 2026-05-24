@@ -50,7 +50,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   const marginRight = 6;
   const usableWidth = pageWidth - marginLeft - marginRight;
 
-  // Colunas: [Rubrica] + [empresa…] + [TOTAL] + [SEM MOV.]
+  // Colunas: [Rubrica] + [empresa…] + [TOTAL] + [SEM IMOB.]
   const companyColumns = dataset.companies;
   const totalNumericCols = companyColumns.length + 2;
   const firstColWidth = 32; // primeira coluna mais larga (modelo legado).
@@ -61,7 +61,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
       "Renda",
       ...companyColumns.map((c) => abbreviate(c.name)),
       "TOTAL",
-      "SEM MOV.",
+      "SEM IMOB.",
     ],
   ];
 
@@ -69,16 +69,19 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   const formatCell = (value: number, isInteger?: boolean) =>
     isInteger ? String(Math.round(value)) : formatBRL(value);
 
-  const body = dataset.rows.map((row) => [
+  const mainRows = dataset.rows.filter((row) => !["rendimentos", "descontos", "custo_medio"].includes(row.kind));
+  const summaryRows = dataset.rows.filter((row) => ["rendimentos", "descontos", "custo_medio"].includes(row.kind));
+
+  const body = mainRows.map((row) => [
     row.label,
     ...companyColumns.map((c) => formatCell(row.valuesByCompanyId[c.id] ?? 0, row.isInteger)),
     formatCell(row.total, row.isInteger),
-    formatCell(row.semMov, row.isInteger),
+    formatCell(row.semImob, row.isInteger),
   ]);
 
   // Mapa de destaque por índice de linha (para didParseCell).
   const boldRowIndexes = new Set<number>();
-  dataset.rows.forEach((row, idx) => {
+  mainRows.forEach((row, idx) => {
     if (row.isBold) boldRowIndexes.add(idx);
   });
 
@@ -106,7 +109,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
       overflow: "linebreak",
     },
     columnStyles: {
-      0: { cellWidth: firstColWidth, halign: "left", fontStyle: "bold" },
+      0: { cellWidth: firstColWidth, halign: "left", fontStyle: "bold", fillColor: [71, 85, 105], textColor: [255, 255, 255] },
       ...Object.fromEntries(
         Array.from({ length: totalNumericCols }).map((_, i) => [
           i + 1,
@@ -117,7 +120,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
     didParseCell: (hookData) => {
       if (hookData.section !== "body") return;
       const rowIndex = hookData.row.index;
-      const row = dataset.rows[rowIndex];
+      const row = mainRows[rowIndex];
       if (!row) return;
 
       // Headcount alinhado ao centro; demais valores à direita.
@@ -131,8 +134,8 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
         hookData.cell.styles.fontStyle = "bold";
       }
 
-      // Coluna TOTAL (penúltima) e SEM MOV. (última) sempre em negrito.
-      const lastIndex = totalNumericCols; // 0=label, depois empresas, depois TOTAL, SEM MOV.
+      // Coluna TOTAL (penúltima) e SEM IMOB. (última) sempre em negrito.
+      const lastIndex = totalNumericCols; // 0=label, depois empresas, depois TOTAL, SEM IMOB.
       if (hookData.column.index === lastIndex - 1 || hookData.column.index === lastIndex) {
         hookData.cell.styles.fontStyle = "bold";
       }
@@ -150,6 +153,54 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
     margin: { top: 16, bottom: 8, left: marginLeft, right: marginRight },
     theme: "grid",
     showHead: "everyPage",
+  });
+
+  // Bloco inferior separado (Rendimentos, Descontos, Custo médio por Func.), igual ao legado.
+  const summaryBody = summaryRows.map((row) => [
+    row.label,
+    ...companyColumns.map((c) => formatCell(row.valuesByCompanyId[c.id] ?? 0, row.isInteger)),
+    formatCell(row.total, row.isInteger),
+    formatCell(row.semImob, row.isInteger),
+  ]);
+  const summaryBoldRows = new Set<number>();
+  summaryRows.forEach((row, idx) => {
+    if (row.isBold) summaryBoldRows.add(idx);
+  });
+
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 3 : 20,
+    body: summaryBody,
+    tableWidth: usableWidth,
+    styles: {
+      fontSize: 5.4,
+      cellPadding: { top: 0.7, right: 0.6, bottom: 0.7, left: 0.6 },
+      lineColor: [180, 188, 200],
+      lineWidth: 0.1,
+      overflow: "linebreak",
+      valign: "middle",
+    },
+    columnStyles: {
+      0: { cellWidth: firstColWidth, halign: "left", fontStyle: "bold", fillColor: [71, 85, 105], textColor: [255, 255, 255] },
+      ...Object.fromEntries(
+        Array.from({ length: totalNumericCols }).map((_, i) => [
+          i + 1,
+          { cellWidth: numericColWidth, halign: "right" },
+        ]),
+      ),
+    },
+    didParseCell: (hookData) => {
+      if (hookData.section !== "body") return;
+      const rowIndex = hookData.row.index;
+      if (summaryBoldRows.has(rowIndex)) {
+        hookData.cell.styles.fontStyle = "bold";
+      }
+      const lastIndex = totalNumericCols;
+      if (hookData.column.index === lastIndex - 1 || hookData.column.index === lastIndex) {
+        hookData.cell.styles.fontStyle = "bold";
+      }
+    },
+    margin: { bottom: 8, left: marginLeft, right: marginRight },
+    theme: "grid",
   });
 
   doc.save(buildFileName(dataset.month, dataset.year));
