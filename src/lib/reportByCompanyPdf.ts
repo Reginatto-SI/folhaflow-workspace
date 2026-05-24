@@ -3,6 +3,10 @@ import autoTable from "jspdf-autotable";
 import { ReportByCompanyDataset } from "@/lib/reportByCompanyData";
 
 const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br — Contato: (65) 99210-2030";
+const DARK_HIGHLIGHT: [number, number, number] = [71, 85, 105];
+const LIGHT_ROW_HIGHLIGHT: [number, number, number] = [226, 232, 240];
+const BORDER_LIGHT: [number, number, number] = [180, 188, 200];
+const TEXT_LIGHT: [number, number, number] = [255, 255, 255];
 
 const formatPdfCurrency = (value: number | string) => {
   const numericValue = typeof value === "number"
@@ -62,21 +66,24 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
   const marginRight = 6;
   const pageUsableWidth = pageWidth - marginLeft - marginRight;
   const dynamicColumnCount = dataset.dynamicColumns.length;
+
+  // Comentário: alinhado ao padrão visual do resumo completo (nome ganha maior largura para leitura gerencial).
   const fixedColumnsWidth = {
-    name: 18,
-    department: 12,
-    jobRole: 14,
-    admissionRegistration: 14,
+    name: 32,
+    department: 15,
+    jobRole: 16,
+    admissionRegistration: 13,
   };
   const reservedFixedWidth = fixedColumnsWidth.name + fixedColumnsWidth.department + fixedColumnsWidth.jobRole + fixedColumnsWidth.admissionRegistration;
-  // Comentário: colunas numéricas usam largura padronizada para manter grade visual uniforme.
+  // Comentário: colunas monetárias ficam proporcionais e uniformes, reaproveitando a lógica de grade do relatório resumo completo.
   const numericColumnWidth = dynamicColumnCount > 0
-    ? Math.max(4.4, (pageUsableWidth - reservedFixedWidth) / dynamicColumnCount)
+    ? Math.max(5.9, (pageUsableWidth - reservedFixedWidth) / dynamicColumnCount)
     : 0;
   const bodyRowsLength = dataset.rows.length;
 
   autoTable(doc, {
-    startY: 16,
+    // Comentário: aumenta respiro entre cabeçalho (título/data) e tabela para leitura mais confortável.
+    startY: 18,
     head: [[...dataset.fixedColumns.map((column) => formatPdfColumnLabel(column.label)), ...dataset.dynamicColumns.map((column) => formatPdfColumnLabel(column.rubricName))]],
     body: [
       ...dataset.rows.map((row) => [row.name, row.department, row.jobRole, formatAdmissionRegistrationForPrint(row.admissionRegistration), ...dataset.dynamicColumns.map((column) => formatPdfCurrency(row.rubricValues[column.rubricId] ?? 0))]),
@@ -84,22 +91,23 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
     ],
     tableWidth: pageUsableWidth,
     styles: {
-      fontSize: 4.9,
-      cellPadding: { top: 0.6, right: 0.45, bottom: 0.6, left: 0.45 },
-      lineColor: [203, 213, 225],
+      fontSize: 5.2,
+      cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 0.5 },
+      lineColor: BORDER_LIGHT,
       lineWidth: 0.1,
       overflow: "linebreak",
       valign: "middle",
     },
     headStyles: {
-      fillColor: [226, 232, 240],
-      textColor: 15,
+      // Comentário: cabeçalho escuro + texto claro padronizado com o PDF de resumo completo.
+      fillColor: DARK_HIGHLIGHT,
+      textColor: TEXT_LIGHT,
       fontStyle: "bold",
-      minCellHeight: 6,
+      minCellHeight: 5.8,
       halign: "center",
       valign: "middle",
       overflow: "linebreak",
-      fontSize: 4.7,
+      fontSize: 4.9,
     },
     columnStyles: {
       0: { cellWidth: fixedColumnsWidth.name, halign: "left" },
@@ -107,20 +115,19 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
       2: { cellWidth: fixedColumnsWidth.jobRole, halign: "left" },
       3: { cellWidth: fixedColumnsWidth.admissionRegistration, halign: "center" },
       ...Object.fromEntries(
-        dataset.dynamicColumns.map((_, index) => [index + 4, { cellWidth: numericColumnWidth, minCellWidth: 4.4, halign: "right" }]),
+        dataset.dynamicColumns.map((_, index) => [index + 4, { cellWidth: numericColumnWidth, minCellWidth: 5.9, halign: "right" }]),
       ),
     },
     didParseCell: (hookData) => {
       const isTotalRow = hookData.section === "body" && hookData.row.index === bodyRowsLength;
 
-      // Comentário: a linha TOTAL recebe destaque visual (cinza + negrito + borda superior) sem alterar dados.
+      // Comentário: destaque da linha TOTAL alinhado ao padrão do resumo completo (fundo claro + negrito).
       if (isTotalRow) {
-        hookData.cell.styles.fillColor = [226, 232, 240];
+        hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
         hookData.cell.styles.fontStyle = "bold";
         hookData.cell.styles.lineWidth = { top: 0.25, right: 0.1, bottom: 0.1, left: 0.1 };
       }
 
-      // Comentário: o PDF não recalcula valores; apenas alinha visualmente os números já consolidados da folha.
       if (hookData.section === "body" && hookData.column.index >= 4) {
         hookData.cell.styles.halign = "right";
       }
@@ -132,11 +139,17 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
       }
     },
     didDrawPage: () => {
-      doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text(dataset.title, marginLeft, 9);
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(`Gerado em ${generatedAtLabel}`, marginLeft, 13);
-      doc.setFontSize(7); doc.text(FOOTER_TEXT, pageWidth / 2, pageHeight - 4, { align: "center" });
+      // Comentário: título centralizado e data à direita para paridade visual com o relatório resumo completo.
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(dataset.title, pageWidth / 2, 9, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.text(`Gerado em ${generatedAtLabel}`, pageWidth - marginRight, 13, { align: "right" });
+      doc.setFontSize(7);
+      doc.text(FOOTER_TEXT, pageWidth / 2, pageHeight - 4, { align: "center" });
     },
-    margin: { top: 16, bottom: 8, left: marginLeft, right: marginRight },
+    margin: { top: 18, bottom: 9, left: marginLeft, right: marginRight },
     theme: "grid",
     showHead: "everyPage",
   });
