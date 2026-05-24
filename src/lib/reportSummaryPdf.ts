@@ -309,6 +309,12 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
     headStyles: { fillColor: LIGHT_ROW_HIGHLIGHT, textColor: TEXT_DARK, fontStyle: "bold" },
     columnStyles: { 0: { cellWidth: leftBlockWidth * 0.07, halign: "center" }, 1: { cellWidth: leftBlockWidth * 0.41 }, 2: { cellWidth: leftBlockWidth * 0.17, halign: "right" }, 3: { cellWidth: leftBlockWidth * 0.22, halign: "right" }, 4: { cellWidth: leftBlockWidth * 0.13, halign: "right" } },
     theme: "grid",
+    didDrawPage: () => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.4);
+      doc.setTextColor(...TEXT_DARK);
+      doc.text("Ranking por Setor / Empresa", marginLeft + 0.6, tablesStartY - 1.6);
+    },
   });
 
   autoTable(doc, {
