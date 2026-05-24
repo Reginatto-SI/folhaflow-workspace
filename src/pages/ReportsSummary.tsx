@@ -48,6 +48,15 @@ const ReportsSummary: React.FC = () => {
     });
   }, [selectedMonth, activeCompanies, allPayrollBatches, allEmployees, allPayrollEntries, rubrics]);
 
+  const mainRows = React.useMemo(
+    () => dataset?.rows.filter((row) => !["rendimentos", "descontos", "custo_medio"].includes(row.kind)) ?? [],
+    [dataset],
+  );
+  const summaryRows = React.useMemo(
+    () => dataset?.rows.filter((row) => ["rendimentos", "descontos", "custo_medio"].includes(row.kind)) ?? [],
+    [dataset],
+  );
+
   const exportPdf = React.useCallback(() => {
     if (!dataset) return;
     generateReportSummaryPdf(dataset);
@@ -121,11 +130,11 @@ const ReportsSummary: React.FC = () => {
                       </TableHead>
                     ))}
                     <TableHead className="text-right">TOTAL</TableHead>
-                    <TableHead className="text-right">SEM MOV.</TableHead>
+                    <TableHead className="text-right">SEM IMOB.</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {dataset.rows.map((row) => {
+                  {mainRows.map((row) => {
                     const cellClass = row.isBold ? "font-semibold bg-muted/40" : "";
                     const format = (v: number) => (row.isInteger ? String(Math.round(v)) : BRL(v));
                     return (
@@ -140,13 +149,40 @@ const ReportsSummary: React.FC = () => {
                           {format(row.total)}
                         </TableCell>
                         <TableCell className={`text-right font-semibold ${cellClass}`}>
-                          {format(row.semMov)}
+                          {format(row.semImob)}
                         </TableCell>
                       </TableRow>
                     );
                   })}
                 </TableBody>
               </Table>
+
+              <div className="mt-4">
+                <Table>
+                  <TableBody>
+                    {summaryRows.map((row) => {
+                      const cellClass = row.isBold ? "font-semibold bg-muted/40" : "";
+                      const format = (v: number) => (row.isInteger ? String(Math.round(v)) : BRL(v));
+                      return (
+                        <TableRow key={row.key}>
+                          <TableCell className={cellClass}>{row.label}</TableCell>
+                          {dataset.companies.map((c) => (
+                            <TableCell key={`${row.key}-${c.id}`} className={`text-right ${cellClass}`}>
+                              {format(row.valuesByCompanyId[c.id] ?? 0)}
+                            </TableCell>
+                          ))}
+                          <TableCell className={`text-right font-semibold ${cellClass}`}>
+                            {format(row.total)}
+                          </TableCell>
+                          <TableCell className={`text-right font-semibold ${cellClass}`}>
+                            {format(row.semImob)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>
