@@ -33,3 +33,19 @@
 
 ## Riscos e pontos pendentes
 - O fallback por label permanece somente para compatibilidade com bases legadas onde o `row.key` canônico esperado não esteja disponível; regra principal permanece por identificador estável.
+
+## Refinamento visual adicional no PDF (Resumo Gerencial para Aprovação)
+- Foi realizado refinamento visual **somente no PDF** da seção `Resumo Gerencial para Aprovação` em `src/lib/reportSummaryPdf.ts`.
+- **Tela `/relatorios/resumo-completo` não foi alterada**.
+- **Exportação Excel não foi alterada** neste refinamento.
+- **Não houve alteração de cálculo** da folha nem mudança em `buildReportSummaryData`/helpers de dados.
+- Blocos melhorados no PDF:
+  - Indicadores principais em cards visuais (Total de Funcionários, Rendimentos, Descontos, Salário Líquido, Custo Médio por Func.).
+  - Tabela compacta de `Ranking por Setor / Empresa` (Top 5 + linha TOTAL quando existente).
+  - Tabela compacta de `Composição da Folha` com destaque discreto para `Salário Líquido` e `Total da Folha / Rendimentos`.
+- Paginação reforçada para evitar título isolado no fim da página e sobreposição com rodapé.
+
+### Validações realizadas neste refinamento
+- Build frontend (`npm run build`) executado.
+- Revisão resumida de escopo com `git diff --stat`.
+- Verificação de arquivos modificados com `git status --short`.
