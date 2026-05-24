@@ -11,6 +11,7 @@ const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br �
 const DARK_HIGHLIGHT: [number, number, number] = [71, 85, 105];
 const LIGHT_ROW_HIGHLIGHT: [number, number, number] = [226, 232, 240];
 const CARD_BACKGROUND: [number, number, number] = [248, 250, 252];
+const CARD_STRIP_BACKGROUND: [number, number, number] = [241, 245, 249];
 const BORDER_LIGHT: [number, number, number] = [203, 213, 225];
 const TEXT_LIGHT: [number, number, number] = [255, 255, 255];
 const TEXT_DARK: [number, number, number] = [31, 41, 55];
@@ -225,10 +226,10 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   // Comentário: seção gerencial reutiliza exclusivamente o dataset já consolidado, sem recalcular a folha.
   const managerial = buildManagerialSummary(dataset);
   const pct = (value: number) => `${(Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-  const requiredHeightForSection = 76;
+  const requiredHeightForSection = 80;
   const mainFinalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY : 40;
   const availableHeight = pageHeight - 10 - mainFinalY;
-  let sectionStartY = mainFinalY + 6;
+  let sectionStartY = mainFinalY + 9;
   if (availableHeight < requiredHeightForSection) {
     doc.addPage();
     sectionStartY = 18;
@@ -237,17 +238,34 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   doc.setDrawColor(...BORDER_LIGHT);
   doc.setLineWidth(0.2);
   doc.setFillColor(...LIGHT_ROW_HIGHLIGHT);
-  doc.roundedRect(marginLeft, sectionStartY - 5, usableWidth, 8, 1.2, 1.2, "FD");
+  doc.roundedRect(marginLeft, sectionStartY - 6.3, usableWidth, 9.2, 1.2, 1.2, "FD");
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...TEXT_DARK);
   doc.setFontSize(9);
-  doc.text("Resumo Gerencial para Aprovação", marginLeft + 2, sectionStartY);
+  doc.text("Resumo Gerencial para Aprovação", marginLeft + 2, sectionStartY - 0.2);
 
-  const cardsTopY = sectionStartY + 2.5;
-  const cardGap = 2;
+  const cardsTopY = sectionStartY + 1.7;
+  const cardGap = 1.2;
   const cardsPerRow = 5;
   const cardWidth = (usableWidth - cardGap * (cardsPerRow - 1)) / cardsPerRow;
-  const cardHeight = 12;
+  const cardHeight = 11.4;
+  const cardsStripPaddingX = 0.9;
+  const cardsStripPaddingTop = 0.8;
+  const cardsStripPaddingBottom = 0.8;
+  const cardsStripY = cardsTopY - cardsStripPaddingTop;
+  const cardsStripHeight = cardHeight + cardsStripPaddingTop + cardsStripPaddingBottom;
+  // Comentário: container sutil para integrar visualmente a linha inteira de indicadores ao bloco gerencial.
+  doc.setFillColor(...CARD_STRIP_BACKGROUND);
+  doc.setDrawColor(...BORDER_LIGHT);
+  doc.roundedRect(
+    marginLeft + cardsStripPaddingX,
+    cardsStripY,
+    usableWidth - cardsStripPaddingX * 2,
+    cardsStripHeight,
+    1,
+    1,
+    "FD",
+  );
   const metrics = [
     { label: "Total de Funcionários", value: String(managerial.totalEmployees) },
     { label: "Rendimentos", value: formatBRL(managerial.rendimentos) },
@@ -280,7 +298,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   const rightBlockWidth = usableWidth - leftBlockWidth - blocksGap;
   const leftBlockX = marginLeft;
   const rightBlockX = marginLeft + leftBlockWidth + blocksGap;
-  const tablesStartY = cardsTopY + cardHeight + 6;
+  const tablesStartY = cardsStripY + cardsStripHeight + 8.2;
   const rankingBody = managerial.ranking
     .slice(0, 5)
     .map((item, index) => [String(index + 1), item.name, String(item.employees), formatBRL(item.salarioLiquido), pct(item.percentOfTotal)]);
@@ -296,8 +314,8 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.2);
   doc.setTextColor(...TEXT_DARK);
-  doc.text("Ranking por Setor / Empresa", leftBlockX, tablesStartY - 1.7);
-  doc.text("Composição da Folha", rightBlockX, tablesStartY - 1.7);
+  doc.text("Ranking por Setor / Empresa", leftBlockX, tablesStartY - 2.2);
+  doc.text("Composição da Folha", rightBlockX, tablesStartY - 2.2);
 
   autoTable(doc, {
     startY: tablesStartY,
@@ -309,12 +327,6 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
     headStyles: { fillColor: LIGHT_ROW_HIGHLIGHT, textColor: TEXT_DARK, fontStyle: "bold" },
     columnStyles: { 0: { cellWidth: leftBlockWidth * 0.07, halign: "center" }, 1: { cellWidth: leftBlockWidth * 0.41 }, 2: { cellWidth: leftBlockWidth * 0.17, halign: "right" }, 3: { cellWidth: leftBlockWidth * 0.22, halign: "right" }, 4: { cellWidth: leftBlockWidth * 0.13, halign: "right" } },
     theme: "grid",
-    didDrawPage: () => {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.4);
-      doc.setTextColor(...TEXT_DARK);
-      doc.text("Ranking por Setor / Empresa", marginLeft + 0.6, tablesStartY - 1.6);
-    },
   });
 
   autoTable(doc, {

@@ -66,3 +66,18 @@
 - Com isso, o PDF não depende mais da existência de um item `TOTAL` dentro de `managerial.ranking`.
 - **Não houve alteração de cálculo** da folha nem mudança de helper; o ajuste é somente de apresentação no PDF.
 - Sobre `public/version.json`: a alteração automática de build foi **removida do escopo deste ajuste** para evitar ruído de versão sem impacto funcional direto.
+
+## Refinamento final de espaçamento e integração visual no PDF
+- Foi concluído o polimento visual **somente no PDF** da seção `Resumo Gerencial para Aprovação`, sem alteração de tela web, Excel, cálculo da folha ou helpers de dados.
+- Ajustes aplicados neste refinamento final:
+  - aumento do espaço entre a tabela principal e o início da seção gerencial para criar separação visual clara;
+  - melhor integração entre o cabeçalho da seção e os 5 cards, com ajuste de faixa/título e aproximação controlada dos cards;
+  - correção da sobreposição no título `Ranking por Setor / Empresa` com unificação do ponto de renderização do título;
+  - ajuste de espaçamento vertical entre cards e blocos inferiores (`Ranking` e `Composição`) para dar mais respiro e acabamento;
+  - manutenção do grid já corrigido (cards em linha e blocos inferiores lado a lado), apenas com refinamento de distâncias.
+
+## Refinamento final: integração visual dos cards no bloco gerencial (PDF)
+- Foi realizado um ajuste final de acabamento **somente no PDF** para reduzir a sensação de que os 5 cards eram elementos desconectados.
+- A linha de indicadores passou a ter um **container sutil único** (fundo leve, borda leve e cantos arredondados), mantendo os cards individuais dentro desse agrupamento visual.
+- Também foram refinados gap e proporções dos cards para que a faixa de indicadores fique mais coesa e executiva, sem alterar dados exibidos.
+- **Não houve alteração de cálculo da folha, tela web ou exportação Excel**.
