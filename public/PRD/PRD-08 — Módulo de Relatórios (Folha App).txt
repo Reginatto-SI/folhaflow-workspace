@@ -14,3 +14,18 @@ Exibir relatórios da folha com base nos valores já calculados.
 ## Diretriz
 
 Relatório é leitura e consolidação visual dos dados existentes.
+
+
+## Indicadores consolidados e visão gerencial “Sem Imobiliária”
+
+- Rendimentos: soma somente proventos adicionais consolidados (Outros Rendimentos, Horas Extras, Prêmio/Desempenho, Compra de Férias, Férias/1/3 e Insalubridade 20%), sem incluir Salário CTPS, Salário G, Salário Real/Fiscal e Salário Líquido.
+- Descontos: soma dos campos de desconto (INSS, Empréstimo Consignado, Adiantamento Gerencial, Vales/Descontos e Faltas/Desconto).
+- Custo médio por funcionário: `Salário G / Total de Funcionários` (por coluna).
+- Coluna TOTAL: consolidação de todas as empresas reais exibidas.
+- Coluna SEM IMOB. / Sem Imobiliária: `TOTAL - valor da empresa Imobiliária`.
+- Total de Funcionários SEM IMOB.: `Total de Funcionários - Funcionários da Imobiliária`.
+- Custo médio SEM IMOB.: `(Salário G total - Salário G Imobiliária) / (Funcionários totais - Funcionários Imobiliária)`.
+- “Sem Imobiliária” é coluna gerencial derivada, não é empresa real, não vira cadastro e não gera rubrica.
+- Relatório visual, PDF, Excel e dashboard devem consumir a mesma regra/dataset consolidado.
+- O módulo de relatórios não recalcula Salário Real, Salário Fiscal, G2 Complemento nem Salário Líquido; apenas exibe valores já calculados na Central de Folha.
+- Rubricas canônicas continuam vindo do cálculo principal da Central de Folha (PRD-01/PRD-03/PRD-12), sem lógica paralela no relatório.
