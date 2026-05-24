@@ -106,6 +106,14 @@ const App = () => (
                             }
                           />
                           <Route
+                            path="/relatorios/resumo-completo"
+                            element={
+                              <PermissionRoute permission="relatorios.view">
+                                <ReportsSummary />
+                              </PermissionRoute>
+                            }
+                          />
+                          <Route
                             path="/configuracoes"
                             element={
                               <PermissionRoute permission="configuracoes.manage">
