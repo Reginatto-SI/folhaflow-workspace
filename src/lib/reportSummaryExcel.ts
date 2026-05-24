@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import type { ReportSummaryDataset } from "@/lib/reportSummaryData";
+import { buildManagerialSummary } from "@/lib/reportSummaryManagerial";
 
 const normalizeFileToken = (value: string): string =>
   value
@@ -40,7 +41,11 @@ export const generateReportSummaryExcel = (dataset: ReportSummaryDataset) => {
     formatNumberCell(row.semImob, row.isInteger),
   ];
 
+  const managerial = buildManagerialSummary(dataset);
   const generatedAt = new Date().toLocaleString("pt-BR");
+  const PCT_FORMAT = '0.0"%"';
+  const rankingRows = managerial.ranking.slice(0, 5);
+
   const sheetData = [
     [{ v: dataset.title, t: "s" as const }],
     [{ v: `Gerado em ${generatedAt}`, t: "s" as const }],
@@ -48,8 +53,50 @@ export const generateReportSummaryExcel = (dataset: ReportSummaryDataset) => {
     ...mainRows.map(makeRow),
     [{ v: "", t: "s" as const }],
     ...summaryRows.map(makeRow),
+    [{ v: "", t: "s" as const }],
+    [{ v: "Resumo Gerencial para Aprovação", t: "s" as const }],
+    [{ v: "Indicador", t: "s" as const }, { v: "Valor", t: "s" as const }],
+    [{ v: "Total de Funcionários", t: "s" as const }, { v: managerial.totalEmployees, t: "n" as const, z: "0" }],
+    [{ v: "Rendimentos", t: "s" as const }, { v: managerial.rendimentos, t: "n" as const, z: BRL_FORMAT }],
+    [{ v: "Descontos", t: "s" as const }, { v: managerial.descontos, t: "n" as const, z: BRL_FORMAT }],
+    [{ v: "Salário Líquido", t: "s" as const }, { v: managerial.salarioLiquido, t: "n" as const, z: BRL_FORMAT }],
+    [{ v: "Custo Médio por Func.", t: "s" as const }, { v: managerial.custoMedioPorFuncionario, t: "n" as const, z: BRL_FORMAT }],
+    [{ v: "", t: "s" as const }],
+    [{ v: "Ranking por Setor / Empresa", t: "s" as const }],
+    [
+      { v: "#", t: "s" as const },
+      { v: "Setor / Empresa", t: "s" as const },
+      { v: "Funcionários", t: "s" as const },
+      { v: "Salário Líquido", t: "s" as const },
+      { v: "% do Total", t: "s" as const },
+    ],
+    ...rankingRows.map((item, index) => [
+      { v: index + 1, t: "n" as const, z: "0" },
+      { v: item.name, t: "s" as const },
+      { v: item.employees, t: "n" as const, z: "0" },
+      { v: item.salarioLiquido, t: "n" as const, z: BRL_FORMAT },
+      { v: item.percentOfTotal / 100, t: "n" as const, z: PCT_FORMAT },
+    ]),
+    [
+      { v: "TOTAL", t: "s" as const },
+      { v: "", t: "s" as const },
+      { v: managerial.totalEmployees, t: "n" as const, z: "0" },
+      { v: managerial.salarioLiquido, t: "n" as const, z: BRL_FORMAT },
+      { v: managerial.salarioLiquido > 0 ? 1 : 0, t: "n" as const, z: PCT_FORMAT },
+    ],
+    [{ v: "", t: "s" as const }],
+    [{ v: "Composição da Folha", t: "s" as const }],
+    [
+      { v: "Grupo", t: "s" as const },
+      { v: "Valor", t: "s" as const },
+      { v: "%", t: "s" as const },
+    ],
+    ...managerial.composition.map((item) => [
+      { v: item.label, t: "s" as const },
+      { v: item.value, t: "n" as const, z: BRL_FORMAT },
+      { v: item.percent / 100, t: "n" as const, z: PCT_FORMAT },
+    ]),
   ];
-
   const worksheet = XLSX.utils.aoa_to_sheet(sheetData as XLSX.AOA2SheetOpts<any>);
 
   worksheet["!ref"] = XLSX.utils.encode_range({

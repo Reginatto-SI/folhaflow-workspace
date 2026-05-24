@@ -9,8 +9,10 @@ import { usePayroll } from "@/contexts/PayrollContext";
 import { buildReportSummaryData } from "@/lib/reportSummaryData";
 import { generateReportSummaryPdf } from "@/lib/reportSummaryPdf";
 import { generateReportSummaryExcel } from "@/lib/reportSummaryExcel";
+import { buildManagerialSummary } from "@/lib/reportSummaryManagerial";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const PCT = (value: number) => `${(Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
 const ReportsSummary: React.FC = () => {
   const {
@@ -57,6 +59,9 @@ const ReportsSummary: React.FC = () => {
     () => dataset?.rows.filter((row) => ["rendimentos", "descontos", "custo_medio"].includes(row.kind)) ?? [],
     [dataset],
   );
+
+  const managerial = React.useMemo(() => (dataset ? buildManagerialSummary(dataset) : null), [dataset]);
+
 
   const exportPdf = React.useCallback(() => {
     if (!dataset) return;
@@ -131,6 +136,7 @@ const ReportsSummary: React.FC = () => {
               Nenhuma empresa ativa para consolidar nesta competência.
             </p>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -196,6 +202,74 @@ const ReportsSummary: React.FC = () => {
                 </Table>
               </div>
             </div>
+
+              {managerial && (
+                <section className="mt-6 space-y-4 rounded-md border p-4">
+                  {/* Comentário: resumo gerencial é apenas consolidação visual do mesmo dataset; não recalcula a folha. */}
+                  <h3 className="text-lg font-semibold">Resumo Gerencial para Aprovação</h3>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                    {[
+                      ["Total de Funcionários", String(managerial.totalEmployees)],
+                      ["Rendimentos", BRL(managerial.rendimentos)],
+                      ["Descontos", BRL(managerial.descontos)],
+                      ["Salário Líquido", BRL(managerial.salarioLiquido)],
+                      ["Custo Médio por Func.", BRL(managerial.custoMedioPorFuncionario)],
+                    ].map(([label, value]) => (
+                      <Card key={label}>
+                        <CardContent className="p-3">
+                          <p className="text-xs text-muted-foreground">{label}</p>
+                          <p className="text-lg font-semibold">{value}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                    <Card>
+                      <CardHeader className="pb-2"><CardTitle className="text-base">Ranking por Setor / Empresa</CardTitle></CardHeader>
+                      <CardContent>
+                        <Table>
+                          <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Setor / Empresa</TableHead><TableHead className="text-right">Funcionários</TableHead><TableHead className="text-right">Salário Líquido</TableHead><TableHead className="text-right">% do Total</TableHead></TableRow></TableHeader>
+                          <TableBody>
+                            {managerial.ranking.slice(0, 5).map((item, idx) => (
+                              <TableRow key={item.companyId}>
+                                <TableCell>{idx + 1}</TableCell><TableCell>{item.name}</TableCell><TableCell className="text-right">{item.employees}</TableCell><TableCell className="text-right">{BRL(item.salarioLiquido)}</TableCell><TableCell className="text-right">{PCT(item.percentOfTotal)}</TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow className="font-semibold"><TableCell colSpan={2}>TOTAL</TableCell><TableCell className="text-right">{managerial.totalEmployees}</TableCell><TableCell className="text-right">{BRL(managerial.salarioLiquido)}</TableCell><TableCell className="text-right">{PCT(managerial.salarioLiquido > 0 ? 100 : 0)}</TableCell></TableRow>
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="pb-2"><CardTitle className="text-base">Top setores por custo</CardTitle></CardHeader>
+                      <CardContent className="space-y-2">
+                        {(() => {
+                          const top = managerial.ranking.slice(0, 5);
+                          const max = top[0]?.salarioLiquido ?? 0;
+                          return top.map((item) => (
+                            <div key={`bar-${item.companyId}`} className="space-y-1">
+                              <div className="flex justify-between text-xs"><span>{item.name}</span><span>{BRL(item.salarioLiquido)}</span></div>
+                              <div className="h-2 rounded bg-muted"><div className="h-2 rounded bg-primary" style={{ width: `${max > 0 ? (item.salarioLiquido / max) * 100 : 0}%` }} /></div>
+                            </div>
+                          ));
+                        })()}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="pb-2"><CardTitle className="text-base">Composição da Folha</CardTitle></CardHeader>
+                      <CardContent>
+                        <Table><TableHeader><TableRow><TableHead>Grupo</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-right">%</TableHead></TableRow></TableHeader><TableBody>
+                          {managerial.composition.map((row) => (<TableRow key={row.key}><TableCell>{row.label}</TableCell><TableCell className="text-right">{BRL(row.value)}</TableCell><TableCell className="text-right">{PCT(row.percent)}</TableCell></TableRow>))}
+                        </TableBody></Table>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </section>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
