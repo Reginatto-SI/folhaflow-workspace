@@ -169,15 +169,20 @@ function AppSidebar() {
         {/* O logo colapsado ficava deslocado porque o header mantinha padding horizontal de layout expandido (px-4). */}
         {/* Ajuste mínimo: no modo icon, reaproveitamos o mesmo "encaixe" horizontal (px-2) usado pelos botões do menu. */}
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-          {collapsed ? (
-            // Sidebar colapsada usa marca compacta "DF" para não exibir a logo completa nesse estado.
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm">
-              DF
-            </div>
-          ) : (
-            // Carregamento direto do SVG público para manter renderização leve no estado expandido.
-            <img src="/logo_Branca_Laranja.svg" alt="Delicious Fish" className="h-8 w-auto shrink-0" />
-          )}
+          {/* Mantemos o SVG oficial sempre montado e com eager loading para evitar atraso visual ao expandir a sidebar. */}
+          <img
+            src="/logo_Branca_Laranja.svg"
+            alt="Delicious Fish"
+            loading="eager"
+            decoding="sync"
+            className={`h-8 w-auto shrink-0 ${collapsed ? "hidden" : "block"}`}
+          />
+          {/* Sidebar colapsada usa marca compacta "DF" e oculta a logo completa nesse estado. */}
+          <div
+            className={`h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm ${collapsed ? "flex" : "hidden"}`}
+          >
+            DF
+          </div>
         </div>
       </SidebarHeader>
 
