@@ -123,11 +123,26 @@ function AppSidebar() {
 
   // Filtra os menus pelo conjunto de permissões do usuário logado.
   const visibleMain = mainNavItems.filter((i) => hasPermission(i.permission));
+  const visibleRelatorios = relatoriosNavItems.filter((i) => hasPermission(i.permission));
   const visibleCadastros = cadastrosNavItems.filter((i) => hasPermission(i.permission));
   const visibleSecondary = secondaryNavItems.filter((i) => hasPermission(i.permission));
 
   const isCadastrosRoute = visibleCadastros.some((item) => location.pathname.startsWith(item.to));
+  const isRelatoriosRoute = visibleRelatorios.some((item) => location.pathname.startsWith(item.to));
   const [cadastrosOpen, setCadastrosOpen] = React.useState(isCadastrosRoute);
+  const [relatoriosOpen, setRelatoriosOpen] = React.useState(isRelatoriosRoute);
+
+  React.useEffect(() => {
+    if (isCadastrosRoute) {
+      setCadastrosOpen(true);
+    }
+  }, [isCadastrosRoute]);
+
+  React.useEffect(() => {
+    if (isRelatoriosRoute) {
+      setRelatoriosOpen(true);
+    }
+  }, [isRelatoriosRoute]);
 
   React.useEffect(() => {
     if (isCadastrosRoute) {
