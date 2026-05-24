@@ -21,6 +21,7 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import ReportsCompany from "./pages/ReportsCompany";
 import ReportsSummary from "./pages/ReportsSummary";
+import Dashboard from "./pages/Dashboard";
 
 const queryClient = new QueryClient();
 
@@ -40,7 +41,16 @@ const App = () => (
                     <SidebarProvider defaultOpen={false}>
                       <AppLayout>
                         <Routes>
-                          <Route path="/" element={<Navigate to="/central-de-folha" replace />} />
+                          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                          {/* Comentário: dashboard comparativo passa a ser a landing page padrão da área autenticada. */}
+                          <Route
+                            path="/dashboard"
+                            element={
+                              <PermissionRoute permission="relatorios.view">
+                                <Dashboard />
+                              </PermissionRoute>
+                            }
+                          />
                           <Route
                             path="/central-de-folha"
                             element={

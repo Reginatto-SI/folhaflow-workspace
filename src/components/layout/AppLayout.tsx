@@ -12,6 +12,7 @@ import {
   NotebookText,
   FileText,
   Bell,
+  LayoutDashboard,
   LogOut,
   UserCircle,
 } from "lucide-react";
@@ -76,6 +77,7 @@ type NavItem = {
 };
 
 const mainNavItems: NavItem[] = [
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permission: "relatorios.view" },
   { to: "/central-de-folha", label: "Central de Folha", icon: FileSpreadsheet, permission: "folha.operar" },
 ];
 
@@ -98,6 +100,7 @@ const secondaryNavItems: NavItem[] = [
 ];
 
 const routeLabels: Record<string, string> = {
+  "/dashboard": "Dashboard",
   "/central-de-folha": "Central de Folha",
   "/empresas": "Empresas",
   "/funcionarios": "Funcionários",
