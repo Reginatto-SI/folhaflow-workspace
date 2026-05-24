@@ -15,15 +15,17 @@ interface PayrollFiltersProps {
   departments: Department[];
   jobRoles: JobRole[];
   onClear: () => void;
+  conferenceStatus: "all" | "checked" | "pending";
+  onConferenceStatusChange: (v: "all" | "checked" | "pending") => void;
 }
 
 const PayrollFilters: React.FC<PayrollFiltersProps> = ({
   search, onSearchChange,
   departmentId, onDepartmentChange,
   jobRoleId, onJobRoleChange,
-  departments, jobRoles, onClear,
+  departments, jobRoles, onClear, conferenceStatus, onConferenceStatusChange,
 }) => {
-  const hasFilters = search || departmentId || jobRoleId;
+  const hasFilters = search || departmentId || jobRoleId || conferenceStatus !== "all";
 
   return (
     <div className="bg-card border rounded-md p-2.5 mb-3">
@@ -59,6 +61,16 @@ const PayrollFilters: React.FC<PayrollFiltersProps> = ({
             {jobRoles.filter((j) => j.isActive).map((j) => (
               <SelectItem key={j.id} value={j.id}>{j.name}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={conferenceStatus} onValueChange={(value) => onConferenceStatusChange(value as "all" | "checked" | "pending")}>
+          <SelectTrigger className="w-[150px] h-8">
+            <SelectValue placeholder="Conferência" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="checked">Conferidos</SelectItem>
+            <SelectItem value="pending">Pendentes</SelectItem>
           </SelectContent>
         </Select>
 

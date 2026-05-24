@@ -262,6 +262,7 @@ export type Database = {
         Row: {
           base_salary: number
           company_id: string
+          conferido: boolean
           created_at: string
           deductions: Json
           deductions_total: number
@@ -281,6 +282,7 @@ export type Database = {
         Insert: {
           base_salary?: number
           company_id: string
+          conferido?: boolean
           created_at?: string
           deductions?: Json
           deductions_total?: number
@@ -300,6 +302,7 @@ export type Database = {
         Update: {
           base_salary?: number
           company_id?: string
+          conferido?: boolean
           created_at?: string
           deductions?: Json
           deductions_total?: number

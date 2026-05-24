@@ -6,7 +6,7 @@ import { PayrollEntry } from "@/types/payroll";
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const TotalsBar: React.FC<{ entriesOverride?: PayrollEntry[] }> = ({ entriesOverride }) => {
+const TotalsBar: React.FC<{ entriesOverride?: PayrollEntry[]; checkedCount?: number }> = ({ entriesOverride, checkedCount = 0 }) => {
   const { payrollEntries, rubrics } = usePayroll();
   const entries = entriesOverride || payrollEntries;
 
@@ -18,6 +18,12 @@ const TotalsBar: React.FC<{ entriesOverride?: PayrollEntry[] }> = ({ entriesOver
       <div>
         <p className="text-xs text-muted-foreground font-medium">Funcionários</p>
         <p className="text-base font-semibold tabular-nums">{totals.count}</p>
+      </div>
+      <div className="h-7 w-px bg-border" />
+      <div>
+        {/* Comentário: indicador de conferência é apenas operacional/visual na Central. */}
+        <p className="text-xs text-muted-foreground font-medium">Conferidos</p>
+        <p className="text-base font-semibold tabular-nums">{checkedCount}/{entries.length}</p>
       </div>
       <div className="h-7 w-px bg-border" />
       <div>

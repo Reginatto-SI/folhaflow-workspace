@@ -403,6 +403,7 @@ type PayrollEntryRow = {
   inss_amount: number | null;
   net_salary: number | null;
   rubric_meta: Record<string, { quantity?: number }> | null;
+  conferido: boolean;
 };
 
 const mapPayrollEntryRowToModel = (row: PayrollEntryRow): PayrollEntry => ({
@@ -421,6 +422,7 @@ const mapPayrollEntryRowToModel = (row: PayrollEntryRow): PayrollEntry => ({
   inssAmount: row.inss_amount !== null ? Number(row.inss_amount) : undefined,
   netSalary: row.net_salary !== null ? Number(row.net_salary) : undefined,
   rubricMeta: row.rubric_meta || {},
+  conferido: !!row.conferido,
 });
 
 const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
@@ -434,6 +436,8 @@ const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
   deductions: entry.deductions,
   notes: normalizeText(entry.notes),
   rubric_meta: entry.rubricMeta ?? {},
+  // Comentário: conferência operacional nasce pendente e não participa do cálculo.
+  conferido: !!entry.conferido,
 });
 
 const mapPayrollBatchRowToModel = (row: {
@@ -459,7 +463,7 @@ const mapPayrollBatchRowToModel = (row: {
 const RUBRICA_SELECT_WITH_ITEMS =
   "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, nature, calculation_method, classification, fixed_value, percentage_value, percentage_base_rubrica_id, uses_complementary_quantity, complementary_quantity_label, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
 
-const PAYROLL_ENTRY_SELECT = "id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary, rubric_meta";
+const PAYROLL_ENTRY_SELECT = "id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary, rubric_meta, conferido";
 const PAYROLL_BATCH_SELECT = "id, company_id, month, year, status, is_archived, payment_date";
 
 const isSameCompetence = (a: PayrollMonth, b: PayrollMonth) => a.month === b.month && a.year === b.year;
@@ -861,6 +865,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...(updates.inssAmount !== undefined ? { inss_amount: updates.inssAmount } : {}),
         ...(updates.netSalary !== undefined ? { net_salary: updates.netSalary } : {}),
         ...(updates.rubricMeta !== undefined ? { rubric_meta: updates.rubricMeta } : {}),
+        // Comentário: marcação operacional de conferência (visual) sem efeito financeiro.
+        ...(updates.conferido !== undefined ? { conferido: updates.conferido } : {}),
       };
       const { data, error } = await supabase
         .from("payroll_entries")

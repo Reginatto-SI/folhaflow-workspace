@@ -2,6 +2,7 @@ import React from "react";
 import { PayrollEntry, Employee, Department, JobRole, Rubric } from "@/types/payroll";
 import { cn } from "@/lib/utils";
 import { calculatePayrollFromEntry } from "@/lib/payrollSpreadsheet";
+import { Check, Circle } from "lucide-react";
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -13,6 +14,7 @@ interface PayrollTableProps {
   allJobRoles: JobRole[];
   rubrics: Rubric[];
   onRowClick: (entry: PayrollEntry) => void;
+  onToggleConferido: (entry: PayrollEntry) => void;
 }
 
 const PayrollTable: React.FC<PayrollTableProps> = ({
@@ -22,6 +24,7 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
   allJobRoles = [],
   rubrics = [],
   onRowClick,
+  onToggleConferido,
 }) => {
   const employeeById = React.useMemo(() => new Map(allEmployees.map((item) => [item.id, item])), [allEmployees]);
   const departmentById = React.useMemo(() => new Map(allDepartments.map((item) => [item.id, item.name])), [allDepartments]);
@@ -42,6 +45,7 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
           <thead>
             {/* Comentário: cabeçalho com contraste suave e hierarquia leve para leitura diária. */}
             <tr className="bg-muted/35 border-b border-border/80">
+              <th className="text-center px-2 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90 w-[62px]">Conf.</th>
               <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">Funcionário</th>
               <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">CPF</th>
               <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">Setor</th>
@@ -65,6 +69,20 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
                   className={cn("border-b border-border/70 transition-all duration-150 hover:bg-muted/45 hover:shadow-[inset_3px_0_0_0_hsl(var(--primary)/0.28)] cursor-pointer")}
                   onClick={() => onRowClick(entry)}
                 >
+                  <td className="px-2 py-2.5 align-middle text-center">
+                    {/* Comentário: toggle rápido de conferência na linha, sem abrir modal e sem recalcular folha. */}
+                    <button
+                      type="button"
+                      className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full border transition-colors", entry.conferido ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-border text-muted-foreground hover:bg-muted")}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onToggleConferido(entry);
+                      }}
+                      aria-label={entry.conferido ? "Desmarcar conferência" : "Marcar conferência"}
+                    >
+                      {entry.conferido ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
+                    </button>
+                  </td>
                   {/* Comentário: redução intencional de densidade para empresas com muitos funcionários, com colunas estáveis para evitar tabela visualmente pesada. */}
                   <td className="px-4 py-2.5 font-medium align-middle whitespace-nowrap min-w-[220px]">
                     <span className="text-[0.95rem] font-semibold text-foreground">{employee?.name || "—"}</span>
