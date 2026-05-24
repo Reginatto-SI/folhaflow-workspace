@@ -2,7 +2,8 @@ import React from "react";
 import { PayrollEntry, Employee, Department, JobRole, Rubric } from "@/types/payroll";
 import { cn } from "@/lib/utils";
 import { calculatePayrollFromEntry } from "@/lib/payrollSpreadsheet";
-import { Check, Circle } from "lucide-react";
+import { Check, Circle, CircleHelp } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -15,6 +16,7 @@ interface PayrollTableProps {
   rubrics: Rubric[];
   onRowClick: (entry: PayrollEntry) => void;
   onToggleConferido: (entry: PayrollEntry) => void;
+  updatingConferidoIds?: Record<string, boolean>;
 }
 
 const PayrollTable: React.FC<PayrollTableProps> = ({
@@ -25,6 +27,7 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
   rubrics = [],
   onRowClick,
   onToggleConferido,
+  updatingConferidoIds = {},
 }) => {
   const employeeById = React.useMemo(() => new Map(allEmployees.map((item) => [item.id, item])), [allEmployees]);
   const departmentById = React.useMemo(() => new Map(allDepartments.map((item) => [item.id, item.name])), [allDepartments]);
@@ -45,7 +48,28 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
           <thead>
             {/* Comentário: cabeçalho com contraste suave e hierarquia leve para leitura diária. */}
             <tr className="bg-muted/35 border-b border-border/80">
-              <th className="text-center px-2 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90 w-[62px]">Conf.</th>
+              <th className="text-center px-2 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90 w-[62px]">
+                <span className="inline-flex items-center justify-center gap-1">
+                  <span>Conf.</span>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="text-muted-foreground/70 hover:text-foreground transition-colors"
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label="Ajuda sobre conferência"
+                        >
+                          <CircleHelp className="h-3 w-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs text-left">
+                        Marque quando os valores do funcionário já foram conferidos nesta competência. Isso não altera cálculos, recibos ou relatórios.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </span>
+              </th>
               <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">Funcionário</th>
               <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">CPF</th>
               <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">Setor</th>
@@ -79,6 +103,7 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
                         onToggleConferido(entry);
                       }}
                       aria-label={entry.conferido ? "Desmarcar conferência" : "Marcar conferência"}
+                      disabled={!!updatingConferidoIds[entry.id]}
                     >
                       {entry.conferido ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
                     </button>
