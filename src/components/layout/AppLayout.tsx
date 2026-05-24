@@ -77,7 +77,11 @@ type NavItem = {
 
 const mainNavItems: NavItem[] = [
   { to: "/central-de-folha", label: "Central de Folha", icon: FileSpreadsheet, permission: "folha.operar" },
-  { to: "/relatorios/por-empresa", label: "Relatórios", icon: FileText, permission: "relatorios.view" },
+];
+
+const relatoriosNavItems: NavItem[] = [
+  { to: "/relatorios/por-empresa", label: "Por Empresa", icon: FileText, permission: "relatorios.view" },
+  { to: "/relatorios/resumo-completo", label: "Resumo Completo", icon: FileText, permission: "relatorios.view" },
 ];
 
 const cadastrosNavItems: NavItem[] = [
@@ -102,6 +106,7 @@ const routeLabels: Record<string, string> = {
   "/rubricas": "Rubricas",
   "/usuarios": "Usuários",
   "/relatorios/por-empresa": "Relatórios",
+  "/relatorios/resumo-completo": "Relatórios",
   "/configuracoes": "Configurações",
 };
 
