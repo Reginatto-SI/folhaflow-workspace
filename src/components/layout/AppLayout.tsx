@@ -170,12 +170,12 @@ function AppSidebar() {
         {/* Ajuste mínimo: no modo icon, reaproveitamos o mesmo "encaixe" horizontal (px-2) usado pelos botões do menu. */}
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
           {collapsed ? (
-            // Mantemos o mesmo box 8x8 dos itens colapsados para alinhar visualmente no mesmo eixo dos ícones.
+            // Sidebar colapsada usa marca compacta "DF" para não exibir a logo completa nesse estado.
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm">
               DF
             </div>
           ) : (
-            // Estado expandido: usa a logo oficial já disponível em /public.
+            // Carregamento direto do SVG público para manter renderização leve no estado expandido.
             <img src="/logo_Branca_Laranja.svg" alt="Delicious Fish" className="h-8 w-auto shrink-0" />
           )}
         </div>
