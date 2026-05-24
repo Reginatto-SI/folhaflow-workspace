@@ -77,7 +77,11 @@ type NavItem = {
 
 const mainNavItems: NavItem[] = [
   { to: "/central-de-folha", label: "Central de Folha", icon: FileSpreadsheet, permission: "folha.operar" },
-  { to: "/relatorios/por-empresa", label: "Relatórios", icon: FileText, permission: "relatorios.view" },
+];
+
+const relatoriosNavItems: NavItem[] = [
+  { to: "/relatorios/por-empresa", label: "Por Empresa", icon: FileText, permission: "relatorios.view" },
+  { to: "/relatorios/resumo-completo", label: "Resumo Completo", icon: FileText, permission: "relatorios.view" },
 ];
 
 const cadastrosNavItems: NavItem[] = [
@@ -102,6 +106,7 @@ const routeLabels: Record<string, string> = {
   "/rubricas": "Rubricas",
   "/usuarios": "Usuários",
   "/relatorios/por-empresa": "Relatórios",
+  "/relatorios/resumo-completo": "Relatórios",
   "/configuracoes": "Configurações",
 };
 
@@ -118,11 +123,26 @@ function AppSidebar() {
 
   // Filtra os menus pelo conjunto de permissões do usuário logado.
   const visibleMain = mainNavItems.filter((i) => hasPermission(i.permission));
+  const visibleRelatorios = relatoriosNavItems.filter((i) => hasPermission(i.permission));
   const visibleCadastros = cadastrosNavItems.filter((i) => hasPermission(i.permission));
   const visibleSecondary = secondaryNavItems.filter((i) => hasPermission(i.permission));
 
   const isCadastrosRoute = visibleCadastros.some((item) => location.pathname.startsWith(item.to));
+  const isRelatoriosRoute = visibleRelatorios.some((item) => location.pathname.startsWith(item.to));
   const [cadastrosOpen, setCadastrosOpen] = React.useState(isCadastrosRoute);
+  const [relatoriosOpen, setRelatoriosOpen] = React.useState(isRelatoriosRoute);
+
+  React.useEffect(() => {
+    if (isCadastrosRoute) {
+      setCadastrosOpen(true);
+    }
+  }, [isCadastrosRoute]);
+
+  React.useEffect(() => {
+    if (isRelatoriosRoute) {
+      setRelatoriosOpen(true);
+    }
+  }, [isRelatoriosRoute]);
 
   React.useEffect(() => {
     if (isCadastrosRoute) {
@@ -177,6 +197,43 @@ function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+
+              {/* Grupo "Relatórios" colapsável (Por Empresa + Resumo Completo). */}
+              {visibleRelatorios.length > 0 && (
+                <Collapsible open={relatoriosOpen} onOpenChange={setRelatoriosOpen}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        tooltip="Relatórios"
+                        isActive={isRelatoriosRoute}
+                        className="text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                      >
+                        <FileText className="h-4 w-4 shrink-0" />
+                        {!collapsed && <span>Relatórios</span>}
+                        {!collapsed && (
+                          <ChevronDown
+                            className={`ml-auto h-4 w-4 transition-transform ${relatoriosOpen ? "rotate-180" : ""}`}
+                          />
+                        )}
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {visibleRelatorios.map((item) => (
+                          <SidebarMenuSubItem key={item.to}>
+                            <SidebarMenuSubButton asChild isActive={location.pathname === item.to}>
+                              <NavLink to={item.to} className="text-sidebar-foreground/70 hover:text-sidebar-foreground">
+                                <item.icon className="h-4 w-4 shrink-0" />
+                                <span>{item.label}</span>
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )}
 
               {/* Grupo "Cadastros" oculto se o usuário não tem nenhum item permitido. */}
               {visibleCadastros.length > 0 && (

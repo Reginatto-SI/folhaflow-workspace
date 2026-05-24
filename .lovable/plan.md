@@ -1,81 +1,80 @@
-## Objetivo
 
-Permitir que uma rubrica manual tenha uma **quantidade complementar opcional** (ex.: "dias" para Compra de Férias), persistida por lançamento/competência, exibida no drawer e refletida no recibo. O número é **apenas descritivo** — não entra em cálculo algum.
+# Resumo Completo da Folha (PDF consolidado)
 
-## Escopo das alterações
+Reproduz o layout legado de `Resumo Completo DF.pdf`: tabela única consolidando **todas as empresas do grupo** numa competência, com rubricas como linhas e empresas como colunas. Sem recalcular nada — reaproveita os mesmos helpers já usados pelo Relatório por Empresa.
 
-### 1. Banco (migration)
+## Navegação
 
-**Tabela `rubricas`** — duas colunas novas:
-- `uses_complementary_quantity boolean not null default false`
-- `complementary_quantity_label text` (ex.: `"dias"`)
+- Manter rota atual `/relatorios/por-empresa` intacta.
+- Adicionar nova rota `/relatorios/resumo-completo` apontando para nova página `ReportsSummary.tsx`.
+- No menu lateral (`AppLayout`), transformar o item "Relatórios" num grupo colapsável (mesmo padrão de "Cadastros"), com dois subitens:
+  - **Por Empresa** → `/relatorios/por-empresa`
+  - **Resumo Completo** → `/relatorios/resumo-completo`
+- Acrescentar `routeLabels["/relatorios/resumo-completo"] = "Relatórios"`.
+- Ambas exigem `relatorios.view` (mesma permissão atual).
 
-**Tabela `payroll_entries`** — uma coluna nova:
-- `rubric_meta jsonb not null default '{}'::jsonb`
-  - formato: `{ "<rubricId>": { "quantity": 10 } }`
-  - mantida separada de `earnings`/`deductions` para não impactar o motor de cálculo e os totalizadores existentes.
+## Estrutura de dados (novo helper)
 
-Sem novos triggers, sem CHECK constraints. RLS herdada (sem mudança).
+Novo arquivo `src/lib/reportSummaryData.ts`:
 
-### 2. Tipos (`src/types/payroll.ts`)
+- Função `buildReportSummaryData({ month, companies, allBatches, allEmployees, allEntries, rubrics })`.
+- Para cada empresa ativa, internamente reusa `buildReportByCompanyData` (não duplica regra de seleção de batch nem de leitura de valores canônicos — `salario_real`, `g2_complemento`, `salario_liquido` vêm da mesma fonte via `calculatePayrollFromEntry` + `resolveCanonicalDerivedRubricIds`).
+- Agrega por rubrica somando os totais por empresa: `companyTotals[companyId][rubricId]`.
+- Calcula:
+  - `headcount` por empresa (contagem de linhas/funcionários no dataset da empresa).
+  - `totalGeral` por rubrica (soma de todas as empresas).
+  - `semMov` por rubrica: soma das empresas marcadas como "sem movimento" — definição simples: empresa sem nenhuma linha na competência (headcount = 0). Se nenhuma se enquadrar, a coluna fica zerada (compatível com o legado).
+  - Linhas finais derivadas: `Rendimentos` (= soma de todas rubricas tipo `provento`), `Descontos` (= soma de todas rubricas tipo `desconto`), `Custo médio por Func.` (= `salario_real` / headcount por empresa; total = soma `salario_real` / soma headcount). Estas linhas usam exclusivamente totais já calculados — sem novo motor.
+- Ordenação das linhas: respeita `display_order` das rubricas (igual ao relatório por empresa); linhas iniciais fixas (`Total de Funcionários`) e linhas finais fixas (`Rendimentos`, `Descontos`, `Custo médio por Func.`) ficam separadas.
 
-- `Rubric`: `usesComplementaryQuantity?: boolean`, `complementaryQuantityLabel?: string | null`.
-- `PayrollEntry`: `rubricMeta?: Record<string, { quantity?: number }>`.
+## Geração do PDF
 
-### 3. Contexto (`src/contexts/PayrollContext.tsx`)
+Novo arquivo `src/lib/reportSummaryPdf.ts`, baseado em `reportByCompanyPdf.ts` (reutiliza jsPDF + autoTable, formatação BRL, footer "Reginatto SI", título e rodapé):
 
-- Mapear as novas colunas em todos os pontos de leitura/escrita de rubricas e entries (load, add, update). Persistir `rubric_meta` no `addPayrollEntry`/`updatePayrollEntry`. Sem mudança em cálculo.
+- Paisagem A4, margens pequenas.
+- Título: `Resumo de Folha de Pagamento - <MÊS-YY>` (ex.: `ABRIL-26`), no formato do legado.
+- Primeira coluna larga ("Rubrica"); colunas por empresa com largura uniforme; colunas finais `TOTAL` e `SEM MOV.`.
+- Header cinza escuro com texto claro, bordas finas, fonte pequena (~4.7-5pt), valores alinhados à direita, headcount centralizado.
+- Linhas `Salário Real`, `Salário G2 complem.`, `Salário Líquido`, `Rendimentos`, `Descontos`, `Custo médio por Func.` com fundo cinza e negrito.
+- Cabeçalho repetido em quebra de página.
+- Fallback para muitas empresas: reduz fonte e largura até o limite legível; se ainda assim estourar (>~16 empresas), quebra horizontalmente em páginas adicionais mantendo a coluna "Rubrica" e replicando `TOTAL`/`SEM MOV.` na última página. Implementação inicial: apenas redução de fonte/largura uniforme (mesma estratégia do relatório por empresa); quebra horizontal só se necessário em iteração futura.
 
-### 4. Cadastro de rubricas (`src/pages/Rubrics.tsx`)
+## Tela `ReportsSummary.tsx`
 
-- Adicionar, no formulário/diálogo de rubrica, um checkbox "Usar quantidade complementar" e, quando marcado, um input "Rótulo" (default `"dias"`). Sem reorganizar a tela.
+Padrão visual igual ao `ReportsCompany.tsx`:
 
-### 5. Drawer da Central (`src/components/payroll/EmployeeDrawer.tsx`)
+- Card de filtros com **um único Select de competência** (lista combinada de todos os batches não arquivados de todas as empresas, deduplicados por `month/year`, ordenados desc).
+- Botão **"Gerar PDF"** → chama `generateReportSummaryPdf(dataset)`.
+- Pré-visualização opcional simples (tabela HTML compacta) com os mesmos dados, para conferência antes de exportar. Pode ser implementada de forma básica reaproveitando componentes `Table` do shadcn.
+- Sem CSV nesta versão (escopo mínimo conforme pedido).
 
-- Em `NumericRubricInput`, quando `rubric.usesComplementaryQuantity` for true, exibir um segundo input compacto à direita do valor, com largura curta (`w-20`), tipo numérico inteiro ≥ 0, label "Dias" (ou o rótulo configurado).
-- Estado local adicional `rubricQuantities: Record<string, number>`; inicialização lê de `entry.rubricMeta`.
-- `buildPayrollEntryDraft` adiciona `rubricMeta` ao payload com apenas as rubricas que têm quantidade definida (>0).
-- Cálculo (`calculatePayroll`) e canônicas **não** recebem nada de quantidade.
+## Arquivos
 
-### 6. Recibo
+Criar:
+- `src/lib/reportSummaryData.ts`
+- `src/lib/reportSummaryPdf.ts`
+- `src/pages/ReportsSummary.tsx`
 
-- `src/lib/receiptData.ts`:
-  - `ReceiptLine` ganha `quantity?: number` e `quantityLabel?: string`.
-  - Após construir as linhas legadas (agregadas), inserir **linhas extras dedicadas** para cada rubrica ativa que:
-    - tenha `usesComplementaryQuantity = true`,
-    - tenha valor > 0 no lançamento,
-    - tenha quantidade > 0 em `entry.rubricMeta`.
-  - Posicionamento: insere logo antes da linha "INSS" (final do bloco de proventos) para não quebrar a ordem visual dos descontos. Prefixo segue o tipo da rubrica (`(+)` provento, `(-)` desconto).
-  - Para evitar dupla contagem visual, **subtrair** o mesmo valor da linha agregada onde a rubrica entraria (por `classification`). Os totais "Líquido a receber" não mudam, porque vêm da entry persistida.
-- `src/components/payroll/Receipt.tsx`:
-  - `formatReceiptLineLabel` passa a anexar `(N dias)` quando `line.quantity` e `line.quantityLabel` existirem. Ex.: `(+) Compra de Férias (10 dias)`.
+Editar:
+- `src/App.tsx` — registrar rota `/relatorios/resumo-completo`.
+- `src/components/layout/AppLayout.tsx` — converter "Relatórios" em grupo colapsável com 2 subitens; atualizar `routeLabels`.
 
-### 7. Relatório PDF (`src/pages/ReportsCompany.tsx` e `src/lib/reportByCompanyData.ts`)
+Não editar: `reportByCompanyData.ts`, `reportByCompanyPdf.ts`, `reportByCompanyExcel.ts`, `payrollSpreadsheet.ts`, contexto, Central, recibos.
 
-- **Nenhuma alteração**. O relatório continua lendo apenas valores monetários.
+## Regras respeitadas (PRDs)
 
-### 8. Testes manuais (após build)
+- PRD-08: relatório só lê, não recalcula.
+- PRD-12: canônicas via mesma resolução do relatório por empresa (`resolveCanonicalDerivedRubricIds` + `calculatePayrollFromEntry`).
+- PRD-00/00B: simples, previsível, sem nova fonte de verdade.
 
-1. Marcar a rubrica "Compra de Férias" como `uses_complementary_quantity = true`, rótulo `dias`.
-2. No drawer, lançar R$ 1.200 + 10 dias, salvar, reabrir → persistência ok.
-3. Salário Líquido e totais inalterados quando só os dias mudam.
-4. Recibo mostra `(+) Compra de Férias (10 dias)  1.200,00`, separado da linha agregada.
-5. Relatório PDF mostra apenas o valor.
-6. Outras rubricas (Horas Extras, Prêmio, INSS, Faltas) continuam idênticas.
+## Validações manuais
 
-## Fora de escopo (explícito)
-
-- Sem motor de cálculo por quantidade.
-- Sem alteração em rubricas canônicas (`salario_real`, `g2_complemento`, `salario_liquido`).
-- Sem mudança em AppLayout, navegação, demais páginas, ou relatórios.
-- Sem refactor do drawer ou do template do recibo.
-
-## Arquivos tocados
-
-- Migration nova (rubricas + payroll_entries)
-- `src/types/payroll.ts`
-- `src/contexts/PayrollContext.tsx`
-- `src/pages/Rubrics.tsx`
-- `src/components/payroll/EmployeeDrawer.tsx`
-- `src/lib/receiptData.ts`
-- `src/components/payroll/Receipt.tsx`
+1. Menu Relatórios mostra dois subitens; "Por Empresa" continua funcionando idêntico.
+2. Nova tela aparece em `/relatorios/resumo-completo`.
+3. Seleção de competência lista todos os meses com folhas ativas.
+4. PDF abre em paisagem, título no formato `Resumo de Folha de Pagamento - ABRIL-26`.
+5. Coluna por empresa, linhas com rubricas + linhas finais (Rendimentos/Descontos/Custo médio).
+6. `Salário Real`, `G2 Complemento` e `Salário Líquido` batem com Central e com Relatório por Empresa para cada empresa.
+7. `TOTAL` por linha = soma das colunas de empresas.
+8. `SEM MOV.` zerada quando todas as empresas têm movimento.
+9. Relatório por Empresa segue gerando PDF/CSV sem alterações.

@@ -20,6 +20,7 @@ import UsersAdmin from "./pages/UsersAdmin";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import ReportsCompany from "./pages/ReportsCompany";
+import ReportsSummary from "./pages/ReportsSummary";
 
 const queryClient = new QueryClient();
 
@@ -101,6 +102,14 @@ const App = () => (
                             element={
                               <PermissionRoute permission="relatorios.view">
                                 <ReportsCompany />
+                              </PermissionRoute>
+                            }
+                          />
+                          <Route
+                            path="/relatorios/resumo-completo"
+                            element={
+                              <PermissionRoute permission="relatorios.view">
+                                <ReportsSummary />
                               </PermissionRoute>
                             }
                           />
