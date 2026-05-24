@@ -40,6 +40,7 @@ const Index = () => {
   const [search, setSearch] = useState("");
   const [filterDept, setFilterDept] = useState("");
   const [filterRole, setFilterRole] = useState("");
+  const [conferenceStatus, setConferenceStatus] = useState<"all" | "checked" | "pending">("all");
   const [selectedEntry, setSelectedEntry] = useState<PayrollEntry | null>(null);
   const [livePreviewEntry, setLivePreviewEntry] = useState<PayrollEntry | null>(null);
   const [drawerMode, setDrawerMode] = useState<"edit" | "create">("edit");
@@ -80,10 +81,12 @@ const Index = () => {
       if (filterRole && filterRole !== "all") {
         if (emp.jobRoleId !== filterRole) return false;
       }
+      if (conferenceStatus === "checked" && !entry.conferido) return false;
+      if (conferenceStatus === "pending" && entry.conferido) return false;
 
       return true;
     });
-  }, [centralEntries, allEmployees, search, filterDept, filterRole]);
+  }, [centralEntries, allEmployees, search, filterDept, filterRole, conferenceStatus]);
 
   // Paginação apenas visual: não altera totais (TotalsBar usa centralEntries) nem cálculos.
   const { page, pageSize, total, paginatedItems: pagedEntries, setPage, setPageSize, resetToFirstPage } =
@@ -91,7 +94,8 @@ const Index = () => {
 
   React.useEffect(() => {
     resetToFirstPage();
-  }, [search, filterDept, filterRole, selectedCompany?.id, selectedMonth.month, selectedMonth.year, resetToFirstPage]);
+  }, [search, filterDept, filterRole, conferenceStatus, selectedCompany?.id, selectedMonth.month, selectedMonth.year, resetToFirstPage]);
+  const checkedCount = useMemo(() => centralEntries.filter((entry) => entry.conferido).length, [centralEntries]);
 
   const handleRowClick = useCallback((entry: PayrollEntry) => {
     setDrawerMode("edit");
@@ -115,6 +119,10 @@ const Index = () => {
     },
     [deletePayrollEntry]
   );
+  const handleToggleConferido = useCallback(async (entry: PayrollEntry) => {
+    // Comentário: troca apenas o marcador operacional de conferência.
+    await updatePayrollEntry(entry.id, { conferido: !entry.conferido });
+  }, [updatePayrollEntry]);
 
   // Comentário: dispara visualização do recibo individual a partir do drawer.
   // Usa a entrada com prévia já aplicada (mesma fonte do livePreviewEntry),
@@ -274,6 +282,7 @@ const Index = () => {
     setSearch("");
     setFilterDept("");
     setFilterRole("");
+    setConferenceStatus("all");
   };
 
   const selectedEmployee = selectedEntry ? allEmployees.find((e) => e.id === selectedEntry.employeeId) || null : null;
@@ -298,7 +307,7 @@ const Index = () => {
       </div>
 
       <PayrollHeader onNewEntry={handleOpenNewEntry} onGenerateReceipts={handleGenerateReceiptsBatch} onGenerateReport={handleGenerateCompanyReport} onGenerateExcelReport={handleGenerateCompanyReportExcel} onDuplicatePayroll={() => setDuplicationOpen(true)} />
-      <TotalsBar entriesOverride={centralEntries} />
+      <TotalsBar entriesOverride={centralEntries} checkedCount={checkedCount} />
       <PayrollFilters
         search={search}
         onSearchChange={setSearch}
@@ -308,6 +317,8 @@ const Index = () => {
         onJobRoleChange={setFilterRole}
         departments={departments}
         jobRoles={jobRoles}
+        conferenceStatus={conferenceStatus}
+        onConferenceStatusChange={setConferenceStatus}
         onClear={clearFilters}
       />
       {!currentBatch && availableCompetences.length === 0 ? (
@@ -322,6 +333,7 @@ const Index = () => {
           allDepartments={allDepartments}
           allJobRoles={allJobRoles}
           onRowClick={handleRowClick}
+          onToggleConferido={handleToggleConferido}
           rubrics={rubrics}
         />
       )}
@@ -354,6 +366,7 @@ const Index = () => {
         onDelete={handleDeleteEntry}
         onPreviewChange={handlePreviewChange}
         onGenerateReceipt={handleGenerateReceiptIndividual}
+        onToggleConferido={handleToggleConferido}
       />
       <PayrollDuplicationDialog open={duplicationOpen} onOpenChange={setDuplicationOpen} />
       <ReceiptPrintView

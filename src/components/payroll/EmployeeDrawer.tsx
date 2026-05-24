@@ -78,6 +78,7 @@ interface EmployeeDrawerProps {
   onPreviewChange?: (entry: PayrollEntry | null) => void;
   // Comentário: drawer apenas dispara a geração; recibo é renderizado fora (PRD-07).
   onGenerateReceipt?: (entry: PayrollEntry) => void;
+  onToggleConferido?: (entry: PayrollEntry) => void;
 }
 
 const NumericRubricInput: React.FC<{
@@ -211,6 +212,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   canDelete = true,
   onPreviewChange,
   onGenerateReceipt,
+  onToggleConferido,
 }) => {
   const isCreateMode = mode === "create";
   const [rubricValues, setRubricValues] = useState<Record<string, number>>({});
@@ -438,6 +440,22 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
           </div>
 
           <div className="mt-1.5 flex w-full flex-wrap justify-end gap-1.5">
+            {!isCreateMode && entry && (
+              entry.conferido ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-md px-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                  onClick={() => onToggleConferido?.(entry)}
+                >
+                  Conferido
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" className="h-8 rounded-md px-3" onClick={() => onToggleConferido?.(entry)}>
+                  Marcar como conferido
+                </Button>
+              )
+            )}
             <Button onClick={handleSave} size="sm" className="h-8 rounded-md px-3" disabled={!canEditValues}>
               <Save className="mr-1 h-4 w-4" />
               {isCreateMode ? "Criar" : "Salvar"}
