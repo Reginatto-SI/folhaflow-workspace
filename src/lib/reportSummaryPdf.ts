@@ -201,7 +201,9 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
       if (hookData.section !== "body") return;
       const rowIndex = hookData.row.index;
       if (summaryBoldRows.has(rowIndex)) {
-        hookData.cell.styles.textColor = TEXT_DARK;
+        // Contraste: no bloco inferior, a 1ª coluna segue fundo escuro e precisa de fonte clara.
+        // Nas demais colunas com fundo claro, mantemos fonte escura para legibilidade.
+        hookData.cell.styles.textColor = hookData.column.index === 0 ? TEXT_LIGHT : TEXT_DARK;
         hookData.cell.styles.fontStyle = "bold";
       }
 
