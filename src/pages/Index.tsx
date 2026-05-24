@@ -50,6 +50,8 @@ const Index = () => {
   const [duplicationOpen, setDuplicationOpen] = useState(false);
   const [newEmployeeId, setNewEmployeeId] = useState("");
   const [isSavingNewEntry, setIsSavingNewEntry] = useState(false);
+  const [optimisticConferidoByEntryId, setOptimisticConferidoByEntryId] = useState<Record<string, boolean>>({});
+  const [updatingConferidoIds, setUpdatingConferidoIds] = useState<Record<string, boolean>>({});
   // Comentário: estado dos recibos (individual = 1 entry, lote = N entries).
   const [receiptsState, setReceiptsState] = useState<{ entries: PayrollEntry[]; title?: string } | null>(null);
 
@@ -59,13 +61,21 @@ const Index = () => {
   );
 
   const centralEntries = useMemo(() => {
-    if (!livePreviewEntry) return payrollEntries;
+    const entriesWithConferidoUx = payrollEntries.map((entry) =>
+      optimisticConferidoByEntryId[entry.id] === undefined
+        ? entry
+        : { ...entry, conferido: optimisticConferidoByEntryId[entry.id] }
+    );
+
+    if (!livePreviewEntry) return entriesWithConferidoUx;
 
     // Comentário: salario_real, g2_complemento e salario_liquido são rubricas canônicas.
     // A Central, o drawer e os totalizadores usam a mesma entrada operacional derivada
     // pela prévia do drawer e a mesma função de cálculo, sem cálculo paralelo.
-    return payrollEntries.map((entry) => (entry.id === livePreviewEntry.id ? livePreviewEntry : entry));
-  }, [livePreviewEntry, payrollEntries]);
+    return entriesWithConferidoUx.map((entry) =>
+      entry.id === livePreviewEntry.id ? { ...livePreviewEntry, conferido: entry.conferido } : entry
+    );
+  }, [livePreviewEntry, optimisticConferidoByEntryId, payrollEntries]);
 
   const filteredEntries = useMemo(() => {
     return centralEntries.filter((entry) => {
@@ -96,6 +106,10 @@ const Index = () => {
     resetToFirstPage();
   }, [search, filterDept, filterRole, conferenceStatus, selectedCompany?.id, selectedMonth.month, selectedMonth.year, resetToFirstPage]);
   const checkedCount = useMemo(() => centralEntries.filter((entry) => entry.conferido).length, [centralEntries]);
+  const selectedEntryForDrawer = useMemo(() => {
+    if (!selectedEntry) return null;
+    return centralEntries.find((entry) => entry.id === selectedEntry.id) ?? selectedEntry;
+  }, [centralEntries, selectedEntry]);
 
   const handleRowClick = useCallback((entry: PayrollEntry) => {
     setDrawerMode("edit");
@@ -120,9 +134,37 @@ const Index = () => {
     [deletePayrollEntry]
   );
   const handleToggleConferido = useCallback(async (entry: PayrollEntry) => {
-    // Comentário: troca apenas o marcador operacional de conferência.
-    await updatePayrollEntry(entry.id, { conferido: !entry.conferido });
-  }, [updatePayrollEntry]);
+    if (updatingConferidoIds[entry.id]) return;
+
+    const currentConferido = optimisticConferidoByEntryId[entry.id] ?? entry.conferido;
+    const nextConferido = !currentConferido;
+
+    // Comentário: atualização otimista apenas para UX do marcador operacional da Central.
+    setOptimisticConferidoByEntryId((prev) => ({ ...prev, [entry.id]: nextConferido }));
+    setUpdatingConferidoIds((prev) => ({ ...prev, [entry.id]: true }));
+
+    try {
+      await updatePayrollEntry(entry.id, { conferido: nextConferido });
+      setOptimisticConferidoByEntryId((prev) => {
+        const next = { ...prev };
+        delete next[entry.id];
+        return next;
+      });
+    } catch {
+      setOptimisticConferidoByEntryId((prev) => {
+        const next = { ...prev };
+        delete next[entry.id];
+        return next;
+      });
+      toast.error("Não foi possível atualizar a conferência deste funcionário.");
+    } finally {
+      setUpdatingConferidoIds((prev) => {
+        const next = { ...prev };
+        delete next[entry.id];
+        return next;
+      });
+    }
+  }, [optimisticConferidoByEntryId, updatePayrollEntry, updatingConferidoIds]);
 
   // Comentário: dispara visualização do recibo individual a partir do drawer.
   // Usa a entrada com prévia já aplicada (mesma fonte do livePreviewEntry),
@@ -334,6 +376,7 @@ const Index = () => {
           allJobRoles={allJobRoles}
           onRowClick={handleRowClick}
           onToggleConferido={handleToggleConferido}
+          updatingConferidoIds={updatingConferidoIds}
           rubrics={rubrics}
         />
       )}
@@ -354,7 +397,7 @@ const Index = () => {
         open={drawerOpen}
         onOpenChange={handleDrawerOpenChange}
         mode={drawerMode}
-        entry={selectedEntry}
+        entry={selectedEntryForDrawer}
         employee={drawerEmployee}
         employees={availableCreateEmployees}
         selectedEmployeeId={createEmployeeId}

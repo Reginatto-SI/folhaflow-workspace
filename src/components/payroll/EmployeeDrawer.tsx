@@ -448,7 +448,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
                   className="h-8 rounded-md px-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
                   onClick={() => onToggleConferido?.(entry)}
                 >
-                  Conferido
+                  Desmarcar conferência
                 </Button>
               ) : (
                 <Button variant="outline" size="sm" className="h-8 rounded-md px-3" onClick={() => onToggleConferido?.(entry)}>
