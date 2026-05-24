@@ -10,6 +10,8 @@ import { buildManagerialSummary } from "@/lib/reportSummaryManagerial";
 const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br — Contato: (65) 99210-2030";
 const DARK_HIGHLIGHT: [number, number, number] = [71, 85, 105];
 const LIGHT_ROW_HIGHLIGHT: [number, number, number] = [226, 232, 240];
+const CARD_BACKGROUND: [number, number, number] = [248, 250, 252];
+const BORDER_LIGHT: [number, number, number] = [203, 213, 225];
 const TEXT_LIGHT: [number, number, number] = [255, 255, 255];
 const TEXT_DARK: [number, number, number] = [31, 41, 55];
 
@@ -223,48 +225,110 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   // Comentário: seção gerencial reutiliza exclusivamente o dataset já consolidado, sem recalcular a folha.
   const managerial = buildManagerialSummary(dataset);
   const pct = (value: number) => `${(Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-  const startY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 5 : 40;
+  const requiredHeightForSection = 76;
+  const mainFinalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY : 40;
+  const availableHeight = pageHeight - 10 - mainFinalY;
+  let sectionStartY = mainFinalY + 6;
+  if (availableHeight < requiredHeightForSection) {
+    doc.addPage();
+    sectionStartY = 18;
+  }
 
-  autoTable(doc, {
-    startY,
-    head: [["Resumo Gerencial para Aprovação", "Valor"]],
-    body: [
-      ["Total de Funcionários", String(managerial.totalEmployees)],
-      ["Rendimentos", formatBRL(managerial.rendimentos)],
-      ["Descontos", formatBRL(managerial.descontos)],
-      ["Salário Líquido", formatBRL(managerial.salarioLiquido)],
-      ["Custo Médio por Func.", formatBRL(managerial.custoMedioPorFuncionario)],
-    ],
-    tableWidth: usableWidth,
-    margin: { left: marginLeft, right: marginRight },
-    styles: { fontSize: 6, cellPadding: 1 },
-    headStyles: { fillColor: DARK_HIGHLIGHT, textColor: TEXT_LIGHT, fontStyle: "bold" },
-    columnStyles: { 1: { halign: "right" } },
-    theme: "grid",
+  doc.setDrawColor(...BORDER_LIGHT);
+  doc.setLineWidth(0.2);
+  doc.setFillColor(...LIGHT_ROW_HIGHLIGHT);
+  doc.roundedRect(marginLeft, sectionStartY - 5, usableWidth, 8, 1.2, 1.2, "FD");
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...TEXT_DARK);
+  doc.setFontSize(9);
+  doc.text("Resumo Gerencial para Aprovação", marginLeft + 2, sectionStartY);
+
+  const cardsTopY = sectionStartY + 2.5;
+  const cardGap = 2;
+  const cardsPerRow = 5;
+  const cardWidth = (usableWidth - cardGap * (cardsPerRow - 1)) / cardsPerRow;
+  const cardHeight = 12;
+  const metrics = [
+    { label: "Total de Funcionários", value: String(managerial.totalEmployees) },
+    { label: "Rendimentos", value: formatBRL(managerial.rendimentos) },
+    { label: "Descontos", value: formatBRL(managerial.descontos) },
+    { label: "Salário Líquido", value: formatBRL(managerial.salarioLiquido) },
+    { label: "Custo Médio por Func.", value: formatBRL(managerial.custoMedioPorFuncionario) },
+  ];
+
+  metrics.forEach((metric, idx) => {
+    const row = Math.floor(idx / cardsPerRow);
+    const col = idx % cardsPerRow;
+    const x = marginLeft + col * (cardWidth + cardGap);
+    const y = cardsTopY + row * (cardHeight + 2);
+    doc.setFillColor(...CARD_BACKGROUND);
+    doc.setDrawColor(...BORDER_LIGHT);
+    doc.roundedRect(x, y, cardWidth, cardHeight, 1, 1, "FD");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.2);
+    doc.setTextColor(71, 85, 105);
+    doc.text(metric.label, x + 1.3, y + 4.1);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.3);
+    doc.setTextColor(...TEXT_DARK);
+    doc.text(metric.value, x + 1.3, y + 8.8);
   });
 
+  // Grid fixo de duas colunas para manter alinhamento e evitar "vazio" exagerado entre blocos.
+  const blocksGap = 6;
+  const leftBlockWidth = usableWidth * 0.56;
+  const rightBlockWidth = usableWidth - leftBlockWidth - blocksGap;
+  const leftBlockX = marginLeft;
+  const rightBlockX = marginLeft + leftBlockWidth + blocksGap;
+  const tablesStartY = cardsTopY + cardHeight + 6;
+  const rankingBody = managerial.ranking
+    .slice(0, 5)
+    .map((item, index) => [String(index + 1), item.name, String(item.employees), formatBRL(item.salarioLiquido), pct(item.percentOfTotal)]);
+  // Linha TOTAL no PDF deve ser explícita para não depender de item "TOTAL" no ranking de origem.
+  rankingBody.push([
+    "",
+    "TOTAL",
+    String(managerial.totalEmployees),
+    formatBRL(managerial.salarioLiquido),
+    managerial.salarioLiquido > 0 ? "100,0%" : "0,0%",
+  ]);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.2);
+  doc.setTextColor(...TEXT_DARK);
+  doc.text("Ranking por Setor / Empresa", leftBlockX, tablesStartY - 1.7);
+  doc.text("Composição da Folha", rightBlockX, tablesStartY - 1.7);
+
   autoTable(doc, {
-    startY: (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 3 : startY + 25,
+    startY: tablesStartY,
     head: [["#", "Setor / Empresa", "Funcionários", "Salário Líquido", "% do Total"]],
-    body: managerial.ranking.slice(0, 5).map((item, index) => [String(index + 1), item.name, String(item.employees), formatBRL(item.salarioLiquido), pct(item.percentOfTotal)]),
-    tableWidth: usableWidth,
-    margin: { left: marginLeft, right: marginRight },
-    styles: { fontSize: 6, cellPadding: 1 },
-    headStyles: { fillColor: DARK_HIGHLIGHT, textColor: TEXT_LIGHT, fontStyle: "bold" },
-    columnStyles: { 2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right" } },
+    body: rankingBody,
+    tableWidth: leftBlockWidth,
+    margin: { left: leftBlockX, right: marginRight },
+    styles: { fontSize: 6.1, cellPadding: { top: 1.1, right: 1, bottom: 1.1, left: 1 }, lineColor: BORDER_LIGHT, lineWidth: 0.1 },
+    headStyles: { fillColor: LIGHT_ROW_HIGHLIGHT, textColor: TEXT_DARK, fontStyle: "bold" },
+    columnStyles: { 0: { cellWidth: leftBlockWidth * 0.07, halign: "center" }, 1: { cellWidth: leftBlockWidth * 0.41 }, 2: { cellWidth: leftBlockWidth * 0.17, halign: "right" }, 3: { cellWidth: leftBlockWidth * 0.22, halign: "right" }, 4: { cellWidth: leftBlockWidth * 0.13, halign: "right" } },
     theme: "grid",
   });
 
   autoTable(doc, {
-    startY: (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 3 : startY + 45,
+    startY: tablesStartY,
     head: [["Grupo", "Valor", "%"]],
     body: managerial.composition.map((item) => [item.label, formatBRL(item.value), pct(item.percent)]),
-    tableWidth: usableWidth,
-    margin: { left: marginLeft, right: marginRight, bottom: 8 },
-    styles: { fontSize: 6, cellPadding: 1 },
-    headStyles: { fillColor: DARK_HIGHLIGHT, textColor: TEXT_LIGHT, fontStyle: "bold" },
-    columnStyles: { 1: { halign: "right" }, 2: { halign: "right" } },
+    tableWidth: rightBlockWidth,
+    margin: { left: rightBlockX, right: marginRight, bottom: 8 },
+    styles: { fontSize: 6.1, cellPadding: { top: 1.1, right: 1, bottom: 1.1, left: 1 }, lineColor: BORDER_LIGHT, lineWidth: 0.1 },
+    headStyles: { fillColor: LIGHT_ROW_HIGHLIGHT, textColor: TEXT_DARK, fontStyle: "bold" },
+    columnStyles: { 0: { cellWidth: rightBlockWidth * 0.50 }, 1: { cellWidth: rightBlockWidth * 0.32, halign: "right" }, 2: { cellWidth: rightBlockWidth * 0.18, halign: "right" } },
     theme: "grid",
+    didParseCell: (hookData) => {
+      if (hookData.section !== "body") return;
+      const label = String(hookData.row.raw?.[0] ?? "");
+      if (label === "Salário Líquido" || label === "Total da Folha / Rendimentos") {
+        hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
+        hookData.cell.styles.fontStyle = "bold";
+      }
+    },
   });
 
   doc.save(buildFileName(dataset.month, dataset.year));
