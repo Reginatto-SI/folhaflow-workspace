@@ -225,10 +225,10 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   // Comentário: seção gerencial reutiliza exclusivamente o dataset já consolidado, sem recalcular a folha.
   const managerial = buildManagerialSummary(dataset);
   const pct = (value: number) => `${(Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-  const requiredHeightForSection = 76;
+  const requiredHeightForSection = 80;
   const mainFinalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY : 40;
   const availableHeight = pageHeight - 10 - mainFinalY;
-  let sectionStartY = mainFinalY + 6;
+  let sectionStartY = mainFinalY + 9;
   if (availableHeight < requiredHeightForSection) {
     doc.addPage();
     sectionStartY = 18;
@@ -237,13 +237,13 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   doc.setDrawColor(...BORDER_LIGHT);
   doc.setLineWidth(0.2);
   doc.setFillColor(...LIGHT_ROW_HIGHLIGHT);
-  doc.roundedRect(marginLeft, sectionStartY - 5, usableWidth, 8, 1.2, 1.2, "FD");
+  doc.roundedRect(marginLeft, sectionStartY - 6.3, usableWidth, 9.2, 1.2, 1.2, "FD");
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...TEXT_DARK);
   doc.setFontSize(9);
-  doc.text("Resumo Gerencial para Aprovação", marginLeft + 2, sectionStartY);
+  doc.text("Resumo Gerencial para Aprovação", marginLeft + 2, sectionStartY - 0.2);
 
-  const cardsTopY = sectionStartY + 2.5;
+  const cardsTopY = sectionStartY + 1.8;
   const cardGap = 2;
   const cardsPerRow = 5;
   const cardWidth = (usableWidth - cardGap * (cardsPerRow - 1)) / cardsPerRow;
@@ -280,7 +280,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   const rightBlockWidth = usableWidth - leftBlockWidth - blocksGap;
   const leftBlockX = marginLeft;
   const rightBlockX = marginLeft + leftBlockWidth + blocksGap;
-  const tablesStartY = cardsTopY + cardHeight + 6;
+  const tablesStartY = cardsTopY + cardHeight + 9;
   const rankingBody = managerial.ranking
     .slice(0, 5)
     .map((item, index) => [String(index + 1), item.name, String(item.employees), formatBRL(item.salarioLiquido), pct(item.percentOfTotal)]);
@@ -296,8 +296,8 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.2);
   doc.setTextColor(...TEXT_DARK);
-  doc.text("Ranking por Setor / Empresa", leftBlockX, tablesStartY - 1.7);
-  doc.text("Composição da Folha", rightBlockX, tablesStartY - 1.7);
+  doc.text("Ranking por Setor / Empresa", leftBlockX, tablesStartY - 2.2);
+  doc.text("Composição da Folha", rightBlockX, tablesStartY - 2.2);
 
   autoTable(doc, {
     startY: tablesStartY,
@@ -309,12 +309,6 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
     headStyles: { fillColor: LIGHT_ROW_HIGHLIGHT, textColor: TEXT_DARK, fontStyle: "bold" },
     columnStyles: { 0: { cellWidth: leftBlockWidth * 0.07, halign: "center" }, 1: { cellWidth: leftBlockWidth * 0.41 }, 2: { cellWidth: leftBlockWidth * 0.17, halign: "right" }, 3: { cellWidth: leftBlockWidth * 0.22, halign: "right" }, 4: { cellWidth: leftBlockWidth * 0.13, halign: "right" } },
     theme: "grid",
-    didDrawPage: () => {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.4);
-      doc.setTextColor(...TEXT_DARK);
-      doc.text("Ranking por Setor / Empresa", marginLeft + 0.6, tablesStartY - 1.6);
-    },
   });
 
   autoTable(doc, {
