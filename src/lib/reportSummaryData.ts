@@ -164,12 +164,18 @@ export function buildReportSummaryData(params: {
   });
 
   // Linhas finais derivadas (somatórios já calculados — não há novo motor).
+  // Paridade legado: "Rendimentos" considera apenas proventos adicionais
+  // (outros rendimentos — incluindo prêmio/desempenho e compra de férias —, horas extras, férias/1/3 e insalubridade).
+  // Não inclui Salário CTPS, Salário G, Salário Real/Fiscal ou Salário Líquido.
+  const LEGACY_RENDIMENTOS_CLASSIFICATIONS = new Set([
+    "outros_rendimentos",
+    "horas_extras",
+    "ferias_terco",
+    "insalubridade",
+  ] as const);
+
   const proventos = activeRubrics.filter(
-    (r) =>
-      r.type === "provento" &&
-      r.id !== canonical.salarioRealId &&
-      r.id !== canonical.g2ComplementoId &&
-      r.id !== canonical.salarioLiquidoId,
+    (r) => r.type === "provento" && LEGACY_RENDIMENTOS_CLASSIFICATIONS.has(r.classification as any),
   );
   const descontos = activeRubrics.filter((r) => r.type === "desconto");
 
@@ -202,9 +208,9 @@ export function buildReportSummaryData(params: {
   );
 
   // Custo médio por funcionário no legado = Salário G / headcount (por empresa).
-  // A linha base já existe no próprio resumo (linha de rubrica "Salário G").
+  // A linha base já existe no próprio resumo (rubrica de classificação `salario_g`).
   // Não recalculamos rubrica: apenas reaproveitamos o valor consolidado já montado acima.
-  const salarioGRow = rows.find((r) => normalize(r.label) === "SALARIO G");
+  const salarioGRow = rows.find((r) => r.kind === "rubric" && r.rubricId && activeRubrics.find((rb) => rb.id === r.rubricId)?.classification === "salario_g");
 
   const custoMedioValues: Record<string, number> = {};
   columns.forEach((col) => {
