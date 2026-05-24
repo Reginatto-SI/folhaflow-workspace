@@ -1,5 +1,5 @@
 import React from "react";
-import { FileText } from "lucide-react";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { usePayroll } from "@/contexts/PayrollContext";
 import { buildReportSummaryData } from "@/lib/reportSummaryData";
 import { generateReportSummaryPdf } from "@/lib/reportSummaryPdf";
+import { generateReportSummaryExcel } from "@/lib/reportSummaryExcel";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -63,6 +64,13 @@ const ReportsSummary: React.FC = () => {
     toast.success("PDF gerado e baixado com sucesso.");
   }, [dataset]);
 
+  const exportExcel = React.useCallback(() => {
+    if (!dataset) return;
+    // Comentário: exporta o mesmo dataset usado no PDF para manter 100% de paridade.
+    generateReportSummaryExcel(dataset);
+    toast.success("Excel gerado e baixado com sucesso.");
+  }, [dataset]);
+
   return (
     <div className="space-y-4">
       <Card>
@@ -102,6 +110,10 @@ const ReportsSummary: React.FC = () => {
             <Button onClick={exportPdf} disabled={!dataset || dataset.companies.length === 0}>
               <FileText className="mr-2 h-4 w-4" />
               Gerar PDF
+            </Button>
+            <Button variant="outline" onClick={exportExcel} disabled={!dataset || dataset.companies.length === 0}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Exportar Excel
             </Button>
           </div>
         </CardContent>
