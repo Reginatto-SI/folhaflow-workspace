@@ -4,9 +4,10 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, SlidersHorizontal, Building2, BriefcaseBusiness, ChevronDown, ChevronUp, X } from "lucide-react";
-import { Department, JobRole } from "@/types/payroll";
+import { Company, Department, JobRole } from "@/types/payroll";
 
 export interface EmployeeFilterState {
+  companyId: string;
   search: string;
   status: string;
   departmentId: string;
@@ -14,6 +15,7 @@ export interface EmployeeFilterState {
 }
 
 export const getInitialFilters = (): EmployeeFilterState => ({
+  companyId: "",
   search: "",
   status: "",
   departmentId: "",
@@ -23,14 +25,16 @@ export const getInitialFilters = (): EmployeeFilterState => ({
 interface EmployeeFiltersProps {
   filters: EmployeeFilterState;
   onFiltersChange: (filters: EmployeeFilterState) => void;
+  companies: Company[];
   departments: Department[];
   jobRoles: JobRole[];
+  disableFunctionalFilters?: boolean;
 }
 
-const EmployeeFilters: React.FC<EmployeeFiltersProps> = ({ filters, onFiltersChange, departments, jobRoles }) => {
+const EmployeeFilters: React.FC<EmployeeFiltersProps> = ({ filters, onFiltersChange, companies, departments, jobRoles, disableFunctionalFilters = false }) => {
   // Comentário: preserva um estado inicial compacto para acelerar o uso diário da listagem.
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const hasActiveFilters = filters.search || filters.status || filters.departmentId || filters.jobRoleId;
+  const hasActiveFilters = filters.companyId || filters.search || filters.status || filters.departmentId || filters.jobRoleId;
 
   const update = (patch: Partial<EmployeeFilterState>) => {
     onFiltersChange({ ...filters, ...patch });
@@ -49,6 +53,24 @@ const EmployeeFilters: React.FC<EmployeeFiltersProps> = ({ filters, onFiltersCha
       </div>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Building2 className="h-3.5 w-3.5" />
+            Empresa
+          </Label>
+          <Select value={filters.companyId || "__all__"} onValueChange={(v) => update({ companyId: v === "__all__" ? "" : v })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Todas as empresas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todas as empresas</SelectItem>
+              {companies.map((company) => (
+                <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="space-y-1.5">
           <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Search className="h-3.5 w-3.5" />
@@ -70,6 +92,7 @@ const EmployeeFilters: React.FC<EmployeeFiltersProps> = ({ filters, onFiltersCha
               <SelectItem value="__all__">Todos</SelectItem>
               <SelectItem value="active">Ativo</SelectItem>
               <SelectItem value="on_leave">Afastado</SelectItem>
+              <SelectItem value="inactive">Inativo</SelectItem>
               <SelectItem value="monthly">Mensalista</SelectItem>
             </SelectContent>
           </Select>
@@ -110,9 +133,13 @@ const EmployeeFilters: React.FC<EmployeeFiltersProps> = ({ filters, onFiltersCha
               <Building2 className="h-3.5 w-3.5" />
               Setor
             </Label>
-            <Select value={filters.departmentId || "__all__"} onValueChange={(v) => update({ departmentId: v === "__all__" ? "" : v })}>
+            <Select
+              disabled={disableFunctionalFilters}
+              value={filters.departmentId || "__all__"}
+              onValueChange={(v) => update({ departmentId: v === "__all__" ? "" : v })}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Todos os setores" />
+                <SelectValue placeholder={disableFunctionalFilters ? "Selecione uma empresa para filtrar por setor" : "Todos os setores"} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todos os setores</SelectItem>
@@ -128,9 +155,13 @@ const EmployeeFilters: React.FC<EmployeeFiltersProps> = ({ filters, onFiltersCha
               <BriefcaseBusiness className="h-3.5 w-3.5" />
               Função / Cargo
             </Label>
-            <Select value={filters.jobRoleId || "__all__"} onValueChange={(v) => update({ jobRoleId: v === "__all__" ? "" : v })}>
+            <Select
+              disabled={disableFunctionalFilters}
+              value={filters.jobRoleId || "__all__"}
+              onValueChange={(v) => update({ jobRoleId: v === "__all__" ? "" : v })}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Todas as funções" />
+                <SelectValue placeholder={disableFunctionalFilters ? "Selecione uma empresa para filtrar por função/cargo" : "Todas as funções"} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todas as funções</SelectItem>
