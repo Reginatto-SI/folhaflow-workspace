@@ -81,6 +81,7 @@ const normalizeBankField = (value?: string) => {
   return normalized.length >= 2 ? normalized : "";
 };
 const formatCpf = (value: string) => maskCpf(value || "");
+const slugify = (value: string) => normalizeText(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 const toIsoDate = (value: unknown): string => {
   if (typeof value === "number") {
@@ -102,10 +103,9 @@ const Employees: React.FC = () => {
   const {
     companies,
     activeCompanies,
-    employees,
+    allEmployees,
     allDepartments,
     allJobRoles,
-    selectedCompany,
     addEmployee,
     updateEmployee,
     deleteEmployee,
@@ -124,18 +124,26 @@ const Employees: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Departments/jobRoles for the filter card (selected company)
+  // Comentário: /funcionarios passa a operar como cadastro global.
+  // A empresa ativa da folha não restringe mais a listagem por padrão.
+  const selectedFilterCompany = useMemo(
+    () => companies.find((company) => company.id === filters.companyId) || null,
+    [companies, filters.companyId]
+  );
+  // Filtro local da tela de funcionários; não altera a empresa ativa da folha.
+  const hasCompanyFilter = Boolean(filters.companyId);
   const departments = useMemo(
-    () => allDepartments.filter((d) => d.companyId === selectedCompany?.id),
-    [allDepartments, selectedCompany?.id]
+    () => (hasCompanyFilter ? allDepartments.filter((d) => d.companyId === filters.companyId) : []),
+    [allDepartments, filters.companyId, hasCompanyFilter]
   );
   const jobRoles = useMemo(
-    () => allJobRoles.filter((r) => r.companyId === selectedCompany?.id),
-    [allJobRoles, selectedCompany?.id]
+    () => (hasCompanyFilter ? allJobRoles.filter((r) => r.companyId === filters.companyId) : []),
+    [allJobRoles, filters.companyId, hasCompanyFilter]
   );
 
   const filteredEmployees = useMemo(() => {
-    return employees.filter((emp) => {
+    return allEmployees.filter((emp) => {
+      if (filters.companyId && emp.companyId !== filters.companyId) return false;
       if (filters.search) {
         const q = filters.search.toLowerCase();
         const cpfDigits = sanitizeDigits(filters.search);
@@ -144,13 +152,15 @@ const Employees: React.FC = () => {
         if (!matchName && !matchCpf) return false;
       }
       if (filters.status === "active" && !emp.isActive) return false;
+      if (filters.status === "active" && emp.isOnLeave) return false;
       if (filters.status === "on_leave" && !emp.isOnLeave) return false;
+      if (filters.status === "inactive" && emp.isActive) return false;
       if (filters.status === "monthly" && !emp.isMonthly) return false;
       if (filters.departmentId && emp.departmentId !== filters.departmentId) return false;
       if (filters.jobRoleId && emp.jobRoleId !== filters.jobRoleId) return false;
       return true;
     });
-  }, [employees, filters]);
+  }, [allEmployees, filters]);
 
   const { page, pageSize, total, paginatedItems: pagedEmployees, setPage, setPageSize, resetToFirstPage } =
     usePagination(filteredEmployees);
@@ -186,7 +196,7 @@ const Employees: React.FC = () => {
     setEditing(null);
     setErrors({});
     setActiveTab("dados-funcionario");
-    setForm(getInitialForm(selectedCompany?.id || ""));
+    setForm(getInitialForm(filters.companyId || ""));
     setOpen(true);
   };
 
@@ -199,11 +209,12 @@ const Employees: React.FC = () => {
   };
 
   useEffect(() => {
-    // Comentário: em novo cadastro, sincronizamos automaticamente a empresa registrada quando a empresa ativa carregar depois.
+    // Comentário: em listagem global, novo cadastro herda a empresa do filtro manual quando houver.
+    // Em "Todas as empresas", mantém vazio para o usuário escolher explicitamente a empresa registrante.
     if (!open || editing) return;
-    if (form.companyId || !selectedCompany?.id) return;
-    setForm((prev) => ({ ...prev, companyId: selectedCompany.id }));
-  }, [open, editing, form.companyId, selectedCompany?.id]);
+    if (form.companyId || !filters.companyId) return;
+    setForm((prev) => ({ ...prev, companyId: filters.companyId }));
+  }, [open, editing, form.companyId, filters.companyId]);
 
   useEffect(() => {
     if (!open || !functionalCatalogError) return;
@@ -268,7 +279,7 @@ const Employees: React.FC = () => {
 
     return {
       ...form,
-      companyId: form.companyId || selectedCompany?.id || "",
+      companyId: form.companyId || filters.companyId || "",
       name: normalizedName,
       cpf: sanitizeDigits(form.cpf),
       registration: normalizedRegistration,
@@ -285,7 +296,7 @@ const Employees: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!selectedCompany?.id && !form.companyId) {
+    if (!form.companyId && !filters.companyId) {
       toast.error("Selecione uma empresa antes de cadastrar funcionário.");
       return;
     }
@@ -346,7 +357,9 @@ const Employees: React.FC = () => {
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(workbook, worksheet, "Funcionarios");
-    XLSX.writeFile(workbook, `funcionarios-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    // Comentário: nome do arquivo acompanha o contexto visível da tela (global ou empresa filtrada).
+    const scopeLabel = selectedFilterCompany ? slugify(selectedFilterCompany.name) || "empresa" : "todas-empresas";
+    XLSX.writeFile(workbook, `funcionarios-${scopeLabel}-${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast.success("Exportação Excel concluída.");
   };
 
@@ -474,7 +487,7 @@ const Employees: React.FC = () => {
         }
         seenImportKeys.add(fullKey);
 
-        const duplicateExact = employees.some((item) =>
+        const duplicateExact = allEmployees.some((item) =>
           item.cpf === cpf
           && item.companyId === company.id
           && item.departmentId === department.id
@@ -486,7 +499,7 @@ const Employees: React.FC = () => {
           continue;
         }
 
-        const cpfInOtherBond = employees.some((item) => item.cpf === cpf);
+        const cpfInOtherBond = allEmployees.some((item) => item.cpf === cpf);
         if (cpfInOtherBond) {
           warningsList.push(`Linha ${line}: CPF já existe em outro vínculo. Registro importado como novo vínculo funcional.`);
         }
@@ -515,12 +528,12 @@ const Employees: React.FC = () => {
   const fieldClass = (field: keyof EmployeeFormErrors) => cn(errors[field] && "border-destructive focus-visible:ring-destructive/40");
 
   const kpis = useMemo(() => {
-    const total = employees.length;
-    const active = employees.filter((e) => e.isActive && !e.isOnLeave).length;
-    const onLeave = employees.filter((e) => e.isOnLeave).length;
-    const monthly = employees.filter((e) => e.isMonthly).length;
+    const total = filteredEmployees.length;
+    const active = filteredEmployees.filter((e) => e.isActive && !e.isOnLeave).length;
+    const onLeave = filteredEmployees.filter((e) => e.isOnLeave).length;
+    const monthly = filteredEmployees.filter((e) => e.isMonthly).length;
     return { total, active, onLeave, monthly };
-  }, [employees]);
+  }, [filteredEmployees]);
 
   return (
     <div>
@@ -530,7 +543,9 @@ const Employees: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Funcionários</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {selectedCompany?.name || "Selecione uma empresa"} — {filteredEmployees.length} de {employees.length} funcionários
+            {selectedFilterCompany
+              ? `${selectedFilterCompany.name} — ${filteredEmployees.length} funcionários`
+              : `Todas as empresas — ${filteredEmployees.length} funcionários`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -933,8 +948,10 @@ const Employees: React.FC = () => {
         <EmployeeFilters
           filters={filters}
           onFiltersChange={setFilters}
+          companies={activeCompanies}
           departments={departments.filter((d) => d.isActive)}
           jobRoles={jobRoles.filter((r) => r.isActive)}
+          disableFunctionalFilters={!hasCompanyFilter}
         />
       </div>
 
@@ -965,8 +982,11 @@ const Employees: React.FC = () => {
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{companies.find((company) => company.id === employee.companyId)?.name || "-"}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{new Date(employee.admissionDate).toLocaleDateString("pt-BR")}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-center">
-                    <Badge variant={employee.isActive ? "default" : "secondary"} className={employee.isActive ? "bg-success text-success-foreground" : ""}>
-                      {employee.isActive ? "Ativo" : "Inativo"}
+                    <Badge
+                      variant={employee.isOnLeave ? "secondary" : employee.isActive ? "default" : "secondary"}
+                      className={employee.isOnLeave ? "bg-warning/20 text-warning-foreground" : employee.isActive ? "bg-success text-success-foreground" : ""}
+                    >
+                      {employee.isOnLeave ? "Afastado" : employee.isActive ? "Ativo" : "Inativo"}
                     </Badge>
                   </td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap">
@@ -984,7 +1004,11 @@ const Employees: React.FC = () => {
               {filteredEmployees.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                    {employees.length === 0 ? "Nenhum funcionário cadastrado para esta empresa." : "Nenhum funcionário encontrado com os filtros aplicados."}
+                    {allEmployees.length === 0
+                      ? "Nenhum funcionário cadastrado."
+                      : hasCompanyFilter && !filters.search && !filters.status && !filters.departmentId && !filters.jobRoleId
+                        ? "Nenhum funcionário encontrado para esta empresa."
+                        : "Nenhum funcionário encontrado com os filtros aplicados."}
                   </td>
                 </tr>
               )}
