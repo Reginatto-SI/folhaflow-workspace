@@ -577,6 +577,7 @@ export type Database = {
         Returns: {
           base_salary: number
           company_id: string
+          conferido: boolean
           created_at: string
           deductions: Json
           deductions_total: number
