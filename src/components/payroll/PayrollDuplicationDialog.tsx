@@ -71,7 +71,8 @@ interface PayrollDuplicationDialogProps {
 
 interface SuccessConfirmationState {
   result: PayrollDuplicationResult;
-  baseCompetence: PayrollMonth;
+  creationType: "zeroed" | "duplicate";
+  baseCompetence?: PayrollMonth | null;
   targetCompetence: PayrollMonth;
 }
 
@@ -88,6 +89,7 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
   } = usePayroll();
 
   const [mode, setMode] = React.useState<"single" | "all">("single");
+  const [creationType, setCreationType] = React.useState<"zeroed" | "duplicate">("duplicate");
   const [companyId, setCompanyId] = React.useState("");
   const [baseCompetence, setBaseCompetence] = React.useState<PayrollMonth | null>(null);
   const [targetCompetence, setTargetCompetence] = React.useState<PayrollMonth | null>(null);
@@ -108,6 +110,7 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
   React.useEffect(() => {
     if (!open) return;
     setMode("single");
+    setCreationType("duplicate");
     setCompanyId(selectedCompany?.id || "");
     setBaseCompetence(selectedMonth);
     setTargetCompetence(null);
@@ -134,16 +137,30 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
 
   const baseOptions = mode === "single" ? singleBaseOptions : allBaseOptions;
   const summaryLines = successConfirmation ? buildSummaryLines(successConfirmation.result) : [];
+  const hasNoActiveEmployeesInSingleMode = successConfirmation?.result.mode === "single"
+    && successConfirmation.result.created[0]?.entries === 0;
 
   React.useEffect(() => {
     if (!open) return;
+    // Quando não existe folha base para a empresa selecionada, forçamos fluxo zerado.
+    if (mode === "single" && singleBaseOptions.length === 0) {
+      setCreationType("zeroed");
+    }
+  }, [mode, open, singleBaseOptions.length]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (creationType === "zeroed") {
+      setBaseCompetence(null);
+      return;
+    }
     if (baseOptions.length === 0) {
       setBaseCompetence(null);
       return;
     }
     if (baseCompetence && baseOptions.some((item) => competenceValue(item) === competenceValue(baseCompetence))) return;
     setBaseCompetence(baseOptions[0]);
-  }, [baseCompetence, baseOptions, open]);
+  }, [baseCompetence, baseOptions, creationType, open]);
 
   const toggleRubric = (rubricId: string, checked: boolean) => {
     setSelectedRubricIds((prev) => checked ? [...prev, rubricId] : prev.filter((id) => id !== rubricId));
@@ -151,9 +168,9 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
 
   const validate = () => {
     if (mode === "single" && !companyId) return "Selecione uma empresa.";
-    if (!baseCompetence) return "Selecione a folha/competência base.";
+    if (creationType === "duplicate" && !baseCompetence) return "Selecione a folha/competência base.";
     if (!targetCompetence) return "Informe a nova competência.";
-    if (baseCompetence.month === targetCompetence.month && baseCompetence.year === targetCompetence.year) {
+    if (creationType === "duplicate" && baseCompetence && baseCompetence.month === targetCompetence.month && baseCompetence.year === targetCompetence.year) {
       return "A nova competência deve ser diferente da competência base.";
     }
     return null;
@@ -168,10 +185,12 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
 
     setIsSubmitting(true);
     try {
+      const effectiveCreationType = mode === "all" ? "duplicate" : creationType;
       const duplicationResult = await duplicatePayroll({
         mode,
         companyId: mode === "single" ? companyId : undefined,
-        baseMonth: baseCompetence!,
+        creationType: effectiveCreationType,
+        baseMonth: effectiveCreationType === "duplicate" ? baseCompetence! : undefined,
         targetMonth: targetCompetence!,
         selectedRubricIds,
       });
@@ -180,7 +199,8 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
       // O modal de sucesso confirma visualmente a folha recém-criada antes de navegar.
       setSuccessConfirmation({
         result: duplicationResult,
-        baseCompetence: baseCompetence!,
+        creationType: effectiveCreationType,
+        baseCompetence: effectiveCreationType === "duplicate" ? baseCompetence : null,
         targetCompetence: targetCompetence!,
       });
     } catch (error) {
@@ -208,7 +228,6 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
         setSelectedMonth(successConfirmation.targetCompetence);
       }
     }
-
     setSuccessConfirmation(null);
   };
 
@@ -220,14 +239,24 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
             <DialogHeader>
               <DialogTitle>Criar nova folha</DialogTitle>
               <DialogDescription>
-                Duplique funcionários e valores manuais selecionados a partir de uma folha existente.
+                Crie uma folha zerada ou duplique uma folha existente.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Tipo de criação</Label>
-                <RadioGroup value={mode} onValueChange={(value) => { setMode(value as "single" | "all"); setBaseCompetence(null); }} className="grid grid-cols-2 gap-2">
+                <RadioGroup
+                  value={mode}
+                  onValueChange={(value) => {
+                    const nextMode = value as "single" | "all";
+                    setMode(nextMode);
+                    setBaseCompetence(null);
+                    // Regra operacional: criação em massa permanece apenas no fluxo de duplicação.
+                    if (nextMode === "all") setCreationType("duplicate");
+                  }}
+                  className="grid grid-cols-2 gap-2"
+                >
                   <Label className="flex cursor-pointer items-center gap-2 rounded-md border p-3 text-sm font-normal">
                     <RadioGroupItem value="single" /> Empresa específica
                   </Label>
@@ -254,22 +283,42 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
               )}
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>{mode === "single" ? "Folha base" : "Competência base"}</Label>
-                  <Select value={baseCompetence ? competenceValue(baseCompetence) : ""} onValueChange={(value) => setBaseCompetence(parseCompetenceValue(value))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione a competência existente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {baseOptions.map((competence) => (
-                        <SelectItem key={competenceValue(competence)} value={competenceValue(competence)}>
-                          {formatCompetence(competence)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {baseOptions.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma folha existente encontrada.</p>}
-                </div>
+                {mode === "single" && (
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>Modo da folha</Label>
+                    <RadioGroup value={creationType} onValueChange={(value) => setCreationType(value as "zeroed" | "duplicate")} className="grid grid-cols-2 gap-2">
+                      <Label className="flex cursor-pointer items-center gap-2 rounded-md border p-3 text-sm font-normal">
+                        <RadioGroupItem value="zeroed" /> Criar folha zerada
+                      </Label>
+                      <Label className="flex cursor-pointer items-center gap-2 rounded-md border p-3 text-sm font-normal">
+                        <RadioGroupItem value="duplicate" disabled={singleBaseOptions.length === 0} /> Duplicar folha existente
+                      </Label>
+                    </RadioGroup>
+                    {singleBaseOptions.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Esta empresa ainda não possui folha anterior. Será criada uma folha zerada para a competência selecionada.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {(mode === "all" || creationType === "duplicate") && (
+                  <div className="space-y-2">
+                    <Label>{mode === "single" ? "Folha base" : "Competência base"}</Label>
+                    <Select value={baseCompetence ? competenceValue(baseCompetence) : ""} onValueChange={(value) => setBaseCompetence(parseCompetenceValue(value))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a competência existente" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {baseOptions.map((competence) => (
+                          <SelectItem key={competenceValue(competence)} value={competenceValue(competence)}>
+                            {formatCompetence(competence)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {creationType === "duplicate" && baseOptions.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma folha existente encontrada.</p>}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Nova competência</Label>
                   <Input
@@ -280,9 +329,9 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
                 </div>
               </div>
 
-              <Separator />
+              {creationType === "duplicate" && <Separator />}
 
-              <div className="space-y-2">
+              {creationType === "duplicate" && <div className="space-y-2">
                 <div>
                   <Label>Rubricas manuais a copiar</Label>
                   <p className="text-xs text-muted-foreground">Rubricas desmarcadas nascerão zeradas/vazias na nova folha.</p>
@@ -304,12 +353,12 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
                     Rubricas calculadas ({calculatedRubrics.map((rubric) => rubric.name).join(", ")}) não são copiadas como valor fixo; serão calculadas automaticamente.
                   </p>
                 )}
-              </div>
+              </div>}
             </div>
 
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancelar</Button>
-              <Button onClick={handleSubmit} disabled={isSubmitting || baseOptions.length === 0}>
+              <Button onClick={handleSubmit} disabled={isSubmitting || (creationType === "duplicate" && baseOptions.length === 0)}>
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Copy className="mr-2 h-4 w-4" />}
                 Confirmar criação
               </Button>
@@ -327,15 +376,20 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
             <DialogTitle>{successConfirmation?.result.mode === "single" ? "Folha criada com sucesso" : "Processo concluído"}</DialogTitle>
             <DialogDescription>
               {successConfirmation?.result.mode === "single" && successConfirmation
-                ? `A nova folha da competência ${formatCompetenceShort(successConfirmation.targetCompetence)} foi criada com base na folha ${formatCompetenceShort(successConfirmation.baseCompetence)}.`
+                ? (successConfirmation.creationType === "duplicate" && successConfirmation.baseCompetence
+                    ? `A nova folha da competência ${formatCompetenceShort(successConfirmation.targetCompetence)} foi criada com base na folha ${formatCompetenceShort(successConfirmation.baseCompetence)}.`
+                    : `A nova folha zerada da competência ${formatCompetenceShort(successConfirmation.targetCompetence)} foi criada com sucesso.`)
                 : "Resumo da criação de folhas por empresa."}
             </DialogDescription>
           </DialogHeader>
 
           {successConfirmation?.result.mode === "single" ? (
-            <p className="text-center text-sm text-muted-foreground">
-              Você será direcionado para a nova folha para continuar a conferência e edição dos valores.
-            </p>
+            <div className="space-y-1 text-center text-sm text-muted-foreground">
+              <p>Você será direcionado para a nova folha para continuar a conferência e edição dos valores.</p>
+              {hasNoActiveEmployeesInSingleMode && (
+                <p>Folha criada sem lançamentos, pois não há funcionários ativos nesta empresa.</p>
+              )}
+            </div>
           ) : (
             <div className="rounded-lg border bg-muted/30 p-4 text-sm">
               <ul className="space-y-2">
