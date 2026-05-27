@@ -110,6 +110,8 @@ const renderTable = (entries: PayrollEntry[], rubrics: Rubric[]) =>
       allDepartments={[{ id: "dept-1", companyId: "comp-1", name: "Operação", isActive: true }]}
       allJobRoles={[{ id: "role-1", companyId: "comp-1", name: "Motorista", isActive: true }]}
       onRowClick={vi.fn()}
+      onToggleConferido={vi.fn()}
+
     />
   );
 
