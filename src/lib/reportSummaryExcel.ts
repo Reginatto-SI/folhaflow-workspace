@@ -97,7 +97,7 @@ export const generateReportSummaryExcel = (dataset: ReportSummaryDataset) => {
       { v: item.percent / 100, t: "n" as const, z: PCT_FORMAT },
     ]),
   ];
-  const worksheet = XLSX.utils.aoa_to_sheet(sheetData as XLSX.AOA2SheetOpts<any>);
+  const worksheet = XLSX.utils.aoa_to_sheet(sheetData as never);
 
   worksheet["!ref"] = XLSX.utils.encode_range({
     s: { c: 0, r: 0 },
