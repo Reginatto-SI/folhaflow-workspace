@@ -279,7 +279,11 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
                 {/* Comentário: nova ação reutiliza a exportação Excel já existente em /relatorios/por-empresa. */}
                 Gerar relatório Excel
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onDuplicatePayroll} disabled={!currentBatch}>
+              <DropdownMenuItem
+                onClick={onDuplicatePayroll}
+                // "Criar nova folha" depende apenas de empresa selecionada; não exige folha ativa.
+                disabled={!selectedCompany}
+              >
                 <Copy className="mr-2 h-4 w-4" />
                 Criar nova folha
               </DropdownMenuItem>

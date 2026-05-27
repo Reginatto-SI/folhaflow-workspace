@@ -106,3 +106,25 @@ Foi mantida a mesma modal e a mesma função de criação, separando o comportam
 - **Preservação do fluxo legado de duplicação:**
   - Mantidas validações de folha base, competência destino e cópia apenas de rubricas manuais selecionadas.
   - Rubricas calculadas continuam sem materialização fixa no banco.
+
+## Correção da habilitação do menu
+
+- **Condição que bloqueava o botão:**
+  - O item **Criar nova folha** no menu da Central estava com `disabled={!currentBatch}` em `PayrollHeader`.
+  - Isso acoplava a ação à existência de folha ativa, impedindo abertura da modal para empresas sem nenhuma folha.
+
+- **Onde foi corrigida:**
+  - Arquivo: `src/components/payroll/PayrollHeader.tsx`.
+  - Ajuste: `disabled={!selectedCompany}` no item **Criar nova folha**.
+  - Comentário de código adicionado deixando explícito que essa ação não depende de folha ativa.
+
+- **Confirmação da regra nova:**
+  - Com empresa selecionada: **Criar nova folha** fica habilitado.
+  - Sem empresa selecionada: **Criar nova folha** fica desabilitado.
+
+- **Confirmação das proteções preservadas (dependem de folha ativa):**
+  - Gerar recibos: continua dependente de `currentBatch`.
+  - Gerar relatório PDF/Excel: continuam dependentes de `currentBatch` + empresa.
+  - Status da folha: continua dependente de `currentBatch`.
+  - Arquivar folha atual: continua dependente de `currentBatch`.
+  - Novo lançamento: continua dependente de `currentBatch`.
