@@ -10,7 +10,8 @@ export type PayrollDuplicationMode = "single" | "all";
 export interface PayrollDuplicationInput {
   mode: PayrollDuplicationMode;
   companyId?: string;
-  baseMonth: PayrollMonth;
+  creationType: "zeroed" | "duplicate";
+  baseMonth?: PayrollMonth;
   targetMonth: PayrollMonth;
   selectedRubricIds: string[];
 }
@@ -982,7 +983,10 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
 
   const duplicatePayroll = useCallback(async (input: PayrollDuplicationInput): Promise<PayrollDuplicationResult> => {
-    if (isSameCompetence(input.baseMonth, input.targetMonth)) {
+    if (input.creationType === "duplicate" && !input.baseMonth) {
+      throw new Error("Selecione a folha/competência base.");
+    }
+    if (input.creationType === "duplicate" && input.baseMonth && isSameCompetence(input.baseMonth, input.targetMonth)) {
       throw new Error("A nova competência deve ser diferente da competência base.");
     }
 
@@ -1022,20 +1026,12 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     for (const company of companiesToProcess) {
-      const sourceBatch = allPayrollBatches.find(
-        (batch) => batch.companyId === company.id && !batch.isArchived && isSameCompetence(batch, input.baseMonth)
-      );
       const targetBatch = allPayrollBatches.find(
         // Comentário: folha arquivada deve ficar fora de todos os fluxos operacionais;
         // na duplicação, só bloqueamos competência quando já existir folha NÃO arquivada.
         (batch) => batch.companyId === company.id && !batch.isArchived && isSameCompetence(batch, input.targetMonth)
       );
 
-      if (!sourceBatch) {
-        if (input.mode === "single") throw new Error("A folha base selecionada não existe para esta empresa.");
-        result.skipped.push({ companyId: company.id, companyName: company.name, reason: "missing_base", message: "Sem folha base na competência informada." });
-        continue;
-      }
       // Validação de competência duplicada: nunca sobrescrevemos uma folha operacional ativa.
       if (targetBatch) {
         if (input.mode === "single") throw new Error("Já existe uma folha ativa para esta competência nesta empresa.");
@@ -1043,14 +1039,24 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
         continue;
       }
 
-      // Comentário: quando existe folha base formal, duplicação copia somente lançamentos
-      // vinculados ao payroll_batch_id dela para evitar contaminação de dados legados.
-      const sourceEntries = allPayrollEntries.filter((entry) => entry.payrollBatchId === sourceBatch.id);
-
-      if (sourceEntries.length === 0) {
-        if (input.mode === "single") throw new Error("A folha base não possui funcionários/lançamentos para copiar.");
-        result.skipped.push({ companyId: company.id, companyName: company.name, reason: "empty_base", message: "Folha base sem lançamentos." });
-        continue;
+      let sourceEntries: PayrollEntry[] = [];
+      if (input.creationType === "duplicate") {
+        const sourceBatch = allPayrollBatches.find(
+          (batch) => batch.companyId === company.id && !batch.isArchived && input.baseMonth && isSameCompetence(batch, input.baseMonth)
+        );
+        if (!sourceBatch) {
+          if (input.mode === "single") throw new Error("A folha base selecionada não existe para esta empresa.");
+          result.skipped.push({ companyId: company.id, companyName: company.name, reason: "missing_base", message: "Sem folha base na competência informada." });
+          continue;
+        }
+        // Comentário: quando existe folha base formal, duplicação copia somente lançamentos
+        // vinculados ao payroll_batch_id dela para evitar contaminação de dados legados.
+        sourceEntries = allPayrollEntries.filter((entry) => entry.payrollBatchId === sourceBatch.id);
+        if (sourceEntries.length === 0) {
+          if (input.mode === "single") throw new Error("A folha base não possui funcionários/lançamentos para copiar.");
+          result.skipped.push({ companyId: company.id, companyName: company.name, reason: "empty_base", message: "Folha base sem lançamentos." });
+          continue;
+        }
       }
 
       let createdBatchId: string | null = null;
@@ -1072,37 +1078,60 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         const newBatch = mapPayrollBatchRowToModel(batchData);
         createdBatchId = newBatch.id;
-        // Ponto central da duplicação: persistimos novos lançamentos sem recalcular nada no backend.
-        const entriesPayload = sourceEntries.map((entry) => {
-          const earnings = copySelectedManualValues(entry.earnings);
-          const deductions = copySelectedManualValues(entry.deductions);
-          const preview = calculatePayroll({ rubrics, manualValues: { ...earnings, ...deductions } });
+        // Comentário: separação explícita das regras de negócio.
+        // - `duplicate`: reaproveita lançamentos da base com rubricas manuais selecionadas.
+        // - `zeroed`: cria lançamentos zerados para funcionários ativos da empresa.
+        const entriesPayload = input.creationType === "duplicate"
+          ? sourceEntries.map((entry) => {
+              const earnings = copySelectedManualValues(entry.earnings);
+              const deductions = copySelectedManualValues(entry.deductions);
+              const preview = calculatePayroll({ rubrics, manualValues: { ...earnings, ...deductions } });
 
-          return {
-            payroll_batch_id: newBatch.id,
-            employee_id: entry.employeeId,
-            company_id: company.id,
-            month: input.targetMonth.month,
-            year: input.targetMonth.year,
-            // base_salary ainda é fallback legado em recibos/migrations; não pode nascer zerado
-            // quando salários/proventos manuais selecionados foram copiados. Usamos o mesmo
-            // cálculo frontend da Central para manter consistência sem criar motor paralelo.
-            base_salary: preview.baseSalary,
-            earnings,
-            deductions,
-            notes: entry.notes || null,
-          };
-        });
+              return {
+                payroll_batch_id: newBatch.id,
+                employee_id: entry.employeeId,
+                company_id: company.id,
+                month: input.targetMonth.month,
+                year: input.targetMonth.year,
+                // base_salary ainda é fallback legado em recibos/migrations; não pode nascer zerado
+                // quando salários/proventos manuais selecionados foram copiados.
+                base_salary: preview.baseSalary,
+                earnings,
+                deductions,
+                notes: entry.notes || null,
+              };
+            })
+          : allEmployees
+              .filter((employee) => employee.companyId === company.id && employee.isActive)
+              .map((employee) => ({
+                payroll_batch_id: newBatch.id,
+                employee_id: employee.id,
+                company_id: company.id,
+                month: input.targetMonth.month,
+                year: input.targetMonth.year,
+                // Folha zerada nasce sem valores manuais persistidos.
+                base_salary: 0,
+                earnings: {},
+                deductions: {},
+                notes: null,
+              }));
 
-        const { data: entriesData, error: entriesError } = await supabase
-          .from("payroll_entries")
-          .insert(entriesPayload)
-          .select(PAYROLL_ENTRY_SELECT);
-        if (entriesError || !entriesData) throw entriesError;
+        // Regra do fluxo zerado: se não houver funcionários ativos, criamos apenas o batch
+        // e evitamos insert vazio em payroll_entries para não depender de comportamento implícito.
+        let mappedEntries: PayrollEntry[] = [];
+        if (entriesPayload.length > 0) {
+          const { data: entriesData, error: entriesError } = await supabase
+            .from("payroll_entries")
+            .insert(entriesPayload)
+            .select(PAYROLL_ENTRY_SELECT);
+          if (entriesError || !entriesData) throw entriesError;
+          mappedEntries = entriesData.map((row) => mapPayrollEntryRowToModel(row as PayrollEntryRow));
+        }
 
-        const mappedEntries = entriesData.map((row) => mapPayrollEntryRowToModel(row as PayrollEntryRow));
         setAllPayrollBatches((prev) => [newBatch, ...prev]);
-        setAllPayrollEntries((prev) => [...mappedEntries, ...prev]);
+        if (mappedEntries.length > 0) {
+          setAllPayrollEntries((prev) => [...mappedEntries, ...prev]);
+        }
         result.created.push({ companyId: company.id, companyName: company.name, batchId: newBatch.id, entries: mappedEntries.length });
       } catch (error) {
         if (createdBatchId) {
@@ -1121,7 +1150,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     return result;
-  }, [activeCompanies, allPayrollBatches, allPayrollEntries, rubrics]);
+  }, [activeCompanies, allEmployees, allPayrollBatches, allPayrollEntries, rubrics]);
 
 
 
