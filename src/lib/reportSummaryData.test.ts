@@ -18,15 +18,15 @@ const makeRubric = (overrides: Partial<Rubric>): Rubric => ({
 
 describe("buildReportSummaryData - rendimentos legado", () => {
   it("soma rubricas adicionais incluindo prêmio e compra de férias via outros_rendimentos", () => {
-    const company: Company = {
+    const company = {
       id: "c1",
       name: "Empresa 1",
       cnpj: "00.000.000/0001-00",
       isActive: true,
       createdAt: "2026-01-01",
-    };
+    } as unknown as Company;
 
-    const batch: PayrollBatch = {
+    const batch = {
       id: "b1",
       companyId: "c1",
       month: 4,
@@ -38,9 +38,9 @@ describe("buildReportSummaryData - rendimentos legado", () => {
       paymentDate: null,
       updatedAt: "2026-04-01",
       expectedEmployees: 1,
-    };
+    } as unknown as PayrollBatch;
 
-    const employee: Employee = {
+    const employee = {
       id: "e1",
       companyId: "c1",
       name: "Funcionario 1",
@@ -54,7 +54,7 @@ describe("buildReportSummaryData - rendimentos legado", () => {
       createdAt: "2025-01-01",
       updatedAt: "2026-04-01",
       baseSalary: null,
-    };
+    } as unknown as Employee;
 
     const rubrics: Rubric[] = [
       makeRubric({ id: "sal_ctps", code: "SAL_CTPS", name: "Salário CTPS", classification: "salario_ctps", order: 1 }),
@@ -72,7 +72,7 @@ describe("buildReportSummaryData - rendimentos legado", () => {
       makeRubric({ id: "inss", code: "INSS", name: "INSS", type: "desconto", classification: "inss", order: 13 }),
     ];
 
-    const entry: PayrollEntry = {
+    const entry = {
       id: "p1",
       companyId: "c1",
       employeeId: "e1",
@@ -98,7 +98,8 @@ describe("buildReportSummaryData - rendimentos legado", () => {
       netSalary: 0,
       createdAt: "2026-04-01",
       updatedAt: "2026-04-01",
-    };
+    } as unknown as PayrollEntry;
+
 
     const dataset = buildReportSummaryData({
       month: { month: 4, year: 2026 },
