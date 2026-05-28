@@ -119,7 +119,11 @@ const diagnoseCanonicalRubric = (
   derivedRubrics: Rubric[],
   canonicalCode: CanonicalDerivedCode
 ): CanonicalDerivedRubricDiagnostic => {
-  const codeMatches = derivedRubrics.filter((rubric) => normalizeRubricKey(rubric.code) === canonicalCode);
+  // Comentário: comparamos códigos já normalizados dos dois lados. O normalizador
+  // transforma underscores/hífens em espaço; sem isso, `salario_liquido` caía
+  // indevidamente no fallback por nome e podia mascarar configuração canônica errada.
+  const normalizedCanonicalCode = normalizeRubricKey(canonicalCode);
+  const codeMatches = derivedRubrics.filter((rubric) => normalizeRubricKey(rubric.code) === normalizedCanonicalCode);
   if (codeMatches.length > 1) {
     return {
       code: canonicalCode,
@@ -137,7 +141,7 @@ const diagnoseCanonicalRubric = (
     };
   }
 
-  const legacyCodeAliases = canonicalLegacyCodeAliases[canonicalCode];
+  const legacyCodeAliases = canonicalLegacyCodeAliases[canonicalCode].map((alias) => normalizeRubricKey(alias));
   const legacyCodeMatches = derivedRubrics.filter((rubric) => legacyCodeAliases.includes(normalizeRubricKey(rubric.code)));
   if (legacyCodeMatches.length > 1) {
     return {

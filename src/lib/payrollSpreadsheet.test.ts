@@ -224,6 +224,49 @@ describe("resolveCanonicalDerivedRubricIds", () => {
     expect(result.g2Complemento).toBe(-500);
     expect(hasCanonicalRubricInconsistency(diagnosis)).toBe(false);
   });
+
+  it("calcula salario_liquido pela fórmula corrigida: fiscal + proventos operacionais - descontos", () => {
+    const rubrics: Rubric[] = [
+      makeBaseRubric({ id: "ctps", code: "SALARIO_CTPS", name: "Salário CTPS", classification: "salario_ctps", order: 1 }),
+      makeBaseRubric({ id: "g", code: "SALARIO_G", name: "Salário G", classification: "salario_g", order: 2 }),
+      makeBaseRubric({ id: "fiscal", code: "SALARIO_FISCAL", name: "Salário Fiscal", classification: null, order: 3 }),
+      makeBaseRubric({ id: "horas", code: "HORAS_EXTRAS", name: "Horas Extras", classification: "horas_extras", order: 5 }),
+      makeBaseRubric({ id: "inss", code: "INSS", name: "INSS", type: "desconto", classification: "inss", order: 10 }),
+      makeBaseRubric({ id: "vales", code: "VALES", name: "Vales/Descontos", type: "desconto", classification: "vales", order: 13 }),
+      makeBaseRubric({ id: "faltas", code: "FALTAS", name: "Faltas/Descontos", type: "desconto", classification: "faltas", order: 14 }),
+      makeDerivedRubric({
+        id: "liq",
+        code: "salario_liquido",
+        name: "Salário Líquido",
+        calculationMethod: "formula",
+        order: 15,
+        formulaItems: [
+          { id: "liq-1", operation: "add", sourceRubricId: "fiscal", order: 1 },
+          { id: "liq-2", operation: "add", sourceRubricId: "horas", order: 2 },
+          { id: "liq-3", operation: "subtract", sourceRubricId: "inss", order: 3 },
+          { id: "liq-4", operation: "subtract", sourceRubricId: "vales", order: 4 },
+          { id: "liq-5", operation: "subtract", sourceRubricId: "faltas", order: 5 },
+        ],
+      }),
+    ];
+
+    const result = calculatePayroll({
+      rubrics,
+      manualValues: {
+        ctps: 1900,
+        g: 2500,
+        fiscal: 1762.2,
+        horas: 66.84,
+        inss: 199.69,
+        vales: 527.22,
+        faltas: 77.73,
+      },
+    });
+
+    // Comentário: CTPS/G permanecem bases técnicas fora da canônica de líquido;
+    // o líquido oficial vem da fórmula declarativa corrigida da rubrica salario_liquido.
+    expect(result.salarioLiquido).toBeCloseTo(1024.4, 2);
+  });
 });
 
 describe("calculatePayrollFromEntry / calculatePayrollTotals", () => {
