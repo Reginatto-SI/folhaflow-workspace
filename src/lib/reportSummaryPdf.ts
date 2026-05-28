@@ -294,7 +294,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
 
   // Grid fixo de duas colunas para manter alinhamento e evitar "vazio" exagerado entre blocos.
   const blocksGap = 6;
-  const leftBlockWidth = usableWidth * 0.56;
+  const leftBlockWidth = usableWidth * 0.58;
   const rightBlockWidth = usableWidth - leftBlockWidth - blocksGap;
   const leftBlockX = marginLeft;
   const rightBlockX = marginLeft + leftBlockWidth + blocksGap;
@@ -319,13 +319,13 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
 
   autoTable(doc, {
     startY: tablesStartY,
-    head: [["#", "Setor / Empresa", "Funcionários", "Salário Líquido", "% do Total"]],
+    head: [["#", "Setor / Empresa", "Func.", "Salário Líquido", "% do Total"]],
     body: rankingBody,
     tableWidth: leftBlockWidth,
     margin: { left: leftBlockX, right: marginRight },
     styles: { fontSize: 6.1, cellPadding: { top: 1.1, right: 1, bottom: 1.1, left: 1 }, lineColor: BORDER_LIGHT, lineWidth: 0.1 },
     headStyles: { fillColor: LIGHT_ROW_HIGHLIGHT, textColor: TEXT_DARK, fontStyle: "bold" },
-    columnStyles: { 0: { cellWidth: leftBlockWidth * 0.07, halign: "center" }, 1: { cellWidth: leftBlockWidth * 0.41 }, 2: { cellWidth: leftBlockWidth * 0.17, halign: "right" }, 3: { cellWidth: leftBlockWidth * 0.22, halign: "right" }, 4: { cellWidth: leftBlockWidth * 0.13, halign: "right" } },
+    columnStyles: { 0: { cellWidth: leftBlockWidth * 0.07, halign: "center" }, 1: { cellWidth: leftBlockWidth * 0.46 }, 2: { cellWidth: leftBlockWidth * 0.10, halign: "right" }, 3: { cellWidth: leftBlockWidth * 0.24, halign: "right" }, 4: { cellWidth: leftBlockWidth * 0.13, halign: "right" } },
     theme: "grid",
   });
 
@@ -342,7 +342,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
     didParseCell: (hookData) => {
       if (hookData.section !== "body") return;
       const label = String(hookData.row.raw?.[0] ?? "");
-      if (label === "Salário Líquido" || label === "Total da Folha / Rendimentos") {
+      if (label === "Salário Líquido" || label === "Base da Composição") {
         hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
         hookData.cell.styles.fontStyle = "bold";
       }
