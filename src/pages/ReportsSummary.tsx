@@ -23,7 +23,6 @@ const ReportsSummary: React.FC = () => {
     rubrics,
     isLoading,
     selectedMonth,
-    setSelectedMonth,
   } = usePayroll();
 
   // Lista única de competências de todo o grupo (deduplicada por mês/ano, desc).
@@ -38,18 +37,33 @@ const ReportsSummary: React.FC = () => {
     return Array.from(seen.values()).sort((a, b) => (b.year - a.year) || (b.month - a.month));
   }, [allPayrollBatches]);
 
+  const [reportMonth, setReportMonth] = React.useState(selectedMonth);
+
+  React.useEffect(() => {
+    if (availableCompetences.length === 0) return;
+    const hasReportMonth = availableCompetences.some(
+      (competence) => competence.month === reportMonth.month && competence.year === reportMonth.year,
+    );
+    if (hasReportMonth) return;
+
+    // Comentário: o Resumo Completo consolida todo o grupo; por isso a competência do relatório
+    // precisa seguir as folhas do grupo, sem ser forçada pela empresa selecionada na Central.
+    const [mostRecentCompetence] = availableCompetences;
+    setReportMonth({ month: mostRecentCompetence.month, year: mostRecentCompetence.year });
+  }, [availableCompetences, reportMonth.month, reportMonth.year]);
+
   const dataset = React.useMemo(() => {
-    if (!selectedMonth || (activeCompanies ?? []).length === 0) return null;
+    if (!reportMonth || (activeCompanies ?? []).length === 0) return null;
     // Reaproveita a mesma fonte do Relatório por Empresa (sem novo motor de cálculo).
     return buildReportSummaryData({
-      month: selectedMonth,
+      month: reportMonth,
       companies: activeCompanies ?? [],
       allBatches: allPayrollBatches ?? [],
       allEmployees: allEmployees ?? [],
       allEntries: allPayrollEntries ?? [],
       rubrics: rubrics ?? [],
     });
-  }, [selectedMonth, activeCompanies, allPayrollBatches, allEmployees, allPayrollEntries, rubrics]);
+  }, [reportMonth, activeCompanies, allPayrollBatches, allEmployees, allPayrollEntries, rubrics]);
 
   const mainRows = React.useMemo(
     () => dataset?.rows.filter((row) => !["rendimentos", "descontos", "custo_medio"].includes(row.kind)) ?? [],
@@ -86,10 +100,10 @@ const ReportsSummary: React.FC = () => {
           <div className="space-y-2">
             <p className="text-sm font-medium">Competência</p>
             <Select
-              value={`${selectedMonth.month}/${selectedMonth.year}`}
+              value={`${reportMonth.month}/${reportMonth.year}`}
               onValueChange={(value) => {
                 const [month, year] = value.split("/").map(Number);
-                setSelectedMonth({ month, year });
+                setReportMonth({ month, year });
               }}
               disabled={availableCompetences.length === 0}
             >
