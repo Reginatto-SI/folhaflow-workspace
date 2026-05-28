@@ -5,6 +5,7 @@ import { ReportByCompanyDataset } from "@/lib/reportByCompanyData";
 const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br — Contato: (65) 99210-2030";
 const DARK_HIGHLIGHT: [number, number, number] = [71, 85, 105];
 const LIGHT_ROW_HIGHLIGHT: [number, number, number] = [226, 232, 240];
+const RESULT_HEAD_HIGHLIGHT: [number, number, number] = [82, 97, 121];
 const BORDER_LIGHT: [number, number, number] = [180, 188, 200];
 const TEXT_LIGHT: [number, number, number] = [255, 255, 255];
 
@@ -13,7 +14,8 @@ const formatPdfCurrency = (value: number | string) => {
     ? value
     : Number(String(value).replace(/[^\d,-]/g, "").replace(/\./g, "").replace(",", "."));
   const safeValue = Number.isFinite(numericValue) ? numericValue : 0;
-  return safeValue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Comentário: formatação BRL somente na exibição do PDF, sem alterar o valor numérico original.
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(safeValue).replace(/\u00a0/g, " ");
 };
 
 const formatAdmissionRegistrationForPrint = (value: string): string => {
@@ -43,6 +45,8 @@ const PDF_LABEL_ALIASES: Record<string, string> = {
 };
 
 const normalizePdfLabelKey = (value: string): string => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s*\/\s*/g, "/").replace(/\(\+\)\s+/g, "(+) ").replace(/\(-\)\s+/g, "(-)").replace(/\s+/g, " ").trim();
+const RESULT_COLUMN_KEYS = new Set(["salario real", "salario_real", "salario g2 complem.", "salario g2 complemento", "g2 complemento", "g2_complemento", "salario_g2_complem", "salario_g2_complemento", "salario liquido", "salario_liquido"]);
+const isResultColumn = (label: string, code: string): boolean => RESULT_COLUMN_KEYS.has(normalizePdfLabelKey(label)) || RESULT_COLUMN_KEYS.has(normalizePdfLabelKey(code));
 const formatPdfColumnLabel = (label: string): string => {
   const sanitized = String(label ?? "").replace(/\s+/g, " ").trim();
   if (!sanitized) return "";
@@ -80,6 +84,9 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
     ? Math.max(5.9, (pageUsableWidth - reservedFixedWidth) / dynamicColumnCount)
     : 0;
   const bodyRowsLength = dataset.rows.length;
+  const resultColumnIndexes = new Set(dataset.dynamicColumns
+    .map((column, index) => (isResultColumn(column.rubricName, column.rubricCode) ? index + 4 : null))
+    .filter((index): index is number => index !== null));
 
   autoTable(doc, {
     // Comentário: aumenta respiro entre cabeçalho (título/data) e tabela para leitura mais confortável.
@@ -121,9 +128,23 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
     didParseCell: (hookData) => {
       const isTotalRow = hookData.section === "body" && hookData.row.index === bodyRowsLength;
 
-      // Comentário: destaque da linha TOTAL alinhado ao padrão do resumo completo (fundo claro + negrito).
-      if (isTotalRow) {
+      const isFixedIdentityColumn = hookData.column.index >= 0 && hookData.column.index <= 3;
+      const isResultValueColumn = resultColumnIndexes.has(hookData.column.index);
+
+      if (hookData.section === "head" && isResultValueColumn) {
+        // Comentário: cabeçalho das colunas finais ganha variação discreta, mantendo o padrão azul escuro.
+        hookData.cell.styles.fillColor = RESULT_HEAD_HIGHLIGHT;
+      }
+
+      if (hookData.section === "body" && !isTotalRow && (isFixedIdentityColumn || isResultValueColumn)) {
+        // Comentário: colunas cadastrais e resultados finais recebem fundo leve para separar cadastro, verbas e totais principais.
         hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
+      }
+
+      if (isTotalRow) {
+        // Comentário: TOTAL usa o mesmo azul escuro do cabeçalho para fechar visualmente a tabela e evitar destaque cinza fraco.
+        hookData.cell.styles.fillColor = DARK_HIGHLIGHT;
+        hookData.cell.styles.textColor = TEXT_LIGHT;
         hookData.cell.styles.fontStyle = "bold";
         hookData.cell.styles.lineWidth = { top: 0.25, right: 0.1, bottom: 0.1, left: 0.1 };
       }
