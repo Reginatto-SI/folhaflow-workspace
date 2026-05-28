@@ -39,15 +39,28 @@ const getCanonicalRowByKey = (rows: SummaryRow[], key: string) =>
 
 const getRubricRowByKeyOrLabelFallback = (
   rows: SummaryRow[],
-  preferredKey: string,
-  fallbackLabel: string,
+  preferredKeys: string[],
+  fallbackLabels: string[],
 ) => {
-  const byKey = rows.find((row) => row.kind === "rubric" && row.key === preferredKey);
+  const byKey = rows.find((row) => row.kind === "rubric" && preferredKeys.includes(row.key));
   if (byKey) return byKey;
 
   // Comentário: fallback por label é apenas contingência para bases legadas;
   // a fonte principal deve ser identificador estável (`row.key` da rubrica).
-  return rows.find((row) => row.kind === "rubric" && normalize(row.label) === normalize(fallbackLabel));
+  const normalizedFallbacks = new Set(fallbackLabels.map(normalize));
+  return rows.find((row) => row.kind === "rubric" && normalizedFallbacks.has(normalize(row.label)));
+};
+
+const getCompositionBase = (rows: SummaryRow[], fallbackValue: number) => {
+  const baseProventosTotal = rows.reduce((acc, row) => {
+    if (row.kind !== "rubric" || row.rubricType !== "provento" || row.isCanonical) return acc;
+    return acc + (Number.isFinite(row.total) ? row.total : 0);
+  }, 0);
+
+  // Comentário: na composição, a referência de 100% precisa ser o total de proventos
+  // de folha já consolidados no dataset, não a linha gerencial "Rendimentos" do legado
+  // (que soma só adicionais e fazia salários aparecerem acima de 100%).
+  return baseProventosTotal > 0 ? baseProventosTotal : fallbackValue;
 };
 
 export const buildManagerialSummary = (dataset: ReportSummaryDataset): ManagerialSummary => {
@@ -76,10 +89,15 @@ export const buildManagerialSummary = (dataset: ReportSummaryDataset): Manageria
 
   const totalRendimentos = rendimentosRow?.total ?? 0;
 
-  const salarioCtpsRow = getRubricRowByKeyOrLabelFallback(dataset.rows, "salario_ctps", "Salário CTPS");
-  const salarioGRow = getRubricRowByKeyOrLabelFallback(dataset.rows, "g2_complemento", "Salário G");
-  const salarioFiscalRow = getRubricRowByKeyOrLabelFallback(dataset.rows, "salario_real", "Salário Fiscal");
-  const outrosRendimentosRow = getRubricRowByKeyOrLabelFallback(dataset.rows, "outros_rendimentos", "Outros Rendimentos");
+  const salarioCtpsRow = getRubricRowByKeyOrLabelFallback(dataset.rows, ["salario_ctps"], ["Salário CTPS"]);
+  const salarioGRow = getRubricRowByKeyOrLabelFallback(dataset.rows, ["salario_g"], ["Salário G"]);
+  const salarioFiscalRow =
+    getCanonicalRowByKey(dataset.rows, "salario_real") ??
+    dataset.rows.find((row) => row.isCanonical && normalize(row.label) === "SALARIO REAL") ??
+    getRubricRowByKeyOrLabelFallback(dataset.rows, ["salario_real"], ["Salário Fiscal", "Salário Real"]);
+  const outrosRendimentosRow = getRubricRowByKeyOrLabelFallback(dataset.rows, ["outros_rendimentos"], ["Outros Rendimentos", "Outros Rend."]);
+
+  const compositionBase = getCompositionBase(dataset.rows, totalRendimentos);
 
   const compositionCandidates = [
     { key: "salario_ctps", label: "Salário CTPS", value: salarioCtpsRow?.total ?? 0 },
@@ -88,12 +106,12 @@ export const buildManagerialSummary = (dataset: ReportSummaryDataset): Manageria
     { key: "outros_rendimentos", label: "Outros Rendimentos", value: outrosRendimentosRow?.total ?? 0 },
     { key: "descontos", label: "Descontos", value: descontosRow?.total ?? 0 },
     { key: "salario_liquido", label: "Salário Líquido", value: totalSalarioLiquido },
-    { key: "total_folha", label: "Total da Folha / Rendimentos", value: totalRendimentos },
+    { key: "base_composicao", label: "Base da Composição", value: compositionBase },
   ];
 
   const composition = compositionCandidates.map((item) => ({
     ...item,
-    percent: totalRendimentos > 0 ? (item.value / totalRendimentos) * 100 : 0,
+    percent: compositionBase > 0 ? (item.value / compositionBase) * 100 : 0,
   }));
 
   return {

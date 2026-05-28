@@ -224,19 +224,19 @@ const ReportsSummary: React.FC = () => {
                     ))}
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                    <Card>
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
+                    <Card className="xl:col-span-2">
                       <CardHeader className="pb-2"><CardTitle className="text-base">Ranking por Setor / Empresa</CardTitle></CardHeader>
                       <CardContent>
-                        <Table>
-                          <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Setor / Empresa</TableHead><TableHead className="text-right">Funcionários</TableHead><TableHead className="text-right">Salário Líquido</TableHead><TableHead className="text-right">% do Total</TableHead></TableRow></TableHeader>
+                        <Table className="w-full table-fixed text-sm">
+                          <TableHeader><TableRow><TableHead className="w-8">#</TableHead><TableHead>Setor / Empresa</TableHead><TableHead className="w-12 text-right">Func.</TableHead><TableHead className="w-28 text-right">Salário Líquido</TableHead><TableHead className="w-20 text-right">% do Total</TableHead></TableRow></TableHeader>
                           <TableBody>
                             {managerial.ranking.slice(0, 5).map((item, idx) => (
                               <TableRow key={item.companyId}>
-                                <TableCell>{idx + 1}</TableCell><TableCell>{item.name}</TableCell><TableCell className="text-right">{item.employees}</TableCell><TableCell className="text-right">{BRL(item.salarioLiquido)}</TableCell><TableCell className="text-right">{PCT(item.percentOfTotal)}</TableCell>
+                                <TableCell>{idx + 1}</TableCell><TableCell className="break-words">{item.name}</TableCell><TableCell className="text-right tabular-nums">{item.employees}</TableCell><TableCell className="text-right tabular-nums">{BRL(item.salarioLiquido)}</TableCell><TableCell className="text-right tabular-nums">{PCT(item.percentOfTotal)}</TableCell>
                               </TableRow>
                             ))}
-                            <TableRow className="font-semibold"><TableCell colSpan={2}>TOTAL</TableCell><TableCell className="text-right">{managerial.totalEmployees}</TableCell><TableCell className="text-right">{BRL(managerial.salarioLiquido)}</TableCell><TableCell className="text-right">{PCT(managerial.salarioLiquido > 0 ? 100 : 0)}</TableCell></TableRow>
+                            <TableRow className="font-semibold"><TableCell colSpan={2}>TOTAL</TableCell><TableCell className="text-right tabular-nums">{managerial.totalEmployees}</TableCell><TableCell className="text-right tabular-nums">{BRL(managerial.salarioLiquido)}</TableCell><TableCell className="text-right tabular-nums">{PCT(managerial.salarioLiquido > 0 ? 100 : 0)}</TableCell></TableRow>
                           </TableBody>
                         </Table>
                       </CardContent>
@@ -258,7 +258,7 @@ const ReportsSummary: React.FC = () => {
                       </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card className="xl:col-span-2">
                       <CardHeader className="pb-2"><CardTitle className="text-base">Composição da Folha</CardTitle></CardHeader>
                       <CardContent>
                         <Table><TableHeader><TableRow><TableHead>Grupo</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-right">%</TableHead></TableRow></TableHeader><TableBody>
