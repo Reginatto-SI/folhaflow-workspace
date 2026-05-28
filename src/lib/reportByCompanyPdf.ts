@@ -4,7 +4,7 @@ import { ReportByCompanyDataset } from "@/lib/reportByCompanyData";
 
 const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br — Contato: (65) 99210-2030";
 const DARK_HIGHLIGHT: [number, number, number] = [71, 85, 105];
-const LIGHT_ROW_HIGHLIGHT: [number, number, number] = [226, 232, 240];
+const LIGHT_ROW_HIGHLIGHT: [number, number, number] = [241, 245, 249];
 const RESULT_HEAD_HIGHLIGHT: [number, number, number] = [82, 97, 121];
 const BORDER_LIGHT: [number, number, number] = [180, 188, 200];
 const TEXT_LIGHT: [number, number, number] = [255, 255, 255];
@@ -14,8 +14,10 @@ const formatPdfCurrency = (value: number | string) => {
     ? value
     : Number(String(value).replace(/[^\d,-]/g, "").replace(/\./g, "").replace(",", "."));
   const safeValue = Number.isFinite(numericValue) ? numericValue : 0;
+  // Comentário: valores que arredondam para zero devem sair como R$ 0,00, sem sinal negativo residual do cálculo.
+  const displayValue = Math.round(safeValue * 100) === 0 ? 0 : safeValue;
   // Comentário: formatação BRL somente na exibição do PDF, sem alterar o valor numérico original.
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(safeValue).replace(/\u00a0/g, " ");
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(displayValue).replace(/\u00a0/g, " ");
 };
 
 const formatAdmissionRegistrationForPrint = (value: string): string => {
@@ -117,7 +119,7 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
       fontSize: 4.9,
     },
     columnStyles: {
-      0: { cellWidth: fixedColumnsWidth.name, halign: "left" },
+      0: { cellWidth: fixedColumnsWidth.name, halign: "left", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
       1: { cellWidth: fixedColumnsWidth.department, halign: "left" },
       2: { cellWidth: fixedColumnsWidth.jobRole, halign: "left" },
       3: { cellWidth: fixedColumnsWidth.admissionRegistration, halign: "center" },
@@ -137,8 +139,9 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
       }
 
       if (hookData.section === "body" && !isTotalRow && (isFixedIdentityColumn || isResultValueColumn)) {
-        // Comentário: colunas cadastrais e resultados finais recebem fundo leve para separar cadastro, verbas e totais principais.
+        // Comentário: colunas destacadas usam fundo mais suave e texto em negrito para equilibrar leitura sem pesar a grade.
         hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
+        hookData.cell.styles.fontStyle = "bold";
       }
 
       if (isTotalRow) {
@@ -146,6 +149,8 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
         hookData.cell.styles.fillColor = DARK_HIGHLIGHT;
         hookData.cell.styles.textColor = TEXT_LIGHT;
         hookData.cell.styles.fontStyle = "bold";
+        // Comentário: altura mínima diferencia o TOTAL das linhas comuns sem mudar a estrutura da tabela.
+        hookData.cell.styles.minCellHeight = 4.8;
         hookData.cell.styles.lineWidth = { top: 0.25, right: 0.1, bottom: 0.1, left: 0.1 };
       }
 
