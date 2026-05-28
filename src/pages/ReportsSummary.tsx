@@ -10,9 +10,14 @@ import { buildReportSummaryData } from "@/lib/reportSummaryData";
 import { generateReportSummaryPdf } from "@/lib/reportSummaryPdf";
 import { generateReportSummaryExcel } from "@/lib/reportSummaryExcel";
 import { buildManagerialSummary } from "@/lib/reportSummaryManagerial";
+import { usePersistedFilters } from "@/hooks/usePersistedFilters";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const PCT = (value: number) => `${(Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+type ReportsSummaryFilters = {
+  competencia: { month: number; year: number };
+};
 
 const ReportsSummary: React.FC = () => {
   const {
@@ -38,8 +43,45 @@ const ReportsSummary: React.FC = () => {
   }, [allPayrollBatches]);
 
   const [reportMonth, setReportMonth] = React.useState(selectedMonth);
+  const persistedFilters = usePersistedFilters<ReportsSummaryFilters>("relatorios-resumo-completo");
+  const restoredFiltersRef = React.useRef(false);
+  const [filtersReady, setFiltersReady] = React.useState(false);
 
   React.useEffect(() => {
+    if (isLoading || restoredFiltersRef.current) return;
+    if (availableCompetences.length === 0) return;
+
+    const saved = persistedFilters.readFilters();
+    const savedCompetence = saved?.competencia
+      ? availableCompetences.find((competence) =>
+          competence.month === saved.competencia?.month && competence.year === saved.competencia?.year
+        )
+      : null;
+
+    // Comentário: só restaura a competência consolidada se ela ainda existir em alguma folha ativa do grupo.
+    if (savedCompetence) setReportMonth({ month: savedCompetence.month, year: savedCompetence.year });
+    restoredFiltersRef.current = true;
+    setFiltersReady(true);
+  }, [availableCompetences, isLoading, persistedFilters]);
+
+  React.useEffect(() => {
+    if (!filtersReady) return;
+    const hasReportMonth = availableCompetences.some((competence) =>
+      competence.month === reportMonth.month && competence.year === reportMonth.year
+    );
+    if (!hasReportMonth) return;
+
+    persistedFilters.saveFilters({ competencia: { month: reportMonth.month, year: reportMonth.year } });
+  }, [availableCompetences, filtersReady, persistedFilters, reportMonth.month, reportMonth.year]);
+
+  const resetToDefaultFilters = React.useCallback(() => {
+    persistedFilters.clearFilters();
+    const [mostRecentCompetence] = availableCompetences;
+    if (mostRecentCompetence) setReportMonth({ month: mostRecentCompetence.month, year: mostRecentCompetence.year });
+  }, [availableCompetences, persistedFilters]);
+
+  React.useEffect(() => {
+    if (!filtersReady) return;
     if (availableCompetences.length === 0) return;
     const hasReportMonth = availableCompetences.some(
       (competence) => competence.month === reportMonth.month && competence.year === reportMonth.year,
@@ -50,7 +92,7 @@ const ReportsSummary: React.FC = () => {
     // precisa seguir as folhas do grupo, sem ser forçada pela empresa selecionada na Central.
     const [mostRecentCompetence] = availableCompetences;
     setReportMonth({ month: mostRecentCompetence.month, year: mostRecentCompetence.year });
-  }, [availableCompetences, reportMonth.month, reportMonth.year]);
+  }, [availableCompetences, filtersReady, reportMonth.month, reportMonth.year]);
 
   const dataset = React.useMemo(() => {
     if (!reportMonth || (activeCompanies ?? []).length === 0) return null;
@@ -133,6 +175,9 @@ const ReportsSummary: React.FC = () => {
             <Button variant="outline" onClick={exportExcel} disabled={!dataset || dataset.companies.length === 0}>
               <FileSpreadsheet className="mr-2 h-4 w-4" />
               Exportar Excel
+            </Button>
+            <Button variant="ghost" onClick={resetToDefaultFilters}>
+              Limpar filtros
             </Button>
           </div>
         </CardContent>

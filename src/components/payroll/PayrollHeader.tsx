@@ -25,6 +25,7 @@ interface PayrollHeaderProps {
   onDuplicatePayroll?: () => void;
   onGenerateReport?: () => void;
   onGenerateExcelReport?: () => void;
+  onClearPersistedFilters?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -66,7 +67,7 @@ const normalizePayrollStatus = (status?: string | null): PayrollStatus => {
   return "em_edicao";
 };
 
-const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateReceipts, onDuplicatePayroll, onGenerateReport, onGenerateExcelReport }) => {
+const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateReceipts, onDuplicatePayroll, onGenerateReport, onGenerateExcelReport, onClearPersistedFilters }) => {
   const {
     activeCompanies,
     selectedCompany,
@@ -286,6 +287,10 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
               >
                 <Copy className="mr-2 h-4 w-4" />
                 Criar nova folha
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onClearPersistedFilters} disabled={!onClearPersistedFilters}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Limpar filtros
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setStatusDialogOpen(true)} disabled={!currentBatch || currentBatch.isArchived}>
                 <CurrentStatusIcon className="mr-2 h-4 w-4" />
