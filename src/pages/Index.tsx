@@ -17,6 +17,17 @@ import { generateReportByCompanyPdf } from "@/lib/reportByCompanyPdf";
 import { exportReportByCompanyExcel } from "@/lib/reportByCompanyExcel";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import ReceiptPrintView from "@/components/payroll/ReceiptPrintView";
+import { usePersistedFilters } from "@/hooks/usePersistedFilters";
+
+type CentralPayrollFilters = {
+  empresaId: string;
+  competencia: { month: number; year: number };
+  folhaId: string;
+  busca: string;
+  setorId: string;
+  funcaoCargoId: string;
+  statusConferencia: "all" | "checked" | "pending";
+};
 
 const Index = () => {
   const {
@@ -35,6 +46,10 @@ const Index = () => {
     currentBatch,
     availableCompetences,
     allPayrollBatches,
+    activeCompanies,
+    isLoading,
+    setSelectedCompany,
+    setSelectedMonth,
   } = usePayroll();
 
   const [search, setSearch] = useState("");
@@ -54,6 +69,74 @@ const Index = () => {
   const [updatingConferidoIds, setUpdatingConferidoIds] = useState<Record<string, boolean>>({});
   // Comentário: estado dos recibos (individual = 1 entry, lote = N entries).
   const [receiptsState, setReceiptsState] = useState<{ entries: PayrollEntry[]; title?: string } | null>(null);
+  const persistedFilters = usePersistedFilters<CentralPayrollFilters>("central-de-folha");
+  const restoredFiltersRef = React.useRef(false);
+  const [filtersReady, setFiltersReady] = useState(false);
+
+  React.useEffect(() => {
+    if (restoredFiltersRef.current || isLoading) return;
+    if ((activeCompanies ?? []).length === 0) return;
+
+    const saved = persistedFilters.readFilters();
+    const savedCompany = saved?.empresaId ? activeCompanies.find((company) => company.id === saved.empresaId) : null;
+    const savedBatch = savedCompany
+      ? allPayrollBatches.find((batch) =>
+          !batch.isArchived &&
+          batch.companyId === savedCompany.id &&
+          ((saved.folhaId && batch.id === saved.folhaId) ||
+            (saved.competencia && batch.month === saved.competencia.month && batch.year === saved.competencia.year))
+        )
+      : null;
+
+    // Comentário: restauração local roda depois de empresas/folhas carregarem, validando IDs antes de sobrescrever o fallback padrão.
+    if (savedCompany) setSelectedCompany(savedCompany);
+    if (savedBatch) setSelectedMonth({ month: savedBatch.month, year: savedBatch.year });
+    if (typeof saved?.busca === "string") setSearch(saved.busca);
+    const savedDepartment = savedCompany && saved?.setorId
+      ? allDepartments.find((department) => department.id === saved.setorId && department.companyId === savedCompany.id && department.isActive)
+      : null;
+    const savedJobRole = savedCompany && saved?.funcaoCargoId
+      ? allJobRoles.find((jobRole) => jobRole.id === saved.funcaoCargoId && jobRole.companyId === savedCompany.id && jobRole.isActive)
+      : null;
+    // Comentário: setor/função são validados contra a empresa restaurada, não contra listas derivadas da empresa anterior.
+    if (savedDepartment) setFilterDept(savedDepartment.id);
+    if (savedJobRole) setFilterRole(savedJobRole.id);
+    if (saved?.statusConferencia === "checked" || saved?.statusConferencia === "pending") setConferenceStatus(saved.statusConferencia);
+
+    restoredFiltersRef.current = true;
+    setFiltersReady(true);
+  }, [activeCompanies, allDepartments, allJobRoles, allPayrollBatches, isLoading, persistedFilters, setSelectedCompany, setSelectedMonth]);
+
+  React.useEffect(() => {
+    if (!filtersReady || !selectedCompany) return;
+    const hasSelectedBatch = currentBatch && allPayrollBatches.some((batch) => batch.id === currentBatch.id && !batch.isArchived);
+
+    persistedFilters.saveFilters({
+      empresaId: selectedCompany.id,
+      competencia: { month: selectedMonth.month, year: selectedMonth.year },
+      ...(hasSelectedBatch ? { folhaId: currentBatch.id } : {}),
+      busca: search,
+      setorId: filterDept,
+      funcaoCargoId: filterRole,
+      statusConferencia: conferenceStatus,
+    });
+  }, [allPayrollBatches, conferenceStatus, currentBatch, filterDept, filterRole, filtersReady, persistedFilters, search, selectedCompany, selectedMonth.month, selectedMonth.year]);
+
+  const resetOperationalFilters = useCallback(() => {
+    persistedFilters.clearFilters();
+    setSearch("");
+    setFilterDept("");
+    setFilterRole("");
+    setConferenceStatus("all");
+
+    const fallbackCompany = activeCompanies[0];
+    if (!fallbackCompany) return;
+    setSelectedCompany(fallbackCompany);
+    const [fallbackBatch] = allPayrollBatches
+      .filter((batch) => batch.companyId === fallbackCompany.id && !batch.isArchived)
+      .sort((a, b) => (b.year - a.year) || (b.month - a.month));
+    if (fallbackBatch) setSelectedMonth({ month: fallbackBatch.month, year: fallbackBatch.year });
+  }, [activeCompanies, allPayrollBatches, persistedFilters, setSelectedCompany, setSelectedMonth]);
 
   const competenceLabel = useMemo(
     () => new Date(selectedMonth.year, selectedMonth.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
@@ -350,7 +433,7 @@ const Index = () => {
         <p className="text-sm text-muted-foreground mt-1">Selecione empresa e competência, clique em um funcionário para editar valores.</p>
       </div>
 
-      <PayrollHeader onNewEntry={handleOpenNewEntry} onGenerateReceipts={handleGenerateReceiptsBatch} onGenerateReport={handleGenerateCompanyReport} onGenerateExcelReport={handleGenerateCompanyReportExcel} onDuplicatePayroll={() => setDuplicationOpen(true)} />
+      <PayrollHeader onNewEntry={handleOpenNewEntry} onGenerateReceipts={handleGenerateReceiptsBatch} onGenerateReport={handleGenerateCompanyReport} onGenerateExcelReport={handleGenerateCompanyReportExcel} onDuplicatePayroll={() => setDuplicationOpen(true)} onClearPersistedFilters={resetOperationalFilters} />
       <TotalsBar entriesOverride={centralEntries} checkedCount={checkedCount} />
       <PayrollFilters
         search={search}

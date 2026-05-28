@@ -692,7 +692,8 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!companiesRes.error && companiesRes.data) {
       const loadedCompanies = companiesRes.data.map(mapCompanyRowToModel);
       setCompanies(loadedCompanies);
-      // Comentário: default selecionada deve ser uma empresa ATIVA (PRD-05 §5.4).
+      // Comentário: mantém a empresa atual quando ela ainda é válida; caso contrário, usa fallback ativo seguro.
+      // Isso evita estado global inválido sem bloquear a restauração específica de filtros por tela.
       setSelectedCompany((prev) => {
         if (prev && loadedCompanies.some((company) => company.id === prev.id && company.isActive)) return prev;
         return loadedCompanies.find((c) => c.isActive) ?? null;

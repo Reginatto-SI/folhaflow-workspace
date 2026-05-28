@@ -9,8 +9,15 @@ import { usePayroll } from "@/contexts/PayrollContext";
 import { buildReportByCompanyData } from "@/lib/reportByCompanyData";
 import { generateReportByCompanyPdf } from "@/lib/reportByCompanyPdf";
 import { exportReportByCompanyExcel } from "@/lib/reportByCompanyExcel";
+import { usePersistedFilters } from "@/hooks/usePersistedFilters";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+type ReportsCompanyFilters = {
+  empresaId: string;
+  competencia: { month: number; year: number };
+};
+
 const ReportsCompany: React.FC = () => {
   const {
     activeCompanies,
@@ -26,7 +33,68 @@ const ReportsCompany: React.FC = () => {
     setSelectedMonth,
   } = usePayroll();
 
-  const safeActiveCompanies = activeCompanies ?? [];
+  const persistedFilters = usePersistedFilters<ReportsCompanyFilters>("relatorios-por-empresa");
+  const restoredFiltersRef = React.useRef(false);
+  const [filtersReady, setFiltersReady] = React.useState(false);
+
+  const safeActiveCompanies = React.useMemo(() => activeCompanies ?? [], [activeCompanies]);
+
+  React.useEffect(() => {
+    if (isLoading || restoredFiltersRef.current) return;
+    if (safeActiveCompanies.length === 0) return;
+
+    const saved = persistedFilters.readFilters();
+    const savedCompany = saved?.empresaId ? safeActiveCompanies.find((company) => company.id === saved.empresaId) : null;
+    const companyCompetences = savedCompany
+      ? (allPayrollBatches ?? [])
+          .filter((batch) => batch.companyId === savedCompany.id && !batch.isArchived)
+          .sort((a, b) => (b.year - a.year) || (b.month - a.month))
+      : [];
+    const savedCompetence = saved?.competencia
+      ? companyCompetences.find((batch) =>
+          batch.month === saved.competencia?.month &&
+          batch.year === saved.competencia?.year
+        )
+      : null;
+    const competenceToRestore = savedCompetence ?? companyCompetences[0] ?? null;
+
+    // Comentário: restaura após carregar empresas/folhas; se a competência salva não existe mais, usa a mais recente da própria empresa.
+    if (savedCompany) {
+      setSelectedCompany(savedCompany);
+      if (competenceToRestore) setSelectedMonth({ month: competenceToRestore.month, year: competenceToRestore.year });
+    }
+
+    restoredFiltersRef.current = true;
+    setFiltersReady(true);
+  }, [allPayrollBatches, isLoading, persistedFilters, safeActiveCompanies, setSelectedCompany, setSelectedMonth]);
+
+  React.useEffect(() => {
+    if (!filtersReady || !selectedCompany) return;
+
+    const hasSelectedCompetence = (allPayrollBatches ?? []).some((batch) =>
+      batch.companyId === selectedCompany.id &&
+      !batch.isArchived &&
+      batch.month === selectedMonth.month &&
+      batch.year === selectedMonth.year
+    );
+
+    persistedFilters.saveFilters({
+      empresaId: selectedCompany.id,
+      ...(hasSelectedCompetence ? { competencia: { month: selectedMonth.month, year: selectedMonth.year } } : {}),
+    });
+  }, [allPayrollBatches, filtersReady, persistedFilters, selectedCompany, selectedMonth.month, selectedMonth.year]);
+
+  const resetToDefaultFilters = React.useCallback(() => {
+    persistedFilters.clearFilters();
+    const fallbackCompany = safeActiveCompanies[0];
+    if (!fallbackCompany) return;
+
+    setSelectedCompany(fallbackCompany);
+    const [fallbackCompetence] = (allPayrollBatches ?? [])
+      .filter((batch) => batch.companyId === fallbackCompany.id && !batch.isArchived)
+      .sort((a, b) => (b.year - a.year) || (b.month - a.month));
+    if (fallbackCompetence) setSelectedMonth({ month: fallbackCompetence.month, year: fallbackCompetence.year });
+  }, [allPayrollBatches, persistedFilters, safeActiveCompanies, setSelectedCompany, setSelectedMonth]);
 
   const availableCompetences = React.useMemo(() => {
     if (!selectedCompany) return [];
@@ -137,6 +205,7 @@ const ReportsCompany: React.FC = () => {
           <div className="md:col-span-2 flex gap-2">
             <Button onClick={exportPdf} disabled={!dataset || dataset.rows.length === 0}><FileText className="mr-2 h-4 w-4" />Gerar PDF</Button>
             <Button variant="outline" onClick={exportCsv} disabled={!dataset || dataset.rows.length === 0}><FileSpreadsheet className="mr-2 h-4 w-4" />Exportar CSV (Excel)</Button>
+            <Button variant="ghost" onClick={resetToDefaultFilters}>Limpar filtros</Button>
           </div>
         </CardContent>
       </Card>
