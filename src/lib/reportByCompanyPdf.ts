@@ -4,7 +4,7 @@ import { ReportByCompanyDataset } from "@/lib/reportByCompanyData";
 
 const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br — Contato: (65) 99210-2030";
 const DARK_HIGHLIGHT: [number, number, number] = [71, 85, 105];
-const LIGHT_ROW_HIGHLIGHT: [number, number, number] = [226, 232, 240];
+const LIGHT_ROW_HIGHLIGHT: [number, number, number] = [241, 245, 249];
 const RESULT_HEAD_HIGHLIGHT: [number, number, number] = [82, 97, 121];
 const BORDER_LIGHT: [number, number, number] = [180, 188, 200];
 const TEXT_LIGHT: [number, number, number] = [255, 255, 255];
@@ -137,8 +137,9 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
       }
 
       if (hookData.section === "body" && !isTotalRow && (isFixedIdentityColumn || isResultValueColumn)) {
-        // Comentário: colunas cadastrais e resultados finais recebem fundo leve para separar cadastro, verbas e totais principais.
+        // Comentário: colunas destacadas usam fundo mais suave e texto em negrito para equilibrar leitura sem pesar a grade.
         hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
+        hookData.cell.styles.fontStyle = "bold";
       }
 
       if (isTotalRow) {
