@@ -166,4 +166,49 @@ describe("buildReceiptData", () => {
     expect(labels.includes("(+) Diarias/Gratificações (10 dias)")).toBe(false);
     expect(data.lines.filter((line) => line.label.includes("Compra de Férias")).length).toBe(1);
   });
+
+  it("prioriza a canônica recalculada quando netSalary persistido está legado", () => {
+    const legacyEntry: PayrollEntry = {
+      ...entry,
+      earnings: {
+        salario_fiscal: 1762.2,
+        he: 66.84,
+      },
+      deductions: {
+        inss: 199.69,
+        vales: 527.22,
+        faltas: 77.73,
+      },
+      netSalary: 1762.2,
+    };
+
+    const rubrics = [
+      makeRubric({ id: "salario_fiscal", name: "Salário Fiscal", code: "SALARIO_FISCAL", classification: null, order: 3 }),
+      makeRubric({ id: "he", name: "Horas Extras", code: "HE", classification: "horas_extras", order: 5 }),
+      makeRubric({ id: "inss", name: "INSS", code: "INSS", type: "desconto", classification: "inss", order: 10 }),
+      makeRubric({ id: "vales", name: "Vales/Descontos", code: "VALES", type: "desconto", classification: "vales", order: 13 }),
+      makeRubric({ id: "faltas", name: "Faltas/Descontos", code: "FALTAS", type: "desconto", classification: "faltas", order: 14 }),
+      makeRubric({
+        id: "salario_liquido",
+        name: "Salário Líquido",
+        code: "salario_liquido",
+        nature: "calculada",
+        calculationMethod: "formula",
+        order: 15,
+        formulaItems: [
+          { id: "liq-1", operation: "add", sourceRubricId: "salario_fiscal", order: 1 },
+          { id: "liq-2", operation: "add", sourceRubricId: "he", order: 2 },
+          { id: "liq-3", operation: "subtract", sourceRubricId: "inss", order: 3 },
+          { id: "liq-4", operation: "subtract", sourceRubricId: "vales", order: 4 },
+          { id: "liq-5", operation: "subtract", sourceRubricId: "faltas", order: 5 },
+        ],
+      }),
+    ];
+
+    const data = buildReceiptData(legacyEntry, rubrics);
+
+    // Comentário: recibo reutiliza a mesma canônica da Central e não o net_salary antigo.
+    expect(data.netSalary).toBeCloseTo(1024.4, 2);
+    expect(data.lines.at(-1)?.value).toBeCloseTo(1024.4, 2);
+  });
 });

@@ -252,13 +252,20 @@ export function buildReceiptData(entry: PayrollEntry, rubrics: Rubric[]): Receip
 
   const baseSalary = lines[0]?.value || 0;
 
-  // Líquido oficial: usa o campo persistido da folha quando presente. Em prévias do
-  // drawer/lote ainda não persistidas, mantém fallback para a canônica/função única já
-  // usada pela Central, sem recalcular uma regra própria no recibo.
-  const netSalary = typeof entry.netSalary === "number"
-    ? entry.netSalary
-    : result.canonicalDerivedRubricIds.salarioLiquidoId
-      ? result.salarioLiquido
+  const canonicalNetRubric = result.canonicalDerivedRubricIds.salarioLiquidoId
+    ? rubrics.find((rubric) => rubric.id === result.canonicalDerivedRubricIds.salarioLiquidoId)
+    : null;
+  const hasRunnableCanonicalNetSalary = !!canonicalNetRubric && (
+    canonicalNetRubric.calculationMethod !== "formula" || (canonicalNetRubric.formulaItems || []).length > 0
+  );
+
+  // Líquido oficial: quando a canônica está executável, usa a mesma função única da
+  // Central para não deixar `net_salary` legado/stale vazar para o recibo após correção
+  // de fórmula. O campo persistido permanece fallback para cadastros ainda incompletos.
+  const netSalary = hasRunnableCanonicalNetSalary
+    ? result.salarioLiquido
+    : typeof entry.netSalary === "number"
+      ? entry.netSalary
       : result.netSalary;
 
   lines.push({ label: "Líquido a receber", prefix: "(=)", value: netSalary, highlight: true });
