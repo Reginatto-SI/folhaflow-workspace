@@ -33,7 +33,7 @@ const PayrollFilters: React.FC<PayrollFiltersProps> = ({
         <div className="relative flex-1 min-w-[200px] max-w-[300px]">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nome..."
+            placeholder="Buscar por nome ou CPF..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             className="pl-9 h-8"

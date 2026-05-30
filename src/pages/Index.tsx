@@ -18,6 +18,36 @@ import { exportReportByCompanyExcel } from "@/lib/reportByCompanyExcel";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import ReceiptPrintView from "@/components/payroll/ReceiptPrintView";
 import { usePersistedFilters } from "@/hooks/usePersistedFilters";
+import { calculatePayrollFromEntry } from "@/lib/payrollSpreadsheet";
+
+
+type PayrollSortKey = "employee" | "cpf" | "department" | "role" | "salarioReal" | "g2Complemento" | "salarioLiquido";
+type PayrollSortDirection = "asc" | "desc";
+type PayrollSortState = { key: PayrollSortKey; direction: PayrollSortDirection } | null;
+
+const centralPayrollCollator = new Intl.Collator("pt-BR", { sensitivity: "base", numeric: true });
+
+const normalizeCpfForSearch = (value?: string | null) => {
+  // Comentário: CPF normalizado permite busca e ordenação com ou sem pontuação.
+  return (value || "").replace(/\D/g, "");
+};
+
+const normalizeSearchText = (value?: string | null) => (value || "").trim().toLocaleLowerCase("pt-BR");
+
+const compareTextForCentral = (a?: string | null, b?: string | null) => {
+  const left = (a || "").trim();
+  const right = (b || "").trim();
+  if (!left && !right) return 0;
+  if (!left) return 1;
+  if (!right) return -1;
+  return centralPayrollCollator.compare(left, right);
+};
+
+const compareNumberForCentral = (a?: number | null, b?: number | null) => {
+  const left = Number.isFinite(a) ? Number(a) : 0;
+  const right = Number.isFinite(b) ? Number(b) : 0;
+  return left - right;
+};
 
 type CentralPayrollFilters = {
   empresaId: string;
@@ -72,6 +102,7 @@ const Index = () => {
   const persistedFilters = usePersistedFilters<CentralPayrollFilters>("central-de-folha");
   const restoredFiltersRef = React.useRef(false);
   const [filtersReady, setFiltersReady] = useState(false);
+  const [sortState, setSortState] = useState<PayrollSortState>(null);
 
   React.useEffect(() => {
     if (restoredFiltersRef.current || isLoading) return;
@@ -160,12 +191,24 @@ const Index = () => {
     );
   }, [livePreviewEntry, optimisticConferidoByEntryId, payrollEntries]);
 
+  const employeeById = useMemo(() => new Map(allEmployees.map((employee) => [employee.id, employee])), [allEmployees]);
+  const departmentById = useMemo(() => new Map(allDepartments.map((department) => [department.id, department.name])), [allDepartments]);
+  const roleById = useMemo(() => new Map(allJobRoles.map((role) => [role.id, role.name])), [allJobRoles]);
+
   const filteredEntries = useMemo(() => {
+    const normalizedQuery = normalizeSearchText(search);
+    const cpfQuery = normalizeCpfForSearch(search);
+
     return centralEntries.filter((entry) => {
-      const emp = allEmployees.find((e) => e.id === entry.employeeId);
+      const emp = employeeById.get(entry.employeeId);
       if (!emp) return false;
 
-      if (search && !emp.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (normalizedQuery) {
+        const matchName = normalizeSearchText(emp.name).includes(normalizedQuery);
+        // Comentário: remove pontuação do CPF para aceitar buscas como 02017348180, 020.173.481-80 ou trechos.
+        const matchCpf = cpfQuery.length > 0 && normalizeCpfForSearch(emp.cpf).includes(cpfQuery);
+        if (!matchName && !matchCpf) return false;
+      }
 
       if (filterDept && filterDept !== "all") {
         if (emp.departmentId !== filterDept) return false;
@@ -179,11 +222,74 @@ const Index = () => {
 
       return true;
     });
-  }, [centralEntries, allEmployees, search, filterDept, filterRole, conferenceStatus]);
+  }, [centralEntries, employeeById, search, filterDept, filterRole, conferenceStatus]);
+
+  const effectiveSort = sortState ?? { key: "employee" as const, direction: "asc" as const };
+
+  const sortedEntries = useMemo(() => {
+    // Comentário: ordenação padrão A-Z deixa a Central previsível sem depender da ordem do banco.
+    return filteredEntries
+      .map((entry, index) => ({ entry, index }))
+      .sort((a, b) => {
+        const employeeA = employeeById.get(a.entry.employeeId);
+        const employeeB = employeeById.get(b.entry.employeeId);
+        const missingNameA = !employeeA?.name?.trim();
+        const missingNameB = !employeeB?.name?.trim();
+        if (missingNameA !== missingNameB) return missingNameA ? 1 : -1;
+        const departmentA = employeeA?.departmentId ? (departmentById.get(employeeA.departmentId) || employeeA.department) : employeeA?.department;
+        const departmentB = employeeB?.departmentId ? (departmentById.get(employeeB.departmentId) || employeeB.department) : employeeB?.department;
+        const roleA = employeeA?.jobRoleId ? (roleById.get(employeeA.jobRoleId) || employeeA.role) : employeeA?.role;
+        const roleB = employeeB?.jobRoleId ? (roleById.get(employeeB.jobRoleId) || employeeB.role) : employeeB?.role;
+        const computedA = calculatePayrollFromEntry({ entry: a.entry, rubrics });
+        const computedB = calculatePayrollFromEntry({ entry: b.entry, rubrics });
+
+        let result = 0;
+        switch (effectiveSort.key) {
+          case "cpf":
+            result = compareTextForCentral(normalizeCpfForSearch(employeeA?.cpf), normalizeCpfForSearch(employeeB?.cpf));
+            break;
+          case "department":
+            result = compareTextForCentral(departmentA, departmentB);
+            break;
+          case "role":
+            result = compareTextForCentral(roleA, roleB);
+            break;
+          case "salarioReal":
+            result = compareNumberForCentral(computedA.salarioReal, computedB.salarioReal);
+            break;
+          case "g2Complemento":
+            result = compareNumberForCentral(computedA.g2Complemento, computedB.g2Complemento);
+            break;
+          case "salarioLiquido":
+            result = compareNumberForCentral(computedA.salarioLiquido, computedB.salarioLiquido);
+            break;
+          case "employee":
+          default:
+            result = compareTextForCentral(employeeA?.name, employeeB?.name);
+            break;
+        }
+
+        if (result === 0 && effectiveSort.key !== "employee") {
+          result = compareTextForCentral(employeeA?.name, employeeB?.name);
+        }
+        if (result === 0) result = a.index - b.index;
+        return effectiveSort.direction === "asc" ? result : -result;
+      })
+      .map(({ entry }) => entry);
+  }, [departmentById, effectiveSort.direction, effectiveSort.key, employeeById, filteredEntries, roleById, rubrics]);
 
   // Paginação apenas visual: não altera totais (TotalsBar usa centralEntries) nem cálculos.
   const { page, pageSize, total, paginatedItems: pagedEntries, setPage, setPageSize, resetToFirstPage } =
-    usePagination(filteredEntries);
+    usePagination(sortedEntries);
+
+  const handleSortChange = useCallback((key: PayrollSortKey) => {
+    setSortState((current) => {
+      if (!current || current.key !== key) return { key, direction: "asc" };
+      return { key, direction: current.direction === "asc" ? "desc" : "asc" };
+    });
+    // Comentário: ao mudar a ordenação, voltamos à página 1 para evitar confusão visual na grade paginada.
+    resetToFirstPage();
+  }, [resetToFirstPage]);
 
   React.useEffect(() => {
     resetToFirstPage();
@@ -267,8 +373,20 @@ const Index = () => {
       toast.error("Não há lançamentos para gerar recibos.");
       return;
     }
-    setReceiptsState({ entries: filteredEntries, title: `Recibos — ${competenceLabel}` });
-  }, [competenceLabel, filteredEntries]);
+
+    // Comentário: recibos em lote sempre A-Z para evitar PDF em ordem aleatória ou pela ordenação atual da tabela.
+    const receiptEntries = filteredEntries
+      .map((entry, index) => ({ entry, index }))
+      .sort((a, b) => {
+        const employeeA = employeeById.get(a.entry.employeeId);
+        const employeeB = employeeById.get(b.entry.employeeId);
+        const result = compareTextForCentral(employeeA?.name, employeeB?.name);
+        return result || a.index - b.index;
+      })
+      .map(({ entry }) => entry);
+
+    setReceiptsState({ entries: receiptEntries, title: `Recibos — ${competenceLabel}` });
+  }, [competenceLabel, employeeById, filteredEntries]);
 
 
 
@@ -463,6 +581,9 @@ const Index = () => {
           onToggleConferido={handleToggleConferido}
           updatingConferidoIds={updatingConferidoIds}
           rubrics={rubrics}
+          sortKey={effectiveSort.key}
+          sortDirection={effectiveSort.direction}
+          onSortChange={handleSortChange}
         />
       )}
       {filteredEntries.length > 0 && (

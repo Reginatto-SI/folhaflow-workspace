@@ -8,6 +8,19 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+type PayrollSortKey = "employee" | "cpf" | "department" | "role" | "salarioReal" | "g2Complemento" | "salarioLiquido";
+type PayrollSortDirection = "asc" | "desc";
+
+const sortLabels: Record<PayrollSortKey, string> = {
+  employee: "Funcionário",
+  cpf: "CPF",
+  department: "Setor",
+  role: "Função",
+  salarioReal: "Salário Real",
+  g2Complemento: "G2 Complemento",
+  salarioLiquido: "Salário Líquido",
+};
+
 interface PayrollTableProps {
   entries: PayrollEntry[];
   allEmployees: Employee[];
@@ -17,6 +30,9 @@ interface PayrollTableProps {
   onRowClick: (entry: PayrollEntry) => void;
   onToggleConferido: (entry: PayrollEntry) => void;
   updatingConferidoIds?: Record<string, boolean>;
+  sortKey: PayrollSortKey;
+  sortDirection: PayrollSortDirection;
+  onSortChange: (key: PayrollSortKey) => void;
 }
 
 const PayrollTable: React.FC<PayrollTableProps> = ({
@@ -28,10 +44,36 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
   onRowClick,
   onToggleConferido,
   updatingConferidoIds = {},
+  sortKey,
+  sortDirection,
+  onSortChange,
 }) => {
   const employeeById = React.useMemo(() => new Map(allEmployees.map((item) => [item.id, item])), [allEmployees]);
   const departmentById = React.useMemo(() => new Map(allDepartments.map((item) => [item.id, item.name])), [allDepartments]);
   const roleById = React.useMemo(() => new Map(allJobRoles.map((item) => [item.id, item.name])), [allJobRoles]);
+
+  const renderSortableHeader = (key: PayrollSortKey, align: "left" | "right" = "left", extraClassName?: string) => {
+    const active = sortKey === key;
+
+    return (
+      <button
+        type="button"
+        className={cn(
+          "inline-flex w-full items-center gap-1 rounded-sm transition-colors hover:text-foreground",
+          align === "right" ? "justify-end text-right" : "justify-start text-left",
+          active && "text-foreground"
+        )}
+        onClick={() => onSortChange(key)}
+        aria-label={`Ordenar por ${sortLabels[key]}`}
+        aria-sort={active ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+      >
+        <span>{sortLabels[key]}</span>
+        <span className={cn("text-[10px] leading-none text-muted-foreground/70", extraClassName)} aria-hidden="true">
+          {active ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}
+        </span>
+      </button>
+    );
+  };
 
   if (entries.length === 0) {
     return (
@@ -70,13 +112,13 @@ const PayrollTable: React.FC<PayrollTableProps> = ({
                   </TooltipProvider>
                 </span>
               </th>
-              <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">Funcionário</th>
-              <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">CPF</th>
-              <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">Setor</th>
-              <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">Função</th>
-              <th className="text-right px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">Salário Real</th>
-              <th className="text-right px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">G2 Complemento</th>
-              <th className="text-right px-4 py-2.5 font-semibold text-[11px] uppercase tracking-[0.08em] text-emerald-700/90 bg-emerald-50/70">Salário Líquido</th>
+              <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">{renderSortableHeader("employee")}</th>
+              <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">{renderSortableHeader("cpf")}</th>
+              <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">{renderSortableHeader("department")}</th>
+              <th className="text-left px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">{renderSortableHeader("role")}</th>
+              <th className="text-right px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">{renderSortableHeader("salarioReal", "right")}</th>
+              <th className="text-right px-4 py-2.5 font-medium text-[11px] uppercase tracking-[0.08em] text-muted-foreground/90">{renderSortableHeader("g2Complemento", "right")}</th>
+              <th className="text-right px-4 py-2.5 font-semibold text-[11px] uppercase tracking-[0.08em] text-emerald-700/90 bg-emerald-50/70">{renderSortableHeader("salarioLiquido", "right", "text-emerald-700/80")}</th>
             </tr>
           </thead>
           <tbody>
