@@ -78,9 +78,10 @@ const getFirstRubricValue = (context: LegacyReceiptContext, predicate: (rubric: 
 };
 
 const getLegacyGrossSalaryValue = (context: LegacyReceiptContext) => {
-  // Comentário: a linha "Salário Bruto" do recibo legado representa uma única
-  // base operacional. Não somamos CTPS + G + Fiscal; seguimos a pista do backend
-  // transitório: salário bruto explícito > salário fiscal > CTPS > base_salary.
+  // Comentário: a linha "Salário Bruto" do recibo legado representa a base
+  // operacional usada na Central para chegar ao líquido. Prioridade:
+  // rubrica explícita "salário bruto" > Salário G > Salário CTPS > Salário Fiscal > base_salary.
+  // Salário Fiscal é base contábil/INSS e não deve ser exibido como Bruto no recibo.
   return (
     getFirstRubricValue(
       context,
@@ -88,11 +89,15 @@ const getLegacyGrossSalaryValue = (context: LegacyReceiptContext) => {
     ) ??
     getFirstRubricValue(
       context,
-      (rubric) => rubric.nature !== "calculada" && rubric.type === "provento" && isFiscalSalaryRubric(rubric),
+      (rubric) => rubric.nature !== "calculada" && rubric.type === "provento" && rubric.classification === "salario_g",
     ) ??
     getFirstRubricValue(
       context,
       (rubric) => rubric.nature !== "calculada" && rubric.type === "provento" && rubric.classification === "salario_ctps",
+    ) ??
+    getFirstRubricValue(
+      context,
+      (rubric) => rubric.nature !== "calculada" && rubric.type === "provento" && isFiscalSalaryRubric(rubric),
     ) ??
     toSafeNumber(context.entry.baseSalary)
   );
