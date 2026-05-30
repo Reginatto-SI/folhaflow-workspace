@@ -40,6 +40,29 @@ const toNumber = (value: unknown) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+const employeeNameCollator = new Intl.Collator("pt-BR", { sensitivity: "base", numeric: true });
+
+const compareReportEmployeeNames = (
+  a: { sortName: string; cpf?: string; sourceIndex: number },
+  b: { sortName: string; cpf?: string; sourceIndex: number },
+) => {
+  const nameA = a.sortName.trim();
+  const nameB = b.sortName.trim();
+
+  if (!nameA && !nameB) {
+    const cpfCompare = employeeNameCollator.compare(a.cpf ?? "", b.cpf ?? "");
+    return cpfCompare || a.sourceIndex - b.sourceIndex;
+  }
+  if (!nameA) return 1;
+  if (!nameB) return -1;
+
+  const nameCompare = employeeNameCollator.compare(nameA, nameB);
+  if (nameCompare !== 0) return nameCompare;
+
+  const cpfCompare = employeeNameCollator.compare(a.cpf ?? "", b.cpf ?? "");
+  return cpfCompare || a.sourceIndex - b.sourceIndex;
+};
+
 const readValueFromPayload = (entry: PayrollEntry, key: string) => {
   const earningsValue = entry.earnings?.[key];
   if (typeof earningsValue === "number") return earningsValue;
@@ -134,7 +157,7 @@ export function buildReportByCompanyData(params: {
 
   const employeeById = new Map(allEmployees.map((employee) => [employee.id, employee]));
 
-  const rows = filteredEntries.map((entry) => {
+  const rowsWithSort = filteredEntries.map((entry, sourceIndex) => {
     const employee = employeeById.get(entry.employeeId);
     const department = employee?.department || "-";
     const jobRole = employee?.role || "-";
@@ -158,8 +181,16 @@ export function buildReportByCompanyData(params: {
       jobRole,
       admissionRegistration,
       rubricValues,
+      sortName: employee?.name ?? "",
+      cpf: employee?.cpf,
+      sourceIndex,
     };
   });
+
+  // Comentário: relatórios/exportações saem A-Z por funcionário para previsibilidade operacional; a ordenação não altera cálculo nem totais.
+  const rows = [...rowsWithSort]
+    .sort((a, b) => compareReportEmployeeNames(a, b))
+    .map(({ sortName: _sortName, cpf: _cpf, sourceIndex: _sourceIndex, ...row }) => row);
 
   const totalsByRubricId = activeRubrics.reduce<Record<string, number>>((acc, rubric) => {
     acc[rubric.rubricId] = rows.reduce((sum, row) => sum + toNumber(row.rubricValues[rubric.rubricId]), 0);
