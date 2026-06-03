@@ -111,8 +111,11 @@ const renderTable = (entries: PayrollEntry[], rubrics: Rubric[]) =>
       allJobRoles={[{ id: "role-1", companyId: "comp-1", name: "Motorista", isActive: true }]}
       onRowClick={vi.fn()}
       onToggleConferido={vi.fn()}
-
+      sortKey="employee"
+      sortDirection="asc"
+      onSortChange={vi.fn()}
     />
+
   );
 
 const expectMoney = (container: HTMLElement, value: string) => {
