@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { ReportByCompanyDataset } from "@/lib/reportByCompanyData";
+import { ReportByCompanyDataset, ReportDynamicColumn } from "@/lib/reportByCompanyData";
 
 const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br — Contato: (65) 99210-2030";
 const DARK_HIGHLIGHT: [number, number, number] = [71, 85, 105];
@@ -9,15 +9,19 @@ const RESULT_HEAD_HIGHLIGHT: [number, number, number] = [82, 97, 121];
 const BORDER_LIGHT: [number, number, number] = [180, 188, 200];
 const TEXT_LIGHT: [number, number, number] = [255, 255, 255];
 
-const formatPdfCurrency = (value: number | string) => {
+export const formatPdfCurrencyBlankWhenZero = (value: number | string | null | undefined) => {
+  if (value === null || value === undefined) return "";
+
   const numericValue = typeof value === "number"
     ? value
     : Number(String(value).replace(/[^\d,-]/g, "").replace(/\./g, "").replace(",", "."));
-  const safeValue = Number.isFinite(numericValue) ? numericValue : 0;
-  // Comentário: valores que arredondam para zero devem sair como R$ 0,00, sem sinal negativo residual do cálculo.
-  const displayValue = Math.round(safeValue * 100) === 0 ? 0 : safeValue;
-  // Comentário: formatação BRL somente na exibição do PDF, sem alterar o valor numérico original.
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(displayValue).replace(/\u00a0/g, " ");
+  if (!Number.isFinite(numericValue)) return "";
+
+  // Comentário: no PDF, valores monetários zerados ficam em branco para reduzir ruído visual; o número original não é alterado.
+  if (Math.round(numericValue * 100) === 0) return "";
+
+  // Comentário: formatação BRL somente na exibição do PDF, sem alterar cálculo, totais ou payload da folha.
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numericValue).replace(/\u00a0/g, " ");
 };
 
 const formatAdmissionRegistrationForPrint = (value: string): string => {
@@ -57,6 +61,29 @@ const formatPdfColumnLabel = (label: string): string => {
   return sanitized;
 };
 
+
+export type PayrollPdfDynamicColumn = ReportDynamicColumn & {
+  isSubstitutingSalarioReal?: boolean;
+};
+
+export const isHighlightedPayrollPdfColumn = (column: PayrollPdfDynamicColumn): boolean =>
+  Boolean(column.isSubstitutingSalarioReal) || isResultColumn(column.rubricName, column.rubricCode);
+
+export const buildPayrollPdfDynamicColumns = (dataset: ReportByCompanyDataset): PayrollPdfDynamicColumn[] => {
+  const hasSalarioReal = dataset.dynamicColumns.some((column) => column.isCanonicalSalarioReal);
+  const salarioCtpsColumn = dataset.dynamicColumns.find((column) => column.rubricClassification === "salario_ctps");
+
+  // Comentário: só removemos a posição original do CTPS quando ele realmente substituir Salário Real;
+  // sem Salário Real canônico no dataset, CTPS permanece na sua posição original e nenhum valor é inventado.
+  return dataset.dynamicColumns.reduce<PayrollPdfDynamicColumn[]>((columns, column) => {
+    if (hasSalarioReal && salarioCtpsColumn && column.rubricId === salarioCtpsColumn.rubricId) return columns;
+    if (column.isCanonicalSalarioReal) {
+      return salarioCtpsColumn ? [...columns, { ...salarioCtpsColumn, isSubstitutingSalarioReal: true }] : columns;
+    }
+    return [...columns, column];
+  }, []);
+};
+
 const normalizeFileToken = (value: string): string => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 const buildReportFileName = (companyName: string, month: number, year: number): string => {
   const competence = new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
@@ -71,7 +98,8 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
   const marginLeft = 6;
   const marginRight = 6;
   const pageUsableWidth = pageWidth - marginLeft - marginRight;
-  const dynamicColumnCount = dataset.dynamicColumns.length;
+  const pdfDynamicColumns = buildPayrollPdfDynamicColumns(dataset);
+  const dynamicColumnCount = pdfDynamicColumns.length;
 
   // Comentário: alinhado ao padrão visual do resumo completo (nome ganha maior largura para leitura gerencial).
   const fixedColumnsWidth = {
@@ -86,17 +114,17 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
     ? Math.max(5.9, (pageUsableWidth - reservedFixedWidth) / dynamicColumnCount)
     : 0;
   const bodyRowsLength = dataset.rows.length;
-  const resultColumnIndexes = new Set(dataset.dynamicColumns
-    .map((column, index) => (isResultColumn(column.rubricName, column.rubricCode) ? index + 4 : null))
+  const resultColumnIndexes = new Set(pdfDynamicColumns
+    .map((column, index) => (isHighlightedPayrollPdfColumn(column) ? index + 4 : null))
     .filter((index): index is number => index !== null));
 
   autoTable(doc, {
     // Comentário: aumenta respiro entre cabeçalho (título/data) e tabela para leitura mais confortável.
     startY: 18,
-    head: [[...dataset.fixedColumns.map((column) => formatPdfColumnLabel(column.label)), ...dataset.dynamicColumns.map((column) => formatPdfColumnLabel(column.rubricName))]],
+    head: [[...dataset.fixedColumns.map((column) => formatPdfColumnLabel(column.label)), ...pdfDynamicColumns.map((column) => formatPdfColumnLabel(column.rubricName))]],
     body: [
-      ...dataset.rows.map((row) => [row.name, row.department, row.jobRole, formatAdmissionRegistrationForPrint(row.admissionRegistration), ...dataset.dynamicColumns.map((column) => formatPdfCurrency(row.rubricValues[column.rubricId] ?? 0))]),
-      ["TOTAL", "", "", "", ...dataset.dynamicColumns.map((column) => formatPdfCurrency(dataset.totalsByRubricId[column.rubricId] ?? 0))],
+      ...dataset.rows.map((row) => [row.name, row.department, row.jobRole, formatAdmissionRegistrationForPrint(row.admissionRegistration), ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(row.rubricValues[column.rubricId]))]),
+      ["TOTAL", "", "", "", ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(dataset.totalsByRubricId[column.rubricId]))],
     ],
     tableWidth: pageUsableWidth,
     styles: {
@@ -124,7 +152,7 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
       2: { cellWidth: fixedColumnsWidth.jobRole, halign: "left" },
       3: { cellWidth: fixedColumnsWidth.admissionRegistration, halign: "center" },
       ...Object.fromEntries(
-        dataset.dynamicColumns.map((_, index) => [index + 4, { cellWidth: numericColumnWidth, minCellWidth: 5.9, halign: "right" }]),
+        pdfDynamicColumns.map((_, index) => [index + 4, { cellWidth: numericColumnWidth, minCellWidth: 5.9, halign: "right" }]),
       ),
     },
     didParseCell: (hookData) => {

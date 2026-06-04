@@ -8,7 +8,9 @@ export type ReportDynamicColumn = {
   rubricCode: string;
   rubricName: string;
   rubricType: Rubric["type"];
+  rubricClassification: Rubric["classification"];
   order: number;
+  isCanonicalSalarioReal: boolean;
 };
 
 export type ReportByCompanyRow = {
@@ -133,7 +135,10 @@ export function buildReportByCompanyData(params: {
       rubricCode: rubric.code,
       rubricName: rubric.name,
       rubricType: rubric.type,
+      rubricClassification: rubric.classification,
       order: rubric.order,
+      // Comentário: marca técnica usada somente na apresentação do PDF para remover Salário Real sem depender do nome da coluna.
+      isCanonicalSalarioReal: canonicalIds.salarioRealId === rubric.id,
     }));
 
   const batchesById = new Map(allBatches.map((item) => [item.id, item]));
