@@ -3,6 +3,8 @@ import {
   buildPayrollPdfDynamicColumns,
   formatJobRoleForPrint,
   formatPdfCurrencyBlankWhenZero,
+  getPayrollPdfBodyColumnHalign,
+  getPayrollPdfBodyColumnStyle,
   isHighlightedPayrollPdfColumn,
 } from "@/lib/reportByCompanyPdf";
 import type { ReportByCompanyDataset, ReportDynamicColumn } from "@/lib/reportByCompanyData";
@@ -77,7 +79,38 @@ describe("reportByCompanyPdf", () => {
     expect(pdfColumns[0].rubricId).toBe("ctps");
   });
 
-  it("omite rubricas oficiais inexistentes sem inventar colunas e preserva a ordem relativa", () => {
+  it("posiciona Compra de Férias entre Emprést. Consig. e INSS quando a rubrica existe no dataset", () => {
+    const pdfColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(officialColumns));
+    const ids = pdfColumns.map((item) => item.rubricId);
+
+    expect(ids).toContain("compra");
+    expect(ids.indexOf("emprestimos")).toBeLessThan(ids.indexOf("compra"));
+    expect(ids.indexOf("compra")).toBeLessThan(ids.indexOf("inss"));
+  });
+
+  it("identifica Compra de Férias por nome normalizado mesmo com código legado", () => {
+    const columns = [
+      column({ rubricId: "emprestimos", rubricCode: "EMPREST_CONSIG", rubricName: "Emprést. Consig.", rubricType: "desconto", rubricClassification: "emprestimos", order: 1 }),
+      column({ rubricId: "compra_nome", rubricCode: "77", rubricName: "(+) Compra de Férias", rubricClassification: "outros_rendimentos", order: 2 }),
+      column({ rubricId: "inss", rubricCode: "INSS", rubricName: "INSS", rubricType: "desconto", rubricClassification: "inss", order: 3 }),
+    ];
+
+    expect(buildPayrollPdfDynamicColumns(datasetWithColumns(columns)).map((item) => item.rubricId)).toEqual([
+      "emprestimos",
+      "compra_nome",
+      "inss",
+    ]);
+  });
+
+  it("não identifica Compra de Férias com classificação incompatível", () => {
+    const columns = [
+      column({ rubricId: "compra_errada", rubricCode: "COMPRA_FERIAS", rubricName: "Compra de Férias", rubricClassification: "insalubridade", order: 1 }),
+    ];
+
+    expect(buildPayrollPdfDynamicColumns(datasetWithColumns(columns))).toEqual([]);
+  });
+
+  it("omite Compra de Férias sem erro quando a rubrica não existe no dataset", () => {
     const partialColumns = officialColumns.filter((item) => !["salario_g", "premio", "compra", "fiscal", "desconhecida"].includes(item.rubricId));
 
     const pdfColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(partialColumns));
@@ -95,6 +128,7 @@ describe("reportByCompanyPdf", () => {
       "liquido",
     ]);
     expect(pdfColumns.some((item) => item.rubricId === "real")).toBe(false);
+    expect(pdfColumns.some((item) => item.rubricId === "compra")).toBe(false);
   });
 
   it("não move Salário CTPS para a posição antiga de Salário Real", () => {
@@ -124,19 +158,46 @@ describe("reportByCompanyPdf", () => {
     expect(formatJobRoleForPrint("  Operador   ")).toBe("Operador");
   });
 
-  it("abrevia ou trunca cargo longo somente para impressão", () => {
+  it("formata cargo médio em até duas linhas somente para impressão", () => {
     expect(formatJobRoleForPrint("Auxiliar De Produção O")).toBe("Aux. Produção");
-    expect(formatJobRoleForPrint("Aj De Operador De Sala De Máquinas")).toBe("Aj. Operador Máq.");
-    expect(formatJobRoleForPrint("Coordenador Geral De Processos Operacionais Internos")).toBe("Coordenador Geral Pro…");
+    expect(formatJobRoleForPrint("Secretária Executiva")).toBe("Secretária\nExecutiva");
+    expect(formatJobRoleForPrint("Auxiliar Departamento")).toBe("Aux.\nDepartamento");
+    expect(formatJobRoleForPrint("Aj De Operador De Sala De Máquinas")).toBe("Aj. Operador\nMáq.");
+  });
+
+  it("limita cargo longo a duas linhas com reticências somente para impressão", () => {
+    const formatted = formatJobRoleForPrint("Coordenador Geral De Processos Operacionais Internos");
+
+    expect(formatted.split("\n")).toHaveLength(2);
+    expect(formatted).toBe("Coordenador\nGeral Processo…");
+    expect(formatted.endsWith("…")).toBe(true);
   });
 
   it("formatação de cargo não altera colunas oficiais nem valores monetários", () => {
     const beforeColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(officialColumns)).map((item) => item.rubricId);
     const money = formatPdfCurrencyBlankWhenZero(1250);
 
-    expect(formatJobRoleForPrint("Aj De Operador De Sala De Máquinas")).toBe("Aj. Operador Máq.");
+    expect(formatJobRoleForPrint("Aj De Operador De Sala De Máquinas")).toBe("Aj. Operador\nMáq.");
     expect(buildPayrollPdfDynamicColumns(datasetWithColumns(officialColumns)).map((item) => item.rubricId)).toEqual(beforeColumns);
     expect(money).toBe("R$ 1.250,00");
+  });
+
+  it("centraliza Admissão/Registro e colunas monetárias, mantendo identificação textual à esquerda", () => {
+    expect(getPayrollPdfBodyColumnHalign(0)).toBe("left");
+    expect(getPayrollPdfBodyColumnHalign(1)).toBe("left");
+    expect(getPayrollPdfBodyColumnHalign(2)).toBe("left");
+    expect(getPayrollPdfBodyColumnHalign(3)).toBe("center");
+    expect(getPayrollPdfBodyColumnHalign(4)).toBe("center");
+    expect(getPayrollPdfBodyColumnHalign(17)).toBe("center");
+  });
+
+  it("aplica negrito somente nas colunas monetárias do corpo", () => {
+    expect(getPayrollPdfBodyColumnStyle(0)).toEqual({ halign: "left" });
+    expect(getPayrollPdfBodyColumnStyle(1)).toEqual({ halign: "left" });
+    expect(getPayrollPdfBodyColumnStyle(2)).toEqual({ halign: "left" });
+    expect(getPayrollPdfBodyColumnStyle(3)).toEqual({ halign: "center" });
+    expect(getPayrollPdfBodyColumnStyle(4)).toEqual({ halign: "center", fontStyle: "bold" });
+    expect(getPayrollPdfBodyColumnStyle(17)).toEqual({ halign: "center", fontStyle: "bold" });
   });
 
   it("deixa valores monetários zerados em branco", () => {

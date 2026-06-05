@@ -47,7 +47,8 @@ const PDF_LABEL_ALIASES: Record<string, string> = {
   "(-)inss": "(-)\nINSS", "(-) emprést. consig.": "(-)\nEmpr.\nConsig.", "(-) emprest. consig.": "(-)\nEmpr.\nConsig.",
   "(-) adiant geren.": "(-)\nAdiant.\nGeren.", "(-) vales/descontos": "(-)\nVales/\nDesc.", "(-) faltas/descontos": "(-)\nFaltas/\nDesc.",
   "salário real": "Salário\nReal", "salario real": "Salário\nReal", "salário g2 complem.": "Salário G2\nComplem.", "salario g2 complem.": "Salário G2\nComplem.",
-  "salário líquido": "Salário\nLíquido", "salario liquido": "Salário\nLíquido",
+  "salário líquido": "Salário\nLíquido", "salario liquido": "Salário\nLíquido", "(+) compra de férias": "(+)\nCompra de\nFérias",
+  "(+) compra de ferias": "(+)\nCompra de\nFérias", "compra de férias": "(+)\nCompra de\nFérias", "compra de ferias": "(+)\nCompra de\nFérias",
 };
 
 const normalizePdfLabelKey = (value: string): string => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s*\/\s*/g, "/").replace(/\(\+\)\s+/g, "(+) ").replace(/\(-\)\s+/g, "(-)").replace(/\s+/g, " ").trim();
@@ -87,6 +88,18 @@ const hasAnyToken = (column: ReportDynamicColumn, expectedTokens: string[]) => {
   return normalizedExpected.some((expected) => tokens.some((token) => token === expected || token.includes(expected)));
 };
 
+const hasExactColumnToken = (column: ReportDynamicColumn, expectedTokens: string[]) => {
+  const tokens = columnTokens(column);
+  const normalizedExpected = expectedTokens.map(normalizePdfColumnToken);
+  return normalizedExpected.some((expected) => tokens.some((token) => token === expected || token === `(+) ${expected}`));
+};
+
+const hasCompraFeriasToken = (column: ReportDynamicColumn) =>
+  hasExactColumnToken(column, ["compra ferias", "compra de ferias"]);
+
+const hasCompatibleCompraFeriasClassification = (column: ReportDynamicColumn) =>
+  column.rubricClassification === null || hasClassification(column, "outros_rendimentos");
+
 const OFFICIAL_PAYROLL_PDF_COLUMN_RULES: OfficialPayrollPdfColumnRule[] = [
   { key: "salario_ctps", matches: (column) => hasClassification(column, "salario_ctps") },
   { key: "salario_g", matches: (column) => hasClassification(column, "salario_g") },
@@ -103,7 +116,7 @@ const OFFICIAL_PAYROLL_PDF_COLUMN_RULES: OfficialPayrollPdfColumnRule[] = [
   { key: "emprestimos", matches: (column) => hasClassification(column, "emprestimos") },
   {
     key: "compra_ferias",
-    matches: (column) => hasClassification(column, "outros_rendimentos") && hasAnyToken(column, ["compra ferias"]),
+    matches: (column) => hasCompatibleCompraFeriasClassification(column) && hasCompraFeriasToken(column),
   },
   { key: "inss", matches: (column) => hasClassification(column, "inss") },
   { key: "vales", matches: (column) => hasClassification(column, "vales") },
@@ -153,7 +166,8 @@ export const buildPayrollPdfDynamicColumns = (dataset: ReportByCompanyDataset): 
 };
 
 
-const JOB_ROLE_MAX_PRINT_LENGTH = 22;
+const JOB_ROLE_PRINT_LINE_LENGTH = 15;
+const JOB_ROLE_MAX_PRINT_LINES = 2;
 const JOB_ROLE_WORD_ALIASES: Record<string, string> = {
   auxiliar: "Aux.",
   ajudante: "Aj.",
@@ -168,6 +182,55 @@ const JOB_ROLE_WORD_ALIASES: Record<string, string> = {
   servicos: "Serv.",
 };
 const JOB_ROLE_PRINT_STOPWORDS = new Set(["de", "da", "do", "das", "dos", "e", "sala"]);
+
+const ellipsizePrintLine = (value: string, maxLength = JOB_ROLE_PRINT_LINE_LENGTH): string => {
+  const text = value.trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+};
+
+const appendPrintEllipsis = (value: string, maxLength = JOB_ROLE_PRINT_LINE_LENGTH): string => {
+  const text = value.replace(/…$/, "").trimEnd();
+  return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+};
+
+const fitJobRoleWordsInTwoPrintLines = (words: string[]): string[] => {
+  const lines: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+    if (nextLine.length <= JOB_ROLE_PRINT_LINE_LENGTH) {
+      currentLine = nextLine;
+      continue;
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    } else {
+      lines.push(ellipsizePrintLine(word));
+    }
+
+    if (lines.length === JOB_ROLE_MAX_PRINT_LINES) {
+      break;
+    }
+
+    currentLine = currentLine ? word : "";
+  }
+
+  if (lines.length < JOB_ROLE_MAX_PRINT_LINES && currentLine) {
+    lines.push(currentLine);
+  }
+
+  const consumedText = lines.join(" ").replace(/…$/, "");
+  const originalText = words.join(" ");
+  if (originalText.length > consumedText.length && lines.length > 0) {
+    const lastLineIndex = lines.length - 1;
+    lines[lastLineIndex] = appendPrintEllipsis(lines[lastLineIndex]);
+  }
+
+  return lines.slice(0, JOB_ROLE_MAX_PRINT_LINES).map((line) => ellipsizePrintLine(line));
+};
 
 export const formatJobRoleForPrint = (value: string): string => {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
@@ -184,11 +247,25 @@ export const formatJobRoleForPrint = (value: string): string => {
   }, []);
 
   const compactText = (words.length > 0 ? words.join(" ") : text).replace(/\s+/g, " ").trim();
-  if (compactText.length <= JOB_ROLE_MAX_PRINT_LENGTH) return compactText;
+  if (compactText.length <= JOB_ROLE_PRINT_LINE_LENGTH) return compactText;
 
-  // Comentário: truncamento controlado apenas na saída do PDF para evitar que Função/Cargo aumente a altura da linha inteira.
-  return `${compactText.slice(0, JOB_ROLE_MAX_PRINT_LENGTH - 1).trimEnd()}…`;
+  // Comentário: limita Função/Cargo a até duas linhas no PDF; se ainda exceder, aplica reticências só no final visual.
+  return fitJobRoleWordsInTwoPrintLines(compactText.split(" ")).join("\n");
 };
+
+export type PayrollPdfBodyColumnStyle = {
+  halign: "left" | "center";
+  fontStyle?: "bold";
+};
+
+export const getPayrollPdfBodyColumnStyle = (columnIndex: number): PayrollPdfBodyColumnStyle => {
+  if (columnIndex <= 2) return { halign: "left" };
+  if (columnIndex === 3) return { halign: "center" };
+  return { halign: "center", fontStyle: "bold" };
+};
+
+export const getPayrollPdfBodyColumnHalign = (columnIndex: number): "left" | "center" =>
+  getPayrollPdfBodyColumnStyle(columnIndex).halign;
 
 const normalizeFileToken = (value: string): string => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 const buildReportFileName = (companyName: string, month: number, year: number): string => {
@@ -254,11 +331,11 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
     },
     columnStyles: {
       0: { cellWidth: fixedColumnsWidth.name, halign: "left", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
-      1: { cellWidth: fixedColumnsWidth.department, halign: "left" },
-      2: { cellWidth: fixedColumnsWidth.jobRole, halign: "left", overflow: "ellipsize" },
+      1: { cellWidth: fixedColumnsWidth.department, halign: "left", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
+      2: { cellWidth: fixedColumnsWidth.jobRole, halign: "left", overflow: "linebreak", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
       3: { cellWidth: fixedColumnsWidth.admissionRegistration, halign: "center" },
       ...Object.fromEntries(
-        pdfDynamicColumns.map((_, index) => [index + 4, { cellWidth: numericColumnWidth, minCellWidth: 5.9, halign: "right" }]),
+        pdfDynamicColumns.map((_, index) => [index + 4, { cellWidth: numericColumnWidth, minCellWidth: 5.9, halign: "center" }]),
       ),
     },
     didParseCell: (hookData) => {
@@ -288,14 +365,13 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
         hookData.cell.styles.lineWidth = { top: 0.25, right: 0.1, bottom: 0.1, left: 0.1 };
       }
 
-      if (hookData.section === "body" && hookData.column.index >= 4) {
-        hookData.cell.styles.halign = "right";
-      }
-      if (hookData.section === "body" && hookData.column.index <= 2) {
-        hookData.cell.styles.halign = "left";
-      }
-      if (hookData.section === "body" && hookData.column.index === 3) {
-        hookData.cell.styles.halign = "center";
+      if (hookData.section === "body") {
+        // Comentário: valores monetários e TOTAL ficam centralizados e em negrito no PDF; identificação textual permanece à esquerda.
+        const bodyColumnStyle = getPayrollPdfBodyColumnStyle(hookData.column.index);
+        hookData.cell.styles.halign = bodyColumnStyle.halign;
+        if (bodyColumnStyle.fontStyle) {
+          hookData.cell.styles.fontStyle = bodyColumnStyle.fontStyle;
+        }
       }
     },
     didDrawPage: () => {
