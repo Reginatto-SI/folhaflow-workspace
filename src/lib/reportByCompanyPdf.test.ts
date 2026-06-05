@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPayrollPdfDynamicColumns,
+  formatJobRoleForPrint,
   formatPdfCurrencyBlankWhenZero,
   isHighlightedPayrollPdfColumn,
 } from "@/lib/reportByCompanyPdf";
@@ -22,73 +23,120 @@ const datasetWithColumns = (dynamicColumns: ReportDynamicColumn[]): ReportByComp
   competenceLabel: "ABRIL DE 26",
   month: 4,
   year: 2026,
-  fixedColumns: [],
+  fixedColumns: [
+    { key: "name", label: "Nome" },
+    { key: "department", label: "Setor" },
+    { key: "jobRole", label: "Função" },
+    { key: "admissionRegistration", label: "Admissão / Registro" },
+  ],
   dynamicColumns,
   rows: [],
   totalsByRubricId: {},
 });
 
+const officialColumns = [
+  column({ rubricId: "liquido", rubricCode: "salario_liquido", rubricName: "Salário Líquido", order: 18 }),
+  column({ rubricId: "ctps", rubricCode: "salario_ctps", rubricName: "Salário CTPS", rubricClassification: "salario_ctps", order: 99 }),
+  column({ rubricId: "real", rubricCode: "salario_real", rubricName: "Salário Real", order: 17, isCanonicalSalarioReal: true }),
+  column({ rubricId: "vales", rubricCode: "VALES", rubricName: "Vales / Descontos", rubricType: "desconto", rubricClassification: "vales", order: 14 }),
+  column({ rubricId: "salario_g", rubricCode: "SALARIO_G", rubricName: "Salário G", rubricClassification: "salario_g", order: 6 }),
+  column({ rubricId: "compra", rubricCode: "COMPRA_FERIAS", rubricName: "Compra de Férias", rubricClassification: "outros_rendimentos", order: 12 }),
+  column({ rubricId: "outros", rubricCode: "OUTROS_RENDIMENTOS", rubricName: "(+) Outros Rendim.", rubricClassification: "outros_rendimentos", order: 7 }),
+  column({ rubricId: "fiscal", rubricCode: "SALARIO_FISCAL", rubricName: "Salário Fiscal", order: 16 }),
+  column({ rubricId: "horas", rubricCode: "HORAS_EXTRAS", rubricName: "(+) Horas Extras", rubricClassification: "horas_extras", order: 8 }),
+  column({ rubricId: "g2", rubricCode: "g2_complemento", rubricName: "Salário G2 complem.", order: 17 }),
+  column({ rubricId: "ferias", rubricCode: "FERIAS_TERCO", rubricName: "(+) 1/3 de Férias", rubricClassification: "ferias_terco", order: 9 }),
+  column({ rubricId: "faltas", rubricCode: "FALTAS", rubricName: "Faltas / Desconto", rubricType: "desconto", rubricClassification: "faltas", order: 15 }),
+  column({ rubricId: "premio", rubricCode: "PREMIO_DESEMP", rubricName: "Premio.Desemp.", rubricClassification: "outros_rendimentos", order: 10 }),
+  column({ rubricId: "inss", rubricCode: "INSS", rubricName: "INSS", rubricType: "desconto", rubricClassification: "inss", order: 13 }),
+  column({ rubricId: "emprestimos", rubricCode: "EMPREST_CONSIG", rubricName: "Emprést. Consig.", rubricType: "desconto", rubricClassification: "emprestimos", order: 11 }),
+  column({ rubricId: "desconhecida", rubricCode: "INSALUBRIDADE", rubricName: "Insalubridade", rubricClassification: "insalubridade", order: 5 }),
+];
+
 describe("reportByCompanyPdf", () => {
-  it("substitui Salário Real por Salário CTPS quando ambos existem", () => {
-    const columns = [
-      column({ rubricId: "ctps", rubricName: "Salário CTPS", rubricClassification: "salario_ctps", order: 1 }),
-      column({ rubricId: "outros", rubricName: "(+) Outros Rendim.", order: 2 }),
-      column({ rubricId: "real", rubricName: "Salário Real", order: 3, isCanonicalSalarioReal: true }),
-      column({ rubricId: "liquido", rubricName: "Salário Líquido", order: 4 }),
-    ];
+  it("monta as colunas dinâmicas na ordem oficial completa e remove Salário Real", () => {
+    const pdfColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(officialColumns));
 
-    const pdfColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(columns));
-
-    expect(pdfColumns.map((item) => item.rubricId)).toEqual(["outros", "ctps", "liquido"]);
-    expect(pdfColumns.some((item) => item.isCanonicalSalarioReal)).toBe(false);
-    expect(pdfColumns.find((item) => item.rubricId === "ctps")?.isSubstitutingSalarioReal).toBe(true);
+    expect(pdfColumns.map((item) => item.rubricId)).toEqual([
+      "ctps",
+      "salario_g",
+      "outros",
+      "horas",
+      "ferias",
+      "premio",
+      "emprestimos",
+      "compra",
+      "inss",
+      "vales",
+      "faltas",
+      "fiscal",
+      "g2",
+      "liquido",
+    ]);
+    expect(pdfColumns.some((item) => item.rubricId === "real" || item.isCanonicalSalarioReal)).toBe(false);
+    expect(pdfColumns[0].rubricId).toBe("ctps");
   });
 
-  it("mantém Salário CTPS na posição original quando Salário Real não existe", () => {
+  it("omite rubricas oficiais inexistentes sem inventar colunas e preserva a ordem relativa", () => {
+    const partialColumns = officialColumns.filter((item) => !["salario_g", "premio", "compra", "fiscal", "desconhecida"].includes(item.rubricId));
+
+    const pdfColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(partialColumns));
+
+    expect(pdfColumns.map((item) => item.rubricId)).toEqual([
+      "ctps",
+      "outros",
+      "horas",
+      "ferias",
+      "emprestimos",
+      "inss",
+      "vales",
+      "faltas",
+      "g2",
+      "liquido",
+    ]);
+    expect(pdfColumns.some((item) => item.rubricId === "real")).toBe(false);
+  });
+
+  it("não move Salário CTPS para a posição antiga de Salário Real", () => {
     const columns = [
-      column({ rubricId: "ctps", rubricName: "Salário CTPS", rubricClassification: "salario_ctps", order: 1 }),
-      column({ rubricId: "outros", rubricName: "(+) Outros Rendim.", order: 2 }),
-      column({ rubricId: "liquido", rubricName: "Salário Líquido", order: 3 }),
+      column({ rubricId: "outros", rubricCode: "OUTROS_RENDIMENTOS", rubricName: "(+) Outros Rendim.", rubricClassification: "outros_rendimentos", order: 1 }),
+      column({ rubricId: "real", rubricCode: "salario_real", rubricName: "Salário Real", order: 2, isCanonicalSalarioReal: true }),
+      column({ rubricId: "ctps", rubricCode: "salario_ctps", rubricName: "Salário CTPS", rubricClassification: "salario_ctps", order: 3 }),
+      column({ rubricId: "liquido", rubricCode: "salario_liquido", rubricName: "Salário Líquido", order: 4 }),
     ];
 
     const pdfColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(columns));
 
     expect(pdfColumns.map((item) => item.rubricId)).toEqual(["ctps", "outros", "liquido"]);
-    expect(pdfColumns.find((item) => item.rubricId === "ctps")?.isSubstitutingSalarioReal).toBeUndefined();
   });
 
-  it("remove Salário Real sem inventar substituta quando CTPS não existe", () => {
-    const columns = [
-      column({ rubricId: "outros", rubricName: "(+) Outros Rendim.", order: 1 }),
-      column({ rubricId: "real", rubricName: "Salário Real", order: 2, isCanonicalSalarioReal: true }),
-      column({ rubricId: "liquido", rubricName: "Salário Líquido", order: 3 }),
-    ];
+  it("destaca somente as colunas finais oficiais de resultado", () => {
+    const pdfColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(officialColumns));
+    const highlightedIds = pdfColumns.filter(isHighlightedPayrollPdfColumn).map((item) => item.rubricId);
 
-    const pdfColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(columns));
-
-    expect(pdfColumns.map((item) => item.rubricId)).toEqual(["outros", "liquido"]);
-    expect(pdfColumns.some((item) => item.isCanonicalSalarioReal)).toBe(false);
+    expect(highlightedIds).toEqual(["fiscal", "g2", "liquido"]);
+    expect(isHighlightedPayrollPdfColumn(pdfColumns[0])).toBe(false);
   });
 
-  it("mantém as demais colunas quando não existem Salário Real nem Salário CTPS", () => {
-    const columns = [
-      column({ rubricId: "outros", rubricName: "(+) Outros Rendim.", order: 1 }),
-      column({ rubricId: "liquido", rubricName: "Salário Líquido", order: 2 }),
-    ];
 
-    const pdfColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(columns));
-
-    expect(pdfColumns.map((item) => item.rubricId)).toEqual(["outros", "liquido"]);
+  it("mantém cargo curto praticamente igual na impressão", () => {
+    expect(formatJobRoleForPrint("Analista")).toBe("Analista");
+    expect(formatJobRoleForPrint("  Operador   ")).toBe("Operador");
   });
 
-  it("trata CTPS substituta como coluna destacada no PDF", () => {
-    const [ctpsReplacement] = buildPayrollPdfDynamicColumns(datasetWithColumns([
-      column({ rubricId: "ctps", rubricName: "Salário CTPS", rubricClassification: "salario_ctps", order: 1 }),
-      column({ rubricId: "real", rubricName: "Salário Real", order: 2, isCanonicalSalarioReal: true }),
-    ]));
+  it("abrevia ou trunca cargo longo somente para impressão", () => {
+    expect(formatJobRoleForPrint("Auxiliar De Produção O")).toBe("Aux. Produção");
+    expect(formatJobRoleForPrint("Aj De Operador De Sala De Máquinas")).toBe("Aj. Operador Máq.");
+    expect(formatJobRoleForPrint("Coordenador Geral De Processos Operacionais Internos")).toBe("Coordenador Geral Pro…");
+  });
 
-    expect(ctpsReplacement.rubricId).toBe("ctps");
-    expect(isHighlightedPayrollPdfColumn(ctpsReplacement)).toBe(true);
+  it("formatação de cargo não altera colunas oficiais nem valores monetários", () => {
+    const beforeColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(officialColumns)).map((item) => item.rubricId);
+    const money = formatPdfCurrencyBlankWhenZero(1250);
+
+    expect(formatJobRoleForPrint("Aj De Operador De Sala De Máquinas")).toBe("Aj. Operador Máq.");
+    expect(buildPayrollPdfDynamicColumns(datasetWithColumns(officialColumns)).map((item) => item.rubricId)).toEqual(beforeColumns);
+    expect(money).toBe("R$ 1.250,00");
   });
 
   it("deixa valores monetários zerados em branco", () => {
