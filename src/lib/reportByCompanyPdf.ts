@@ -166,7 +166,8 @@ export const buildPayrollPdfDynamicColumns = (dataset: ReportByCompanyDataset): 
 };
 
 
-const JOB_ROLE_MAX_PRINT_LENGTH = 22;
+const JOB_ROLE_PRINT_LINE_LENGTH = 15;
+const JOB_ROLE_MAX_PRINT_LINES = 2;
 const JOB_ROLE_WORD_ALIASES: Record<string, string> = {
   auxiliar: "Aux.",
   ajudante: "Aj.",
@@ -181,6 +182,55 @@ const JOB_ROLE_WORD_ALIASES: Record<string, string> = {
   servicos: "Serv.",
 };
 const JOB_ROLE_PRINT_STOPWORDS = new Set(["de", "da", "do", "das", "dos", "e", "sala"]);
+
+const ellipsizePrintLine = (value: string, maxLength = JOB_ROLE_PRINT_LINE_LENGTH): string => {
+  const text = value.trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+};
+
+const appendPrintEllipsis = (value: string, maxLength = JOB_ROLE_PRINT_LINE_LENGTH): string => {
+  const text = value.replace(/…$/, "").trimEnd();
+  return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+};
+
+const fitJobRoleWordsInTwoPrintLines = (words: string[]): string[] => {
+  const lines: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+    if (nextLine.length <= JOB_ROLE_PRINT_LINE_LENGTH) {
+      currentLine = nextLine;
+      continue;
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    } else {
+      lines.push(ellipsizePrintLine(word));
+    }
+
+    if (lines.length === JOB_ROLE_MAX_PRINT_LINES) {
+      break;
+    }
+
+    currentLine = currentLine ? word : "";
+  }
+
+  if (lines.length < JOB_ROLE_MAX_PRINT_LINES && currentLine) {
+    lines.push(currentLine);
+  }
+
+  const consumedText = lines.join(" ").replace(/…$/, "");
+  const originalText = words.join(" ");
+  if (originalText.length > consumedText.length && lines.length > 0) {
+    const lastLineIndex = lines.length - 1;
+    lines[lastLineIndex] = appendPrintEllipsis(lines[lastLineIndex]);
+  }
+
+  return lines.slice(0, JOB_ROLE_MAX_PRINT_LINES).map((line) => ellipsizePrintLine(line));
+};
 
 export const formatJobRoleForPrint = (value: string): string => {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
@@ -197,10 +247,10 @@ export const formatJobRoleForPrint = (value: string): string => {
   }, []);
 
   const compactText = (words.length > 0 ? words.join(" ") : text).replace(/\s+/g, " ").trim();
-  if (compactText.length <= JOB_ROLE_MAX_PRINT_LENGTH) return compactText;
+  if (compactText.length <= JOB_ROLE_PRINT_LINE_LENGTH) return compactText;
 
-  // Comentário: truncamento controlado apenas na saída do PDF para evitar que Função/Cargo aumente a altura da linha inteira.
-  return `${compactText.slice(0, JOB_ROLE_MAX_PRINT_LENGTH - 1).trimEnd()}…`;
+  // Comentário: limita Função/Cargo a até duas linhas no PDF; se ainda exceder, aplica reticências só no final visual.
+  return fitJobRoleWordsInTwoPrintLines(compactText.split(" ")).join("\n");
 };
 
 export type PayrollPdfBodyColumnStyle = {
@@ -281,8 +331,8 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
     },
     columnStyles: {
       0: { cellWidth: fixedColumnsWidth.name, halign: "left", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
-      1: { cellWidth: fixedColumnsWidth.department, halign: "left" },
-      2: { cellWidth: fixedColumnsWidth.jobRole, halign: "left", overflow: "ellipsize" },
+      1: { cellWidth: fixedColumnsWidth.department, halign: "left", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
+      2: { cellWidth: fixedColumnsWidth.jobRole, halign: "left", overflow: "linebreak", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
       3: { cellWidth: fixedColumnsWidth.admissionRegistration, halign: "center" },
       ...Object.fromEntries(
         pdfDynamicColumns.map((_, index) => [index + 4, { cellWidth: numericColumnWidth, minCellWidth: 5.9, halign: "center" }]),

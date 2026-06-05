@@ -158,3 +158,12 @@ Rubricas inexistentes nessa sequência são omitidas com segurança, sem inventa
 - **Segurança do matcher de Compra de Férias:** a identificação continua aceitando `compra ferias`, `compra de ferias`, códigos como `COMPRA_FERIAS` e nomes como `(+) Compra de Férias`, mas agora permanece restrita a rubricas sem classificação técnica ou com `rubricClassification = outros_rendimentos`, evitando correspondência ampla demais.
 - **Escopo visual:** a alteração é apenas de apresentação no PDF compartilhado por `/central-de-folha` e `/relatorios/por-empresa`.
 - **Sem impacto operacional:** não houve alteração em cálculo da folha, `calculatePayrollFromEntry`, banco de dados, persistência, recibos, Excel/CSV, telas fora do escopo ou rubricas canônicas.
+
+## Refinamento visual — Função/Cargo em até 2 linhas e padding textual
+
+- **Causa do problema visual:** o PDF estava usando `overflow: "ellipsize"` na coluna `Função/Cargo` junto com um limite curto de caracteres, fazendo cargos médios serem cortados cedo demais na primeira linha, mesmo quando havia espaço visual para uma segunda linha.
+- **Ajuste aplicado em Função/Cargo:** a formatação exclusiva de impressão passou a distribuir o cargo compactado em até duas linhas, preservando abreviações já existentes e aplicando reticências apenas quando o texto ainda ultrapassa o limite visual da segunda linha.
+- **Limite controlado:** `Função/Cargo` continua sem quebra ilimitada; o helper entrega no máximo duas linhas e o `autoTable` usa `overflow: "linebreak"` somente para respeitar essa quebra controlada.
+- **Padding textual:** as colunas `Setor` e `Função/Cargo` receberam padding interno à esquerda para ficarem visualmente alinhadas com o respiro já existente na coluna `Nome`.
+- **Escopo visual:** a alteração é apenas de apresentação no PDF compartilhado por `/central-de-folha` e `/relatorios/por-empresa`.
+- **Sem impacto operacional:** não houve alteração em cálculo da folha, `calculatePayrollFromEntry`, banco de dados, persistência, recibos, Excel/CSV, telas fora do escopo ou rubricas canônicas.

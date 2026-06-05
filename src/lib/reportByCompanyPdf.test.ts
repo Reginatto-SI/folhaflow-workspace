@@ -158,17 +158,26 @@ describe("reportByCompanyPdf", () => {
     expect(formatJobRoleForPrint("  Operador   ")).toBe("Operador");
   });
 
-  it("abrevia ou trunca cargo longo somente para impressão", () => {
+  it("formata cargo médio em até duas linhas somente para impressão", () => {
     expect(formatJobRoleForPrint("Auxiliar De Produção O")).toBe("Aux. Produção");
-    expect(formatJobRoleForPrint("Aj De Operador De Sala De Máquinas")).toBe("Aj. Operador Máq.");
-    expect(formatJobRoleForPrint("Coordenador Geral De Processos Operacionais Internos")).toBe("Coordenador Geral Pro…");
+    expect(formatJobRoleForPrint("Secretária Executiva")).toBe("Secretária\nExecutiva");
+    expect(formatJobRoleForPrint("Auxiliar Departamento")).toBe("Aux.\nDepartamento");
+    expect(formatJobRoleForPrint("Aj De Operador De Sala De Máquinas")).toBe("Aj. Operador\nMáq.");
+  });
+
+  it("limita cargo longo a duas linhas com reticências somente para impressão", () => {
+    const formatted = formatJobRoleForPrint("Coordenador Geral De Processos Operacionais Internos");
+
+    expect(formatted.split("\n")).toHaveLength(2);
+    expect(formatted).toBe("Coordenador\nGeral Processo…");
+    expect(formatted.endsWith("…")).toBe(true);
   });
 
   it("formatação de cargo não altera colunas oficiais nem valores monetários", () => {
     const beforeColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(officialColumns)).map((item) => item.rubricId);
     const money = formatPdfCurrencyBlankWhenZero(1250);
 
-    expect(formatJobRoleForPrint("Aj De Operador De Sala De Máquinas")).toBe("Aj. Operador Máq.");
+    expect(formatJobRoleForPrint("Aj De Operador De Sala De Máquinas")).toBe("Aj. Operador\nMáq.");
     expect(buildPayrollPdfDynamicColumns(datasetWithColumns(officialColumns)).map((item) => item.rubricId)).toEqual(beforeColumns);
     expect(money).toBe("R$ 1.250,00");
   });
