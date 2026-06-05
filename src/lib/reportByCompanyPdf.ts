@@ -47,7 +47,8 @@ const PDF_LABEL_ALIASES: Record<string, string> = {
   "(-)inss": "(-)\nINSS", "(-) emprést. consig.": "(-)\nEmpr.\nConsig.", "(-) emprest. consig.": "(-)\nEmpr.\nConsig.",
   "(-) adiant geren.": "(-)\nAdiant.\nGeren.", "(-) vales/descontos": "(-)\nVales/\nDesc.", "(-) faltas/descontos": "(-)\nFaltas/\nDesc.",
   "salário real": "Salário\nReal", "salario real": "Salário\nReal", "salário g2 complem.": "Salário G2\nComplem.", "salario g2 complem.": "Salário G2\nComplem.",
-  "salário líquido": "Salário\nLíquido", "salario liquido": "Salário\nLíquido",
+  "salário líquido": "Salário\nLíquido", "salario liquido": "Salário\nLíquido", "(+) compra de férias": "(+)\nCompra de\nFérias",
+  "(+) compra de ferias": "(+)\nCompra de\nFérias", "compra de férias": "(+)\nCompra de\nFérias", "compra de ferias": "(+)\nCompra de\nFérias",
 };
 
 const normalizePdfLabelKey = (value: string): string => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s*\/\s*/g, "/").replace(/\(\+\)\s+/g, "(+) ").replace(/\(-\)\s+/g, "(-)").replace(/\s+/g, " ").trim();
@@ -87,6 +88,18 @@ const hasAnyToken = (column: ReportDynamicColumn, expectedTokens: string[]) => {
   return normalizedExpected.some((expected) => tokens.some((token) => token === expected || token.includes(expected)));
 };
 
+const hasExactColumnToken = (column: ReportDynamicColumn, expectedTokens: string[]) => {
+  const tokens = columnTokens(column);
+  const normalizedExpected = expectedTokens.map(normalizePdfColumnToken);
+  return normalizedExpected.some((expected) => tokens.some((token) => token === expected || token === `(+) ${expected}`));
+};
+
+const hasCompraFeriasToken = (column: ReportDynamicColumn) =>
+  hasExactColumnToken(column, ["compra ferias", "compra de ferias"]);
+
+const hasCompatibleCompraFeriasClassification = (column: ReportDynamicColumn) =>
+  column.rubricClassification === null || hasClassification(column, "outros_rendimentos");
+
 const OFFICIAL_PAYROLL_PDF_COLUMN_RULES: OfficialPayrollPdfColumnRule[] = [
   { key: "salario_ctps", matches: (column) => hasClassification(column, "salario_ctps") },
   { key: "salario_g", matches: (column) => hasClassification(column, "salario_g") },
@@ -103,7 +116,7 @@ const OFFICIAL_PAYROLL_PDF_COLUMN_RULES: OfficialPayrollPdfColumnRule[] = [
   { key: "emprestimos", matches: (column) => hasClassification(column, "emprestimos") },
   {
     key: "compra_ferias",
-    matches: (column) => hasClassification(column, "outros_rendimentos") && hasAnyToken(column, ["compra ferias"]),
+    matches: (column) => hasCompatibleCompraFeriasClassification(column) && hasCompraFeriasToken(column),
   },
   { key: "inss", matches: (column) => hasClassification(column, "inss") },
   { key: "vales", matches: (column) => hasClassification(column, "vales") },
@@ -190,6 +203,20 @@ export const formatJobRoleForPrint = (value: string): string => {
   return `${compactText.slice(0, JOB_ROLE_MAX_PRINT_LENGTH - 1).trimEnd()}…`;
 };
 
+export type PayrollPdfBodyColumnStyle = {
+  halign: "left" | "center";
+  fontStyle?: "bold";
+};
+
+export const getPayrollPdfBodyColumnStyle = (columnIndex: number): PayrollPdfBodyColumnStyle => {
+  if (columnIndex <= 2) return { halign: "left" };
+  if (columnIndex === 3) return { halign: "center" };
+  return { halign: "center", fontStyle: "bold" };
+};
+
+export const getPayrollPdfBodyColumnHalign = (columnIndex: number): "left" | "center" =>
+  getPayrollPdfBodyColumnStyle(columnIndex).halign;
+
 const normalizeFileToken = (value: string): string => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 const buildReportFileName = (companyName: string, month: number, year: number): string => {
   const competence = new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
@@ -258,7 +285,7 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
       2: { cellWidth: fixedColumnsWidth.jobRole, halign: "left", overflow: "ellipsize" },
       3: { cellWidth: fixedColumnsWidth.admissionRegistration, halign: "center" },
       ...Object.fromEntries(
-        pdfDynamicColumns.map((_, index) => [index + 4, { cellWidth: numericColumnWidth, minCellWidth: 5.9, halign: "right" }]),
+        pdfDynamicColumns.map((_, index) => [index + 4, { cellWidth: numericColumnWidth, minCellWidth: 5.9, halign: "center" }]),
       ),
     },
     didParseCell: (hookData) => {
@@ -288,14 +315,13 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
         hookData.cell.styles.lineWidth = { top: 0.25, right: 0.1, bottom: 0.1, left: 0.1 };
       }
 
-      if (hookData.section === "body" && hookData.column.index >= 4) {
-        hookData.cell.styles.halign = "right";
-      }
-      if (hookData.section === "body" && hookData.column.index <= 2) {
-        hookData.cell.styles.halign = "left";
-      }
-      if (hookData.section === "body" && hookData.column.index === 3) {
-        hookData.cell.styles.halign = "center";
+      if (hookData.section === "body") {
+        // Comentário: valores monetários e TOTAL ficam centralizados e em negrito no PDF; identificação textual permanece à esquerda.
+        const bodyColumnStyle = getPayrollPdfBodyColumnStyle(hookData.column.index);
+        hookData.cell.styles.halign = bodyColumnStyle.halign;
+        if (bodyColumnStyle.fontStyle) {
+          hookData.cell.styles.fontStyle = bodyColumnStyle.fontStyle;
+        }
       }
     },
     didDrawPage: () => {
