@@ -140,3 +140,21 @@ Rubricas inexistentes nessa sequência são omitidas com segurança, sem inventa
 - **Controle visual no autoTable:** a coluna `Função/Cargo` passou a usar `overflow: "ellipsize"`, mantendo a largura atual e evitando que textos longos expandam indefinidamente a altura da linha.
 - **Escopo preservado:** a alteração é exclusivamente visual no PDF. Não altera cadastro de cargos, cadastro de funcionários, cálculo da folha, valores monetários, recibos, Excel/CSV, banco de dados ou rubricas canônicas.
 - **Compatibilidade mantida:** a ordem oficial das colunas continua igual, `Salário Real` segue removido e valores monetários zerados continuam em branco.
+
+## Refinamento visual — Compra de Férias e centralização dos valores
+
+- **Diagnóstico da ausência visual:** a rubrica `(+) Compra de Férias` já existia na lista oficial do gerador de PDF, porém o matcher aceitava apenas o token normalizado `compra ferias`. Isso cobria códigos técnicos como `COMPRA_FERIAS`, mas podia falhar quando a rubrica viesse com código legado/numérico e nome visual contendo a preposição, como `(+) Compra de Férias`.
+- **Ajuste aplicado no matcher:** a identificação de Compra de Férias passou a aceitar também o token normalizado `compra de ferias`, usando código/nome normalizados já presentes em `ReportDynamicColumn`. O ajuste continua sem criar rubrica, sem inventar valor e sem mexer no cadastro; ele apenas reconhece a rubrica quando ela já está no dataset do relatório.
+- **Posição confirmada:** quando a rubrica existe no dataset, `(+) Compra de Férias` é inserida pela ordem oficial exatamente depois de `(-) Emprést. Consig.` e antes de `(-) INSS`. Quando não existe, a coluna é omitida sem erro.
+- **Ajuste visual de alinhamento:** os valores das colunas monetárias/dinâmicas passaram de alinhamento à direita para alinhamento centralizado no PDF, inclusive na linha `TOTAL`. A coluna `Admissão/Registro` permanece centralizada, enquanto `Nome`, `Setor` e `Função/Cargo` permanecem alinhadas à esquerda.
+- **Escopo preservado:** a alteração foi apenas visual/de montagem do PDF compartilhado por `/central-de-folha` e `/relatorios/por-empresa`.
+- **Sem impacto em regras de negócio:** não houve alteração em cálculo da folha, `calculatePayrollFromEntry`, banco de dados, persistência, recibos, Excel/CSV, telas fora do escopo ou rubricas canônicas.
+- **Compatibilidade mantida:** `Salário Real` continua removido, `Salário CTPS` continua logo após as colunas fixas, valores monetários zerados continuam em branco e `Função/Cargo` continua limitada somente na impressão para preservar altura visual uniforme das linhas.
+
+## Refinamento visual — valores monetários em negrito
+
+- **Ajuste aplicado:** o corpo do PDF passou a usar um helper único de estilo por índice de coluna. `Nome`, `Setor` e `Função/Cargo` continuam alinhados à esquerda; `Admissão/Registro` continua centralizada; e todas as colunas monetárias/dinâmicas, a partir de `Salário CTPS`, ficam centralizadas e em negrito.
+- **Linha TOTAL preservada:** o destaque visual existente da linha `TOTAL` foi mantido, incluindo fundo escuro, texto claro e negrito. Os valores monetários do `TOTAL` continuam centralizados e em negrito.
+- **Segurança do matcher de Compra de Férias:** a identificação continua aceitando `compra ferias`, `compra de ferias`, códigos como `COMPRA_FERIAS` e nomes como `(+) Compra de Férias`, mas agora permanece restrita a rubricas sem classificação técnica ou com `rubricClassification = outros_rendimentos`, evitando correspondência ampla demais.
+- **Escopo visual:** a alteração é apenas de apresentação no PDF compartilhado por `/central-de-folha` e `/relatorios/por-empresa`.
+- **Sem impacto operacional:** não houve alteração em cálculo da folha, `calculatePayrollFromEntry`, banco de dados, persistência, recibos, Excel/CSV, telas fora do escopo ou rubricas canônicas.
