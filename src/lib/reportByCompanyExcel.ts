@@ -13,36 +13,63 @@ const safeCsvCell = (value: unknown): string => {
   return `"${safeText.replace(/"/g, '""')}"`;
 };
 
-const buildReportFileName = (companyName: string, month: number, year: number, extension: "csv" | "pdf") => {
-  const normalizedCompany = companyName
+const buildReportFileName = (dataset: ReportByCompanyDataset, extension: "csv" | "pdf") => {
+  if (dataset.isConsolidated) return `relatorio-todas-empresas-${String(dataset.month).padStart(2, "0")}-${dataset.year}.${extension}`;
+
+  const normalizedCompany = dataset.companyName
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
-  return `relatorio-empresa-${normalizedCompany || "empresa"}-${String(month).padStart(2, "0")}-${year}.${extension}`;
+  return `relatorio-empresa-${normalizedCompany || "empresa"}-${String(dataset.month).padStart(2, "0")}-${dataset.year}.${extension}`;
 };
 
 export const exportReportByCompanyExcel = (dataset: ReportByCompanyDataset) => {
-  const header = [...dataset.fixedColumns.map((column) => column.label), ...dataset.dynamicColumns.map((column) => column.rubricName)];
-  const lines = [
-    [dataset.title],
-    [],
-    header,
-    ...dataset.rows.map((row) => [
+  const header = [
+    ...(dataset.isConsolidated ? ["Empresa"] : []),
+    ...dataset.fixedColumns.map((column) => column.label),
+    ...dataset.dynamicColumns.map((column) => column.rubricName),
+  ];
+  const consolidatedRows = dataset.companySections?.flatMap((companyDataset) =>
+    companyDataset.rows.map((row) => [
+      companyDataset.companyName,
       row.name,
       row.department,
       row.jobRole,
       row.admissionRegistration,
       ...dataset.dynamicColumns.map((column) => row.rubricValues[column.rubricId] ?? 0),
-    ]),
-    [
-      "TOTAL",
-      "",
-      "",
-      "",
-      ...dataset.dynamicColumns.map((column) => dataset.totalsByRubricId[column.rubricId] ?? 0),
-    ],
+    ])
+  );
+  const lines = [
+    [dataset.title],
+    [],
+    header,
+    ...(dataset.isConsolidated && consolidatedRows
+      ? consolidatedRows
+      : dataset.rows.map((row) => [
+          row.name,
+          row.department,
+          row.jobRole,
+          row.admissionRegistration,
+          ...dataset.dynamicColumns.map((column) => row.rubricValues[column.rubricId] ?? 0),
+        ])),
+    dataset.isConsolidated
+      ? [
+          "TOTAL GERAL",
+          "",
+          "",
+          "",
+          "",
+          ...dataset.dynamicColumns.map((column) => dataset.totalsByRubricId[column.rubricId] ?? 0),
+        ]
+      : [
+          "TOTAL",
+          "",
+          "",
+          "",
+          ...dataset.dynamicColumns.map((column) => dataset.totalsByRubricId[column.rubricId] ?? 0),
+        ],
   ];
 
   const csv = lines.map((line) => line.map((cell) => safeCsvCell(cell)).join(";")).join("\n");
@@ -52,7 +79,7 @@ export const exportReportByCompanyExcel = (dataset: ReportByCompanyDataset) => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = buildReportFileName(dataset.companyName, dataset.month, dataset.year, "csv");
+  a.download = buildReportFileName(dataset, "csv");
   a.click();
   URL.revokeObjectURL(url);
   toast.success("Exportação CSV concluída.");

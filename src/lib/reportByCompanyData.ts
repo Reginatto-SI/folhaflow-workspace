@@ -32,6 +32,8 @@ export type ReportByCompanyDataset = {
   dynamicColumns: ReportDynamicColumn[];
   rows: ReportByCompanyRow[];
   totalsByRubricId: Record<string, number>;
+  isConsolidated?: boolean;
+  companySections?: ReportByCompanyDataset[];
 };
 
 const monthLabel = (month: number, year: number) =>
@@ -108,6 +110,40 @@ const readRubricValueFromEntry = (
 
   return 0;
 };
+
+export function buildConsolidatedReportByCompanyData(companyDatasets: ReportByCompanyDataset[]): ReportByCompanyDataset | null {
+  const orderedCompanyDatasets = [...companyDatasets]
+    .filter((dataset) => dataset.rows.length > 0)
+    .sort((a, b) => employeeNameCollator.compare(a.companyName, b.companyName));
+
+  if (orderedCompanyDatasets.length === 0) return null;
+
+  const dynamicColumnsById = new Map<string, ReportDynamicColumn>();
+  orderedCompanyDatasets.forEach((dataset) => {
+    dataset.dynamicColumns.forEach((column) => {
+      if (!dynamicColumnsById.has(column.rubricId)) dynamicColumnsById.set(column.rubricId, column);
+    });
+  });
+
+  // Comentário: consolidado só une colunas existentes nos relatórios por empresa e mantém a ordem operacional usada no individual.
+  const dynamicColumns = [...dynamicColumnsById.values()].sort((a, b) => (a.order - b.order) || employeeNameCollator.compare(a.rubricName, b.rubricName));
+  const [firstCompanyDataset] = orderedCompanyDatasets;
+  const totalsByRubricId = dynamicColumns.reduce<Record<string, number>>((acc, column) => {
+    acc[column.rubricId] = orderedCompanyDatasets.reduce((sum, dataset) => sum + toNumber(dataset.totalsByRubricId[column.rubricId]), 0);
+    return acc;
+  }, {});
+
+  return {
+    ...firstCompanyDataset,
+    title: "Relatório por Empresa - Todas as Empresas",
+    companyName: "Todas as Empresas",
+    dynamicColumns,
+    rows: orderedCompanyDatasets.flatMap((dataset) => dataset.rows),
+    totalsByRubricId,
+    isConsolidated: true,
+    companySections: orderedCompanyDatasets,
+  };
+}
 
 export function buildReportByCompanyData(params: {
   company: Company;

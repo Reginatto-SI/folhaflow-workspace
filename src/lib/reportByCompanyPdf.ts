@@ -268,9 +268,11 @@ export const getPayrollPdfBodyColumnHalign = (columnIndex: number): "left" | "ce
   getPayrollPdfBodyColumnStyle(columnIndex).halign;
 
 const normalizeFileToken = (value: string): string => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-const buildReportFileName = (companyName: string, month: number, year: number): string => {
-  const competence = new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  return `${normalizeFileToken(companyName || "empresa")}-${normalizeFileToken(competence || `${month}-${year}`)}.pdf`;
+const buildReportFileName = (dataset: ReportByCompanyDataset): string => {
+  if (dataset.isConsolidated) return `relatorio-todas-empresas-${String(dataset.month).padStart(2, "0")}-${dataset.year}.pdf`;
+
+  const competence = new Date(dataset.year, dataset.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  return `${normalizeFileToken(dataset.companyName || "empresa")}-${normalizeFileToken(competence || `${dataset.month}-${dataset.year}`)}.pdf`;
 };
 
 export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
@@ -296,6 +298,27 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
   const numericColumnWidth = dynamicColumnCount > 0
     ? Math.max(5.9, (pageUsableWidth - reservedFixedWidth) / dynamicColumnCount)
     : 0;
+  const consolidatedBodyRows: string[][] = [];
+  const sectionHeaderRowIndexes = new Set<number>();
+  const totalRowIndexes = new Set<number>();
+  const companySections = dataset.isConsolidated ? dataset.companySections ?? [] : [];
+
+  if (dataset.isConsolidated) {
+    companySections.forEach((companyDataset) => {
+      sectionHeaderRowIndexes.add(consolidatedBodyRows.length);
+      consolidatedBodyRows.push([`${companyDataset.companyName} — ${companyDataset.competenceLabel}`, "", "", "", ...pdfDynamicColumns.map(() => "")]);
+      consolidatedBodyRows.push(...companyDataset.rows.map((row) => [row.name, row.department, formatJobRoleForPrint(row.jobRole), formatAdmissionRegistrationForPrint(row.admissionRegistration), ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(row.rubricValues[column.rubricId]))]));
+      totalRowIndexes.add(consolidatedBodyRows.length);
+      consolidatedBodyRows.push(["TOTAL", "", "", "", ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(companyDataset.totalsByRubricId[column.rubricId]))]);
+    });
+    totalRowIndexes.add(consolidatedBodyRows.length);
+    consolidatedBodyRows.push(["TOTAL GERAL", "", "", "", ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(dataset.totalsByRubricId[column.rubricId]))]);
+  }
+
+  const bodyRows = dataset.isConsolidated ? consolidatedBodyRows : [
+    ...dataset.rows.map((row) => [row.name, row.department, formatJobRoleForPrint(row.jobRole), formatAdmissionRegistrationForPrint(row.admissionRegistration), ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(row.rubricValues[column.rubricId]))]),
+    ["TOTAL", "", "", "", ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(dataset.totalsByRubricId[column.rubricId]))],
+  ];
   const bodyRowsLength = dataset.rows.length;
   const resultColumnIndexes = new Set(pdfDynamicColumns
     .map((column, index) => (isHighlightedPayrollPdfColumn(column) ? index + 4 : null))
@@ -305,10 +328,7 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
     // Comentário: aumenta respiro entre cabeçalho (título/data) e tabela para leitura mais confortável.
     startY: 18,
     head: [[...dataset.fixedColumns.map((column) => formatPdfColumnLabel(column.label)), ...pdfDynamicColumns.map((column) => formatPdfColumnLabel(column.rubricName))]],
-    body: [
-      ...dataset.rows.map((row) => [row.name, row.department, formatJobRoleForPrint(row.jobRole), formatAdmissionRegistrationForPrint(row.admissionRegistration), ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(row.rubricValues[column.rubricId]))]),
-      ["TOTAL", "", "", "", ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(dataset.totalsByRubricId[column.rubricId]))],
-    ],
+    body: bodyRows,
     tableWidth: pageUsableWidth,
     styles: {
       fontSize: 5.2,
@@ -339,7 +359,8 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
       ),
     },
     didParseCell: (hookData) => {
-      const isTotalRow = hookData.section === "body" && hookData.row.index === bodyRowsLength;
+      const isSectionHeaderRow = hookData.section === "body" && sectionHeaderRowIndexes.has(hookData.row.index);
+      const isTotalRow = hookData.section === "body" && (dataset.isConsolidated ? totalRowIndexes.has(hookData.row.index) : hookData.row.index === bodyRowsLength);
 
       const isFixedIdentityColumn = hookData.column.index >= 0 && hookData.column.index <= 3;
       const isResultValueColumn = resultColumnIndexes.has(hookData.column.index);
@@ -353,6 +374,14 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
         // Comentário: colunas destacadas usam fundo mais suave e texto em negrito para equilibrar leitura sem pesar a grade.
         hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
         hookData.cell.styles.fontStyle = "bold";
+      }
+
+      if (isSectionHeaderRow) {
+        // Comentário: no consolidado, cada empresa abre um bloco próprio sem alterar a tabela individual.
+        hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
+        hookData.cell.styles.fontStyle = "bold";
+        hookData.cell.styles.textColor = [15, 23, 42];
+        if (hookData.column.index > 0) hookData.cell.text = [""];
       }
 
       if (isTotalRow) {
@@ -390,5 +419,5 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
     showHead: "everyPage",
   });
 
-  doc.save(buildReportFileName(dataset.companyName, dataset.month, dataset.year));
+  doc.save(buildReportFileName(dataset));
 };
