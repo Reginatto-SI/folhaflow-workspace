@@ -6,6 +6,7 @@
 import React from "react";
 import { PayrollEntry, Employee, Company, Department, JobRole, Rubric } from "@/types/payroll";
 import { buildReceiptData } from "@/lib/receiptData";
+import { noTranslateAttributes, withNoTranslateClass } from "@/lib/noTranslate";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -56,14 +57,16 @@ const Receipt: React.FC<ReceiptProps> = ({ entry, employee, company, department,
   const paymentDateLabel = formatLongPtBrDate(paymentDate);
 
   return (
+    // Comentário: recibo impresso deve permanecer em pt-BR mesmo com tradução automática do navegador ativa.
     <div
-      className="receipt-sheet"
+      className={withNoTranslateClass("receipt-sheet")}
+      {...noTranslateAttributes}
       style={{
         pageBreakAfter: isLast ? "auto" : "always",
         breakAfter: isLast ? "auto" : "page",
       }}
     >
-      <div className="receipt-frame">
+      <div className={withNoTranslateClass("receipt-frame")} {...noTranslateAttributes}>
         {/* Cabeçalho com nome do grupo/empresa */}
         <div className="receipt-header">{(company?.name || "—").toUpperCase()}</div>
 
@@ -75,34 +78,34 @@ const Receipt: React.FC<ReceiptProps> = ({ entry, employee, company, department,
             <tr><td className="rk">SETOR:</td><td className="rv">{department?.name || employee.department || "—"}</td></tr>
             <tr><td className="rk">FUNÇÃO:</td><td className="rv">{jobRole?.name || employee.role || "—"}</td></tr>
             <tr><td className="rk">MÊS:</td><td className="rv">{competencia}</td></tr>
-            <tr><td className="rk">VALOR RECEBIDO:</td><td className="rv">{fmt(data.netSalary)}</td></tr>
-            <tr><td className="rk">Valor por Extenso:</td><td className="rv">{data.valorExtenso}</td></tr>
+            <tr><td className={withNoTranslateClass("rk")} {...noTranslateAttributes}>VALOR RECEBIDO:</td><td className={withNoTranslateClass("rv")} {...noTranslateAttributes}>{fmt(data.netSalary)}</td></tr>
+            <tr><td className={withNoTranslateClass("rk")} {...noTranslateAttributes}>Valor por Extenso:</td><td className={withNoTranslateClass("rv")} {...noTranslateAttributes}>{data.valorExtenso}</td></tr>
             <tr><td className="rk">Observação:</td><td className="rv">{observacao}</td></tr>
           </tbody>
         </table>
 
         {/* Discriminação das verbas */}
-        <table className="receipt-verbas">
+        <table className={withNoTranslateClass("receipt-verbas")} {...noTranslateAttributes}>
           <thead>
-            <tr><th colSpan={2}>DISCRIMINAÇÃO DAS VERBAS</th></tr>
+            <tr><th colSpan={2} className="notranslate" {...noTranslateAttributes}>DISCRIMINAÇÃO DAS VERBAS</th></tr>
           </thead>
           <tbody>
             {data.lines.map((line, idx) => (
               <tr key={idx} className={line.highlight ? "verba-total" : ""}>
-                <td className="vl">{formatReceiptLineLabel(line.prefix, line.label)}</td>
-                <td className="vv">{line.highlight || line.value !== 0 ? fmt(line.value) : ""}</td>
+                <td className={withNoTranslateClass("vl")} {...noTranslateAttributes}>{formatReceiptLineLabel(line.prefix, line.label)}</td>
+                <td className={withNoTranslateClass("vv")} {...noTranslateAttributes}>{line.highlight || line.value !== 0 ? fmt(line.value) : ""}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <p className="receipt-decl">Declaro ter recebido a importância discriminada neste recibo.</p>
+        <p className={withNoTranslateClass("receipt-decl")} {...noTranslateAttributes}>Declaro ter recebido a importância discriminada neste recibo.</p>
 
-        <p className="receipt-local">{location}, {paymentDateLabel}</p>
+        <p className={withNoTranslateClass("receipt-local")} {...noTranslateAttributes}>{location}, {paymentDateLabel}</p>
 
-        <div className="receipt-sign">
+        <div className={withNoTranslateClass("receipt-sign")} {...noTranslateAttributes}>
           <div className="sign-line" />
-          <div className="sign-name">{employee.name}</div>
+          <div className={withNoTranslateClass("sign-name")} {...noTranslateAttributes}>{employee.name}</div>
         </div>
 
         <div className="receipt-footer">www.reginattosistemas.com.br - (65) 99210-2030</div>

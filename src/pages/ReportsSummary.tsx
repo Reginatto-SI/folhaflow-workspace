@@ -11,6 +11,7 @@ import { generateReportSummaryPdf } from "@/lib/reportSummaryPdf";
 import { generateReportSummaryExcel } from "@/lib/reportSummaryExcel";
 import { buildManagerialSummary } from "@/lib/reportSummaryManagerial";
 import { usePersistedFilters } from "@/hooks/usePersistedFilters";
+import { noTranslateAttributes, withNoTranslateClass } from "@/lib/noTranslate";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const PCT = (value: number) => `${(Number.isFinite(value) ? value : 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
@@ -133,7 +134,8 @@ const ReportsSummary: React.FC = () => {
   }, [dataset]);
 
   return (
-    <div className="space-y-4">
+    // Comentário: relatórios visuais/exportáveis não devem sofrer tradução automática do navegador.
+    <div className={withNoTranslateClass("space-y-4")} {...noTranslateAttributes}>
       <Card>
         <CardHeader>
           <CardTitle>Resumo Completo da Folha</CardTitle>
@@ -196,7 +198,7 @@ const ReportsSummary: React.FC = () => {
             </p>
           ) : (
             <>
-            <div className="overflow-x-auto">
+            <div className={withNoTranslateClass("overflow-x-auto")} {...noTranslateAttributes}>
               <Table>
                 <TableHeader>
                   <TableRow>
