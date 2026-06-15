@@ -298,126 +298,165 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
   const numericColumnWidth = dynamicColumnCount > 0
     ? Math.max(5.9, (pageUsableWidth - reservedFixedWidth) / dynamicColumnCount)
     : 0;
-  const consolidatedBodyRows: string[][] = [];
-  const sectionHeaderRowIndexes = new Set<number>();
-  const totalRowIndexes = new Set<number>();
-  const companySections = dataset.isConsolidated ? dataset.companySections ?? [] : [];
-
-  if (dataset.isConsolidated) {
-    companySections.forEach((companyDataset) => {
-      sectionHeaderRowIndexes.add(consolidatedBodyRows.length);
-      consolidatedBodyRows.push([`${companyDataset.companyName} — ${companyDataset.competenceLabel}`, "", "", "", ...pdfDynamicColumns.map(() => "")]);
-      consolidatedBodyRows.push(...companyDataset.rows.map((row) => [row.name, row.department, formatJobRoleForPrint(row.jobRole), formatAdmissionRegistrationForPrint(row.admissionRegistration), ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(row.rubricValues[column.rubricId]))]));
-      totalRowIndexes.add(consolidatedBodyRows.length);
-      consolidatedBodyRows.push(["TOTAL", "", "", "", ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(companyDataset.totalsByRubricId[column.rubricId]))]);
-    });
-    totalRowIndexes.add(consolidatedBodyRows.length);
-    consolidatedBodyRows.push(["TOTAL GERAL", "", "", "", ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(dataset.totalsByRubricId[column.rubricId]))]);
-  }
-
-  const bodyRows = dataset.isConsolidated ? consolidatedBodyRows : [
-    ...dataset.rows.map((row) => [row.name, row.department, formatJobRoleForPrint(row.jobRole), formatAdmissionRegistrationForPrint(row.admissionRegistration), ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(row.rubricValues[column.rubricId]))]),
-    ["TOTAL", "", "", "", ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(dataset.totalsByRubricId[column.rubricId]))],
-  ];
-  const bodyRowsLength = dataset.rows.length;
   const resultColumnIndexes = new Set(pdfDynamicColumns
     .map((column, index) => (isHighlightedPayrollPdfColumn(column) ? index + 4 : null))
     .filter((index): index is number => index !== null));
 
-  autoTable(doc, {
-    // Comentário: aumenta respiro entre cabeçalho (título/data) e tabela para leitura mais confortável.
-    startY: 18,
-    head: [[...dataset.fixedColumns.map((column) => formatPdfColumnLabel(column.label)), ...pdfDynamicColumns.map((column) => formatPdfColumnLabel(column.rubricName))]],
-    body: bodyRows,
-    tableWidth: pageUsableWidth,
-    styles: {
-      fontSize: 5.2,
-      cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 0.5 },
-      lineColor: BORDER_LIGHT,
-      lineWidth: 0.1,
-      overflow: "linebreak",
-      valign: "middle",
-    },
-    headStyles: {
-      // Comentário: cabeçalho escuro + texto claro padronizado com o PDF de resumo completo.
-      fillColor: DARK_HIGHLIGHT,
-      textColor: TEXT_LIGHT,
-      fontStyle: "bold",
-      minCellHeight: 5.8,
-      halign: "center",
-      valign: "middle",
-      overflow: "linebreak",
-      fontSize: 4.9,
-    },
-    columnStyles: {
-      0: { cellWidth: fixedColumnsWidth.name, halign: "left", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
-      1: { cellWidth: fixedColumnsWidth.department, halign: "left", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
-      2: { cellWidth: fixedColumnsWidth.jobRole, halign: "left", overflow: "linebreak", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
-      3: { cellWidth: fixedColumnsWidth.admissionRegistration, halign: "center" },
-      ...Object.fromEntries(
-        pdfDynamicColumns.map((_, index) => [index + 4, { cellWidth: numericColumnWidth, minCellWidth: 5.9, halign: "center" }]),
-      ),
-    },
-    didParseCell: (hookData) => {
-      const isSectionHeaderRow = hookData.section === "body" && sectionHeaderRowIndexes.has(hookData.row.index);
-      const isTotalRow = hookData.section === "body" && (dataset.isConsolidated ? totalRowIndexes.has(hookData.row.index) : hookData.row.index === bodyRowsLength);
+  const buildEmployeeRows = (companyDataset: ReportByCompanyDataset) => companyDataset.rows.map((row) => [
+    row.name,
+    row.department,
+    formatJobRoleForPrint(row.jobRole),
+    formatAdmissionRegistrationForPrint(row.admissionRegistration),
+    ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(row.rubricValues[column.rubricId])),
+  ]);
 
-      const isFixedIdentityColumn = hookData.column.index >= 0 && hookData.column.index <= 3;
-      const isResultValueColumn = resultColumnIndexes.has(hookData.column.index);
+  const buildTotalRow = (label: string, companyDataset: ReportByCompanyDataset) => [
+    label,
+    "",
+    "",
+    "",
+    ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(companyDataset.totalsByRubricId[column.rubricId])),
+  ];
 
-      if (hookData.section === "head" && isResultValueColumn) {
-        // Comentário: cabeçalho das colunas finais ganha variação discreta, mantendo o padrão azul escuro.
-        hookData.cell.styles.fillColor = RESULT_HEAD_HIGHLIGHT;
-      }
+  const renderTable = (bodyRows: string[][], options?: { sectionHeaderRowIndexes?: Set<number>; totalRowIndexes?: Set<number>; startY?: number }) => {
+    const sectionHeaderRowIndexes = options?.sectionHeaderRowIndexes ?? new Set<number>();
+    const totalRowIndexes = options?.totalRowIndexes ?? new Set<number>();
 
-      if (hookData.section === "body" && !isTotalRow && (isFixedIdentityColumn || isResultValueColumn)) {
-        // Comentário: colunas destacadas usam fundo mais suave e texto em negrito para equilibrar leitura sem pesar a grade.
-        hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
-        hookData.cell.styles.fontStyle = "bold";
-      }
+    autoTable(doc, {
+      // Comentário: aumenta respiro entre cabeçalho (título/data) e tabela para leitura mais confortável.
+      startY: options?.startY ?? 18,
+      head: [[...dataset.fixedColumns.map((column) => formatPdfColumnLabel(column.label)), ...pdfDynamicColumns.map((column) => formatPdfColumnLabel(column.rubricName))]],
+      body: bodyRows,
+      tableWidth: pageUsableWidth,
+      styles: {
+        fontSize: 5.2,
+        cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 0.5 },
+        lineColor: BORDER_LIGHT,
+        lineWidth: 0.1,
+        overflow: "linebreak",
+        valign: "middle",
+      },
+      headStyles: {
+        // Comentário: cabeçalho escuro + texto claro padronizado com o PDF de resumo completo.
+        fillColor: DARK_HIGHLIGHT,
+        textColor: TEXT_LIGHT,
+        fontStyle: "bold",
+        minCellHeight: 5.8,
+        halign: "center",
+        valign: "middle",
+        overflow: "linebreak",
+        fontSize: 4.9,
+      },
+      columnStyles: {
+        0: { cellWidth: fixedColumnsWidth.name, halign: "left", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
+        1: { cellWidth: fixedColumnsWidth.department, halign: "left", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
+        2: { cellWidth: fixedColumnsWidth.jobRole, halign: "left", overflow: "linebreak", cellPadding: { top: 0.62, right: 0.5, bottom: 0.62, left: 1.3 } },
+        3: { cellWidth: fixedColumnsWidth.admissionRegistration, halign: "center" },
+        ...Object.fromEntries(
+          pdfDynamicColumns.map((_, index) => [index + 4, { cellWidth: numericColumnWidth, minCellWidth: 5.9, halign: "center" }]),
+        ),
+      },
+      didParseCell: (hookData) => {
+        const isSectionHeaderRow = hookData.section === "body" && sectionHeaderRowIndexes.has(hookData.row.index);
+        const isTotalRow = hookData.section === "body" && totalRowIndexes.has(hookData.row.index);
 
-      if (isSectionHeaderRow) {
-        // Comentário: no consolidado, cada empresa abre um bloco próprio sem alterar a tabela individual.
-        hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
-        hookData.cell.styles.fontStyle = "bold";
-        hookData.cell.styles.textColor = [15, 23, 42];
-        if (hookData.column.index > 0) hookData.cell.text = [""];
-      }
+        const isFixedIdentityColumn = hookData.column.index >= 0 && hookData.column.index <= 3;
+        const isResultValueColumn = resultColumnIndexes.has(hookData.column.index);
 
-      if (isTotalRow) {
-        // Comentário: TOTAL usa o mesmo azul escuro do cabeçalho para fechar visualmente a tabela e evitar destaque cinza fraco.
-        hookData.cell.styles.fillColor = DARK_HIGHLIGHT;
-        hookData.cell.styles.textColor = TEXT_LIGHT;
-        hookData.cell.styles.fontStyle = "bold";
-        // Comentário: altura mínima diferencia o TOTAL das linhas comuns sem mudar a estrutura da tabela.
-        hookData.cell.styles.minCellHeight = 4.8;
-        hookData.cell.styles.lineWidth = { top: 0.25, right: 0.1, bottom: 0.1, left: 0.1 };
-      }
-
-      if (hookData.section === "body") {
-        // Comentário: valores monetários e TOTAL ficam centralizados e em negrito no PDF; identificação textual permanece à esquerda.
-        const bodyColumnStyle = getPayrollPdfBodyColumnStyle(hookData.column.index);
-        hookData.cell.styles.halign = bodyColumnStyle.halign;
-        if (bodyColumnStyle.fontStyle) {
-          hookData.cell.styles.fontStyle = bodyColumnStyle.fontStyle;
+        if (hookData.section === "head" && isResultValueColumn) {
+          // Comentário: cabeçalho das colunas finais ganha variação discreta, mantendo o padrão azul escuro.
+          hookData.cell.styles.fillColor = RESULT_HEAD_HIGHLIGHT;
         }
-      }
-    },
-    didDrawPage: () => {
-      // Comentário: título centralizado e data à direita para paridade visual com o relatório resumo completo.
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.text(dataset.title, pageWidth / 2, 9, { align: "center" });
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7);
-      doc.text(`Gerado em ${generatedAtLabel}`, pageWidth - marginRight, 13, { align: "right" });
-      doc.setFontSize(7);
-      doc.text(FOOTER_TEXT, pageWidth / 2, pageHeight - 4, { align: "center" });
-    },
-    margin: { top: 18, bottom: 9, left: marginLeft, right: marginRight },
-    theme: "grid",
-    showHead: "everyPage",
-  });
 
+        if (hookData.section === "body" && !isTotalRow && !isSectionHeaderRow && (isFixedIdentityColumn || isResultValueColumn)) {
+          // Comentário: colunas destacadas usam fundo mais suave e texto em negrito para equilibrar leitura sem pesar a grade.
+          hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
+          hookData.cell.styles.fontStyle = "bold";
+        }
+
+        if (isSectionHeaderRow) {
+          // Comentário: no consolidado, cada empresa abre uma página/bloco próprio sem alterar o relatório individual.
+          hookData.cell.styles.fillColor = LIGHT_ROW_HIGHLIGHT;
+          hookData.cell.styles.fontStyle = "bold";
+          hookData.cell.styles.textColor = [15, 23, 42];
+          if (hookData.column.index > 0) hookData.cell.text = [""];
+        }
+
+        if (isTotalRow) {
+          // Comentário: TOTAL usa o mesmo azul escuro do cabeçalho para fechar visualmente a tabela e evitar destaque cinza fraco.
+          hookData.cell.styles.fillColor = DARK_HIGHLIGHT;
+          hookData.cell.styles.textColor = TEXT_LIGHT;
+          hookData.cell.styles.fontStyle = "bold";
+          // Comentário: altura mínima diferencia o TOTAL das linhas comuns sem mudar a estrutura da tabela.
+          hookData.cell.styles.minCellHeight = 4.8;
+          hookData.cell.styles.lineWidth = { top: 0.25, right: 0.1, bottom: 0.1, left: 0.1 };
+        }
+
+        if (hookData.section === "body") {
+          // Comentário: valores monetários e TOTAL ficam centralizados e em negrito no PDF; identificação textual permanece à esquerda.
+          const bodyColumnStyle = getPayrollPdfBodyColumnStyle(hookData.column.index);
+          hookData.cell.styles.halign = bodyColumnStyle.halign;
+          if (bodyColumnStyle.fontStyle) {
+            hookData.cell.styles.fontStyle = bodyColumnStyle.fontStyle;
+          }
+        }
+      },
+      didDrawPage: () => {
+        // Comentário: título centralizado e data à direita para paridade visual com o relatório resumo completo.
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text(dataset.title, pageWidth / 2, 9, { align: "center" });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.text(`Gerado em ${generatedAtLabel}`, pageWidth - marginRight, 13, { align: "right" });
+        doc.setFontSize(7);
+        doc.text(FOOTER_TEXT, pageWidth / 2, pageHeight - 4, { align: "center" });
+      },
+      margin: { top: 18, bottom: 9, left: marginLeft, right: marginRight },
+      theme: "grid",
+      showHead: "everyPage",
+    });
+  };
+
+  if (dataset.isConsolidated) {
+    const companySections = dataset.companySections ?? [];
+
+    if (companySections.length === 0) {
+      // Comentário: consolidado sem empresas não deve gerar um PDF contendo apenas TOTAL GERAL vazio.
+      return;
+    }
+
+    companySections.forEach((companyDataset, companyIndex) => {
+      if (companyIndex > 0) doc.addPage();
+
+      const bodyRows = [
+        [`${companyDataset.companyName} — ${companyDataset.competenceLabel}`, "", "", "", ...pdfDynamicColumns.map(() => "")],
+        ...buildEmployeeRows(companyDataset),
+        buildTotalRow("TOTAL", companyDataset),
+      ];
+
+      // Comentário: o consolidado agora isola cada empresa em uma tabela/página, preservando totais e valores já calculados.
+      renderTable(bodyRows, {
+        sectionHeaderRowIndexes: new Set([0]),
+        totalRowIndexes: new Set([bodyRows.length - 1]),
+      });
+    });
+
+    doc.addPage();
+
+    // Comentário: TOTAL GERAL fica separado no fim do consolidado para não se misturar visualmente aos dados de uma empresa.
+    renderTable([buildTotalRow("TOTAL GERAL", dataset)], {
+      totalRowIndexes: new Set([0]),
+    });
+  } else {
+    const bodyRows = [
+      ...buildEmployeeRows(dataset),
+      buildTotalRow("TOTAL", dataset),
+    ];
+
+    renderTable(bodyRows, {
+      totalRowIndexes: new Set([bodyRows.length - 1]),
+    });
+  }
   doc.save(buildReportFileName(dataset));
 };
