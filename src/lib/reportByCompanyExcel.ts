@@ -1,9 +1,11 @@
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { toast } from "sonner";
 import type { ReportByCompanyDataset } from "@/lib/reportByCompanyData";
 
 // Comentário: formato numérico do Excel — com locale pt-BR exibe como 1.234,56 (sem R$).
 const BRL_NUMBER_FORMAT = "#,##0.00;-#,##0.00";
+const INSTITUTIONAL_RED = "C4151C";
+const HEADER_ROW_INDEX = 2;
 
 const brlNumberFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
@@ -15,6 +17,13 @@ export const formatBrlNumber = (value: unknown): string => {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return "0,00";
   return brlNumberFormatter.format(n);
+};
+
+export const formatAdmissionRegistrationForExcel = (value: string): string => {
+  if (!value) return value;
+
+  // Comentário: a exportação mantém a célula como texto, convertendo só o prefixo ISO quando presente.
+  return value.replace(/^(\d{4})-(\d{2})-(\d{2})(\s*\/.*)?$/, (_match, year: string, month: string, day: string, suffix = "") => `${day}/${month}/${year}${suffix}`);
 };
 
 const buildReportFileName = (dataset: ReportByCompanyDataset, extension: "xlsx" | "pdf") => {
@@ -61,7 +70,7 @@ export const buildReportByCompanySheetData = (dataset: ReportByCompanyDataset): 
           textCell(row.name),
           textCell(row.department),
           textCell(row.jobRole),
-          textCell(row.admissionRegistration),
+          textCell(formatAdmissionRegistrationForExcel(row.admissionRegistration)),
           textCell(row.bankName),
           textCell(row.bankBranch),
           textCell(row.bankAccount),
@@ -73,7 +82,7 @@ export const buildReportByCompanySheetData = (dataset: ReportByCompanyDataset): 
         textCell(row.name),
         textCell(row.department),
         textCell(row.jobRole),
-        textCell(row.admissionRegistration),
+        textCell(formatAdmissionRegistrationForExcel(row.admissionRegistration)),
         textCell(row.bankName),
         textCell(row.bankBranch),
         textCell(row.bankAccount),
@@ -98,8 +107,22 @@ export const buildReportByCompanySheetData = (dataset: ReportByCompanyDataset): 
   ];
 };
 
+const TEXT_COLUMN_MIN_WIDTHS: Record<string, number> = {
+  Empresa: 28,
+  Nome: 28,
+  Setor: 18,
+  "Função/Cargo": 22,
+  Banco: 20,
+  Agência: 14,
+  Conta: 16,
+  "Chave Pix": 24,
+};
+
+const MONEY_COLUMN_MIN_WIDTH = 14;
+
 const computeColumnWidths = (rows: CellObject[][]): { wch: number }[] => {
   const widths: number[] = [];
+  const headerRow = rows[HEADER_ROW_INDEX] ?? [];
   for (const row of rows) {
     row.forEach((cell, index) => {
       const text = cell.t === "n" ? formatBrlNumber(cell.v) : String(cell.v ?? "");
@@ -107,18 +130,80 @@ const computeColumnWidths = (rows: CellObject[][]): { wch: number }[] => {
       if (len > (widths[index] ?? 0)) widths[index] = len;
     });
   }
-  return widths.map((wch) => ({ wch: Math.max(wch, 10) }));
+  return widths.map((wch, index) => {
+    const header = String(headerRow[index]?.v ?? "");
+    const minimum = TEXT_COLUMN_MIN_WIDTHS[header] ?? (header ? MONEY_COLUMN_MIN_WIDTH : 10);
+    return { wch: Math.max(wch, minimum) };
+  });
 };
 
-export const exportReportByCompanyExcel = (dataset: ReportByCompanyDataset) => {
+const headerCellStyle = {
+  fill: { type: "pattern", pattern: "solid", fgColor: { argb: `FF${INSTITUTIONAL_RED}` } },
+  font: { color: { argb: "FFFFFFFF" }, bold: true },
+  alignment: { vertical: "center" },
+  border: {
+    top: { style: "thin", color: { argb: "FFB7B7B7" } },
+    right: { style: "thin", color: { argb: "FFB7B7B7" } },
+    bottom: { style: "thin", color: { argb: "FFB7B7B7" } },
+    left: { style: "thin", color: { argb: "FFB7B7B7" } },
+  },
+} satisfies Partial<ExcelJS.Style>;
+
+const titleCellStyle = {
+  font: { bold: true, sz: 14 },
+} satisfies Partial<ExcelJS.Style>;
+
+export const buildReportByCompanyWorksheet = (dataset: ReportByCompanyDataset): ExcelJS.Worksheet => {
   const sheetData = buildReportByCompanySheetData(dataset);
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Folha", {
+    views: [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4", activeCell: "A4" }],
+  });
+  const headerColumnCount = sheetData[HEADER_ROW_INDEX]?.length ?? 0;
+  const lastColumn = worksheet.getColumn(headerColumnCount || 1).letter;
 
-  const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
-  worksheet["!cols"] = computeColumnWidths(sheetData);
+  sheetData.forEach((row) => {
+    worksheet.addRow(row.map((cell) => cell.v));
+  });
 
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Folha");
-  XLSX.writeFile(workbook, buildReportFileName(dataset, "xlsx"));
+  worksheet.columns = computeColumnWidths(sheetData).map(({ wch }) => ({ width: wch }));
+  worksheet.getRow(1).height = 22;
+  worksheet.getRow(3).height = 24;
+  worksheet.getCell("A1").style = titleCellStyle;
+
+  // Comentário: AutoFilter e estilos usam a última coluna real do cabeçalho, sem fixar 25 colunas.
+  if (headerColumnCount > 0) {
+    worksheet.autoFilter = `A3:${lastColumn}3`;
+
+    for (let columnIndex = 0; columnIndex < headerColumnCount; columnIndex += 1) {
+      worksheet.getRow(3).getCell(columnIndex + 1).style = headerCellStyle;
+    }
+  }
+
+  sheetData.forEach((row, rowIndex) => {
+    row.forEach((cell, columnIndex) => {
+      if (cell.t !== "n") return;
+      worksheet.getRow(rowIndex + 1).getCell(columnIndex + 1).numFmt = BRL_NUMBER_FORMAT;
+    });
+  });
+
+  return worksheet;
+};
+
+const downloadWorkbook = async (workbook: ExcelJS.Workbook, fileName: string) => {
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+export const exportReportByCompanyExcel = async (dataset: ReportByCompanyDataset) => {
+  const worksheet = buildReportByCompanyWorksheet(dataset);
+  await downloadWorkbook(worksheet.workbook, buildReportFileName(dataset, "xlsx"));
 
   toast.success("Exportação Excel concluída.");
 };
