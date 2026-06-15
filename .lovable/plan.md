@@ -1,57 +1,61 @@
-# Correção do Recibo — Alinhar "Salário Bruto" à Central
+# Ajuste de Exportação Excel/CSV — Relatório por Empresa
 
-## Diagnóstico
+Escopo restrito a `src/lib/reportByCompanyData.ts` (dataset) e `src/lib/reportByCompanyExcel.ts` (exportação). PDF, Central de Folha, cálculo, recibos e layout da tela permanecem intocados.
 
-Validando o caso da Ana Alves Pereira (ABRIL-26) contra a fórmula visível do recibo legado:
+## 1) Dataset (`reportByCompanyData.ts`)
 
-```text
-Salário Bruto + Diárias 300,00 + HE 18,38 − INSS 282,01 − Faltas 39,80 = Líquido 2.996,57
-⇒ Salário Bruto = 3.000,00  → corresponde ao Salário G
-```
+Estender `ReportByCompanyRow` com campos bancários lidos diretamente do cadastro do funcionário (sem persistência nova, sem inferência):
 
-Hoje, em `src/lib/receiptData.ts`, a função `getLegacyGrossSalaryValue` tem esta ordem de prioridade:
+- `bankName: string`
+- `bankBranch: string`
+- `bankAccount: string`
+- `bankPixKey: string`
 
-1. Rubrica explicitamente chamada "salário bruto"  
-2. **Salário Fiscal** ← está caindo aqui (2.996,57) — origem do bug  
-3. `salario_ctps`  
-4. `entry.baseSalary`
+Em `buildReportByCompanyData`, ao montar cada linha, preencher esses 4 campos a partir do `employee` já resolvido (`employee?.bankName ?? ""`, etc.). Quando vazio, exporta vazio. Nenhuma alteração em rubricas, totais, ordenação ou regra de batch arquivado. Consolidado herda automaticamente via `companySections`/`rows`.
 
-Salário G nem entra na lista. Resultado: o recibo mostra Bruto = 2.996,57 (fiscal), e a soma das demais linhas estoura o líquido. O drawer/Central estão corretos porque consomem o motor único (`calculatePayrollFromEntry`), sem essa heurística — então o bug é exclusivamente da camada de exibição do recibo.
+## 2) Exportação (`reportByCompanyExcel.ts`)
 
-Os demais valores do recibo (Diárias, HE, INSS, Faltas, Líquido a receber) já vêm corretos da mesma `calculatePayrollFromEntry` usada pela Central, então não há cálculo paralelo a remover — apenas reordenar a prioridade da linha "Salário Bruto".
+### Formatação pt-BR de valores monetários
+Criar helper local `formatBrlNumber(value: number): string` usando `Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })`. Resultado: `2.324,20`, `10.000,00`, `0,00`. Sem `R$`.
 
-## Mudança
+### Helper de célula CSV
+- `safeCsvText(value)`: para texto (nomes, setor, banco, agência, conta, Pix). Mantém o escape de fórmula (`'` na frente quando começa com `= + - @`) e aspas duplas. Garante que `0012`, `70378-8` e `606.547.463-03` saem como texto puro.
+- `safeCsvMoney(value)`: aplica `formatBrlNumber` e envolve em aspas. Não usar `safeCsvCell` genérico para dinheiro.
 
-Arquivo único: `src/lib/receiptData.ts`
+### Estrutura de colunas
+Ordem final no header e em cada linha:
 
-Em `getLegacyGrossSalaryValue`, ajustar a prioridade para refletir a base operacional do legado:
+1. `Empresa` (apenas no consolidado)
+2. `Nome` (Funcionário)
+3. `Setor`
+4. `Função/Cargo`
+5. `Admissão/Registro`
+6. `Banco`
+7. `Agência`
+8. `Conta`
+9. `Chave Pix`
+10. ...rubricas dinâmicas (valores monetários formatados pt-BR)
 
-```text
-1. Rubrica explicitamente "salário bruto" (mantém)
-2. classification === 'salario_g'        ← passa a ter prioridade sobre fiscal
-3. classification === 'salario_ctps'
-4. Salário Fiscal                          ← rebaixado (é base contábil, não operacional)
-5. entry.baseSalary                        (mantém fallback final)
-```
+CPF fica fora desta entrega (não está em `ReportByCompanyRow` hoje; evitar mudança grande).
 
-Justificativa: Salário G é a base operacional usada na Central para chegar ao Salário Real e ao Líquido. Salário Fiscal é base contábil/INSS e não deve aparecer como "Salário Bruto" no recibo — a divergência observada confirma isso.
+Linha de totais:
+- Individual: `TOTAL` + 8 colunas vazias (fixas + bancárias) + totais por rubrica formatados em pt-BR.
+- Consolidado: `TOTAL GERAL` + 9 colunas vazias (Empresa + fixas + bancárias) + totais por rubrica formatados em pt-BR.
 
-## Não-mudanças (escopo)
+### CSV compatível com Excel pt-BR
+- Manter separador `;` e BOM UTF-8 já existentes.
+- Adicionar 1ª linha `sep=;` antes do BOM/título para o Excel detectar o separador automaticamente em pt-BR.
+- MIME `text/csv;charset=utf-8;` e extensão `.csv` permanecem.
 
-- Não criar motor/fórmula nova no recibo.  
-- Não alterar `calculatePayrollFromEntry`, drawer, tabela da Central, totais, relatórios ou layout do recibo.  
-- Geração em lote (`ReceiptPrintView`) já reusa o mesmo componente `Receipt` → fix individual cobre lote automaticamente, sem tocar no arquivo.  
-- Líquido continua vindo da canônica `salario_liquido` quando executável (lógica atual mantida).  
-- Sem migration de dados; sem refresh forçado; valores em tela são respeitados via `livePreviewEntry`.
+## 3) Testes
 
-## Validação
-
-1. Atualizar/rodar `src/components/payroll/Receipt.test.tsx` e `src/lib/receiptData.test.ts` (caso Ana: Bruto 3.000,00 / Líquido 2.996,57).  
-2. Conferência manual: Ana ABRIL-26 → recibo individual e em lote precisam mostrar Líquido = 2.996,57 e Bruto = 3.000,00, batendo com o drawer.
+- Atualizar `src/lib/reportByCompanyData.test.ts` para cobrir os 4 novos campos bancários nas linhas (incluindo funcionário sem dados bancários → strings vazias).
+- Adicionar teste leve em uma suíte nova `src/lib/reportByCompanyExcel.test.ts` validando: (a) `formatBrlNumber(2324.2) === "2.324,20"`, (b) header inclui Banco/Agência/Conta/Chave Pix, (c) agência `0012` preservada, (d) valor monetário formatado em pt-BR, (e) primeira linha contém `sep=;`.
 
 ## Critérios de aceite
 
-- Recibo individual e em lote idênticos ao drawer/Central.  
-- Nenhum cálculo novo dentro do recibo.  
-- Não exige re-salvar lançamentos para refletir valores em tela.  
-- Layout, rodapé e demais telas inalterados.
+- PDF, Central de Folha, cálculo e recibos inalterados.
+- Excel/CSV individual e consolidado exibem Banco, Agência, Conta, Chave Pix.
+- Valores monetários saem como `1.234,56` (nunca `1234.56`, nunca `R$`).
+- Campos bancários preservam zeros à esquerda, traços e pontos.
+- Build verde; testes do relatório passam.
