@@ -1,6 +1,37 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const { addPageMock, saveMock, textMock, setFontMock, setFontSizeMock, autoTableMock } = vi.hoisted(() => ({
+  addPageMock: vi.fn(),
+  saveMock: vi.fn(),
+  textMock: vi.fn(),
+  setFontMock: vi.fn(),
+  setFontSizeMock: vi.fn(),
+  autoTableMock: vi.fn(),
+}));
+
+vi.mock("jspdf", () => ({
+  default: vi.fn().mockImplementation(() => ({
+    internal: {
+      pageSize: {
+        getWidth: () => 297,
+        getHeight: () => 210,
+      },
+    },
+    addPage: addPageMock,
+    save: saveMock,
+    text: textMock,
+    setFont: setFontMock,
+    setFontSize: setFontSizeMock,
+  })),
+}));
+
+vi.mock("jspdf-autotable", () => ({
+  default: autoTableMock,
+}));
+
 import {
   buildPayrollPdfDynamicColumns,
+  generateReportByCompanyPdf,
   formatJobRoleForPrint,
   formatPdfCurrencyBlankWhenZero,
   getPayrollPdfBodyColumnHalign,
@@ -152,6 +183,71 @@ describe("reportByCompanyPdf", () => {
     expect(isHighlightedPayrollPdfColumn(pdfColumns[0])).toBe(false);
   });
 
+  it("gera o PDF consolidado com uma tabela por empresa e total geral separado no final", () => {
+    addPageMock.mockClear();
+    saveMock.mockClear();
+    autoTableMock.mockClear();
+
+    const baseDataset = datasetWithColumns([
+      column({ rubricId: "ctps", rubricCode: "salario_ctps", rubricName: "Salário CTPS", rubricClassification: "salario_ctps", order: 1 }),
+      column({ rubricId: "liquido", rubricCode: "salario_liquido", rubricName: "Salário Líquido", order: 2 }),
+    ]);
+    const companySections: ReportByCompanyDataset[] = [
+      {
+        ...baseDataset,
+        companyName: "Empresa A",
+        rows: [{ employeeId: "1", name: "Ana", department: "RH", jobRole: "Analista", admissionRegistration: "2026-01-02 / 10", rubricValues: { ctps: 1000, liquido: 900 } }],
+        totalsByRubricId: { ctps: 1000, liquido: 900 },
+      },
+      {
+        ...baseDataset,
+        companyName: "Empresa B",
+        rows: [{ employeeId: "2", name: "Bia", department: "DP", jobRole: "Auxiliar", admissionRegistration: "2026-02-03 / 20", rubricValues: { ctps: 2000 } }],
+        totalsByRubricId: { ctps: 2000, liquido: 0 },
+      },
+    ];
+
+    generateReportByCompanyPdf({
+      ...baseDataset,
+      title: "Relatório por Empresa - Todas as Empresas",
+      companyName: "Todas as Empresas",
+      rows: companySections.flatMap((section) => section.rows),
+      totalsByRubricId: { ctps: 3000, liquido: 900 },
+      isConsolidated: true,
+      companySections,
+    });
+
+    expect(autoTableMock).toHaveBeenCalledTimes(3);
+    expect(addPageMock).toHaveBeenCalledTimes(2);
+    expect(autoTableMock.mock.calls[0][1].body[0][0]).toBe("Empresa A — ABRIL DE 26");
+    expect(autoTableMock.mock.calls[1][1].body[0][0]).toBe("Empresa B — ABRIL DE 26");
+    expect(autoTableMock.mock.calls[2][1].body).toEqual([["TOTAL GERAL", "", "", "", "R$ 3.000,00", "R$ 900,00"]]);
+    expect(saveMock).toHaveBeenCalledWith("relatorio-todas-empresas-04-2026.pdf");
+  });
+
+  it("não gera tabela nem arquivo quando o consolidado não possui empresas", () => {
+    addPageMock.mockClear();
+    saveMock.mockClear();
+    autoTableMock.mockClear();
+
+    const baseDataset = datasetWithColumns([
+      column({ rubricId: "ctps", rubricCode: "salario_ctps", rubricName: "Salário CTPS", rubricClassification: "salario_ctps", order: 1 }),
+    ]);
+
+    generateReportByCompanyPdf({
+      ...baseDataset,
+      title: "Relatório por Empresa - Todas as Empresas",
+      companyName: "Todas as Empresas",
+      rows: [],
+      totalsByRubricId: { ctps: 0 },
+      isConsolidated: true,
+      companySections: [],
+    });
+
+    expect(autoTableMock).not.toHaveBeenCalled();
+    expect(addPageMock).not.toHaveBeenCalled();
+    expect(saveMock).not.toHaveBeenCalled();
+  });
 
   it("mantém cargo curto praticamente igual na impressão", () => {
     expect(formatJobRoleForPrint("Analista")).toBe("Analista");
