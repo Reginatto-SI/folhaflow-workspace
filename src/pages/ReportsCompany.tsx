@@ -6,12 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePayroll } from "@/contexts/PayrollContext";
-import { buildReportByCompanyData } from "@/lib/reportByCompanyData";
+import { buildConsolidatedReportByCompanyData, buildReportByCompanyData, type ReportByCompanyDataset } from "@/lib/reportByCompanyData";
 import { generateReportByCompanyPdf } from "@/lib/reportByCompanyPdf";
 import { exportReportByCompanyExcel } from "@/lib/reportByCompanyExcel";
 import { usePersistedFilters } from "@/hooks/usePersistedFilters";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const ALL_COMPANIES_VALUE = "__all_companies__";
 
 type ReportsCompanyFilters = {
   empresaId: string;
@@ -36,6 +37,7 @@ const ReportsCompany: React.FC = () => {
   const persistedFilters = usePersistedFilters<ReportsCompanyFilters>("relatorios-por-empresa");
   const restoredFiltersRef = React.useRef(false);
   const [filtersReady, setFiltersReady] = React.useState(false);
+  const [isAllCompaniesSelected, setIsAllCompaniesSelected] = React.useState(false);
 
   const safeActiveCompanies = React.useMemo(() => activeCompanies ?? [], [activeCompanies]);
 
@@ -44,12 +46,17 @@ const ReportsCompany: React.FC = () => {
     if (safeActiveCompanies.length === 0) return;
 
     const saved = persistedFilters.readFilters();
-    const savedCompany = saved?.empresaId ? safeActiveCompanies.find((company) => company.id === saved.empresaId) : null;
-    const companyCompetences = savedCompany
+    const savedAllCompanies = saved?.empresaId === ALL_COMPANIES_VALUE;
+    const savedCompany = saved?.empresaId && !savedAllCompanies ? safeActiveCompanies.find((company) => company.id === saved.empresaId) : null;
+    const companyCompetences = savedAllCompanies
       ? (allPayrollBatches ?? [])
-          .filter((batch) => batch.companyId === savedCompany.id && !batch.isArchived)
+          .filter((batch) => !batch.isArchived && safeActiveCompanies.some((company) => company.id === batch.companyId))
           .sort((a, b) => (b.year - a.year) || (b.month - a.month))
-      : [];
+      : savedCompany
+        ? (allPayrollBatches ?? [])
+            .filter((batch) => batch.companyId === savedCompany.id && !batch.isArchived)
+            .sort((a, b) => (b.year - a.year) || (b.month - a.month))
+        : [];
     const savedCompetence = saved?.competencia
       ? companyCompetences.find((batch) =>
           batch.month === saved.competencia?.month &&
@@ -59,7 +66,11 @@ const ReportsCompany: React.FC = () => {
     const competenceToRestore = savedCompetence ?? companyCompetences[0] ?? null;
 
     // Comentário: restaura após carregar empresas/folhas; se a competência salva não existe mais, usa a mais recente da própria empresa.
-    if (savedCompany) {
+    if (savedAllCompanies) {
+      setIsAllCompaniesSelected(true);
+      if (competenceToRestore) setSelectedMonth({ month: competenceToRestore.month, year: competenceToRestore.year });
+    } else if (savedCompany) {
+      setIsAllCompaniesSelected(false);
       setSelectedCompany(savedCompany);
       if (competenceToRestore) setSelectedMonth({ month: competenceToRestore.month, year: competenceToRestore.year });
     }
@@ -69,26 +80,36 @@ const ReportsCompany: React.FC = () => {
   }, [allPayrollBatches, isLoading, persistedFilters, safeActiveCompanies, setSelectedCompany, setSelectedMonth]);
 
   React.useEffect(() => {
-    if (!filtersReady || !selectedCompany) return;
+    if (!filtersReady) return;
 
     const hasSelectedCompetence = (allPayrollBatches ?? []).some((batch) =>
-      batch.companyId === selectedCompany.id &&
       !batch.isArchived &&
       batch.month === selectedMonth.month &&
-      batch.year === selectedMonth.year
+      batch.year === selectedMonth.year &&
+      (isAllCompaniesSelected || batch.companyId === selectedCompany?.id)
     );
 
+    if (isAllCompaniesSelected) {
+      persistedFilters.saveFilters({
+        empresaId: ALL_COMPANIES_VALUE,
+        ...(hasSelectedCompetence ? { competencia: { month: selectedMonth.month, year: selectedMonth.year } } : {}),
+      });
+      return;
+    }
+
+    if (!selectedCompany) return;
     persistedFilters.saveFilters({
       empresaId: selectedCompany.id,
       ...(hasSelectedCompetence ? { competencia: { month: selectedMonth.month, year: selectedMonth.year } } : {}),
     });
-  }, [allPayrollBatches, filtersReady, persistedFilters, selectedCompany, selectedMonth.month, selectedMonth.year]);
+  }, [allPayrollBatches, filtersReady, isAllCompaniesSelected, persistedFilters, selectedCompany, selectedMonth.month, selectedMonth.year]);
 
   const resetToDefaultFilters = React.useCallback(() => {
     persistedFilters.clearFilters();
     const fallbackCompany = safeActiveCompanies[0];
     if (!fallbackCompany) return;
 
+    setIsAllCompaniesSelected(false);
     setSelectedCompany(fallbackCompany);
     const [fallbackCompetence] = (allPayrollBatches ?? [])
       .filter((batch) => batch.companyId === fallbackCompany.id && !batch.isArchived)
@@ -97,19 +118,73 @@ const ReportsCompany: React.FC = () => {
   }, [allPayrollBatches, persistedFilters, safeActiveCompanies, setSelectedCompany, setSelectedMonth]);
 
   const availableCompetences = React.useMemo(() => {
-    if (!selectedCompany) return [];
-    return (allPayrollBatches ?? [])
-      .filter((batch) => batch.companyId === selectedCompany.id && !batch.isArchived)
+    if (!selectedCompany && !isAllCompaniesSelected) return [];
+    const batches = (allPayrollBatches ?? [])
+      .filter((batch) => !batch.isArchived && (isAllCompaniesSelected || batch.companyId === selectedCompany?.id))
       .sort((a, b) => (b.year - a.year) || (b.month - a.month));
-  }, [allPayrollBatches, selectedCompany]);
+
+    if (!isAllCompaniesSelected) return batches;
+
+    // Comentário: no consolidado a competência aparece uma única vez, mesmo existindo batch em várias empresas.
+    const seenCompetences = new Set<string>();
+    return batches.filter((batch) => {
+      const key = `${batch.month}/${batch.year}`;
+      if (seenCompetences.has(key)) return false;
+      seenCompetences.add(key);
+      return true;
+    });
+  }, [allPayrollBatches, isAllCompaniesSelected, selectedCompany]);
 
   const selectedBatch = React.useMemo(
     () => availableCompetences.find((batch) => batch.month === selectedMonth.month && batch.year === selectedMonth.year) || null,
     [availableCompetences, selectedMonth.month, selectedMonth.year],
   );
 
+  React.useEffect(() => {
+    if (!isAllCompaniesSelected || availableCompetences.length === 0) return;
+
+    const hasCurrentConsolidatedCompetence = availableCompetences.some((batch) =>
+      batch.month === selectedMonth.month && batch.year === selectedMonth.year
+    );
+    if (hasCurrentConsolidatedCompetence) return;
+
+    const [latestConsolidatedCompetence] = availableCompetences;
+    // Comentário: ao entrar no consolidado, evita estado vazio se a competência anterior só existia na empresa individual.
+    setSelectedMonth({ month: latestConsolidatedCompetence.month, year: latestConsolidatedCompetence.year });
+  }, [availableCompetences, isAllCompaniesSelected, selectedMonth.month, selectedMonth.year, setSelectedMonth]);
+
   const dataset = React.useMemo(() => {
-    if (!selectedCompany) return null;
+    if (!selectedCompany && !isAllCompaniesSelected) return null;
+
+    if (isAllCompaniesSelected) {
+      const companyDatasets = safeActiveCompanies
+        .map((company) => {
+          const companyBatch = (allPayrollBatches ?? []).find((batch) =>
+            batch.companyId === company.id &&
+            !batch.isArchived &&
+            batch.month === selectedMonth.month &&
+            batch.year === selectedMonth.year
+          ) || null;
+          if (!companyBatch) return null;
+
+          const companyDataset = buildReportByCompanyData({
+            company,
+            month: selectedMonth,
+            batch: companyBatch,
+            allBatches: allPayrollBatches ?? [],
+            allEmployees: allEmployees ?? [],
+            // Comentário: consolidado usa lançamentos persistidos de todas as empresas, sem recalcular ou alterar a Central.
+            allEntries: allPayrollEntries ?? [],
+            rubrics: rubrics ?? [],
+          });
+
+          return companyDataset;
+        })
+        .filter((item): item is ReportByCompanyDataset => Boolean(item));
+
+      return buildConsolidatedReportByCompanyData(companyDatasets);
+    }
+
     return buildReportByCompanyData({
       company: selectedCompany,
       month: selectedMonth,
@@ -121,51 +196,36 @@ const ReportsCompany: React.FC = () => {
       allEntries: payrollEntries ?? [],
       rubrics: rubrics ?? [],
     });
-  }, [selectedCompany, selectedMonth, selectedBatch, allPayrollBatches, allEmployees, payrollEntries, rubrics]);
-
-  React.useEffect(() => {
-    if (!import.meta.env.DEV) return;
-
-    console.table({
-      selectedCompanyId: selectedCompany?.id,
-      selectedCompanyName: selectedCompany?.name,
-      selectedMonth: selectedMonth?.month,
-      selectedYear: selectedMonth?.year,
-      selectedBatchId: selectedBatch?.id,
-      selectedBatchArchived: selectedBatch?.isArchived,
-      payrollEntriesCount: payrollEntries?.length ?? 0,
-      allPayrollEntriesCount: allPayrollEntries?.length ?? 0,
-      allPayrollBatchesCount: allPayrollBatches?.length ?? 0,
-      datasetRows: dataset?.rows?.length ?? 0,
-    });
-
-    console.table(
-      (payrollEntries ?? []).map((entry) => ({
-        id: entry.id,
-        companyId: entry.companyId,
-        employeeId: entry.employeeId,
-        month: entry.month,
-        year: entry.year,
-        payrollBatchId: entry.payrollBatchId,
-        netSalary: entry.netSalary,
-        inssAmount: entry.inssAmount,
-      }))
-    );
-  }, [selectedCompany, selectedMonth, selectedBatch, payrollEntries, allPayrollEntries, allPayrollBatches, dataset]);
+  }, [selectedCompany, isAllCompaniesSelected, safeActiveCompanies, selectedMonth, selectedBatch, allPayrollBatches, allEmployees, payrollEntries, allPayrollEntries, rubrics]);
 
   const exportCsv = React.useCallback(() => {
-    if (!dataset) return;
+    if (!dataset) {
+      toast.error("Nenhuma folha encontrada para a competência selecionada.");
+      return;
+    }
 
     // Comentário: página de relatórios e Central reutilizam a mesma rotina de exportação Excel (CSV compatível).
     exportReportByCompanyExcel(dataset);
   }, [dataset]);
 
   const exportPdf = React.useCallback(() => {
-    if (!dataset) return;
+    if (!dataset) {
+      toast.error("Nenhuma folha encontrada para a competência selecionada.");
+      return;
+    }
 
     // Comentário: a página e a Central reutilizam a geração oficial do relatório por empresa.
     generateReportByCompanyPdf(dataset);
     toast.success("PDF gerado e baixado com sucesso.");
+  }, [dataset]);
+
+  const previewRows = React.useMemo(() => {
+    if (!dataset?.isConsolidated) return dataset?.rows.map((row) => ({ row, companyName: "" })) ?? [];
+
+    // Comentário: prévia consolidada mostra Empresa sem mudar a estrutura da tabela individual.
+    return (dataset.companySections ?? []).flatMap((companyDataset) =>
+      companyDataset.rows.map((row) => ({ row, companyName: companyDataset.companyName }))
+    );
   }, [dataset]);
 
   return (
@@ -175,12 +235,23 @@ const ReportsCompany: React.FC = () => {
         <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="space-y-2">
             <p className="text-sm font-medium">Empresa</p>
-            <Select value={selectedCompany?.id || ""} onValueChange={(value) => {
+            <Select value={isAllCompaniesSelected ? ALL_COMPANIES_VALUE : selectedCompany?.id || ""} onValueChange={(value) => {
+              if (value === ALL_COMPANIES_VALUE) {
+                setIsAllCompaniesSelected(true);
+                return;
+              }
+
               const company = safeActiveCompanies.find((item) => item.id === value);
-              if (company) setSelectedCompany(company);
+              if (company) {
+                setIsAllCompaniesSelected(false);
+                setSelectedCompany(company);
+              }
             }}>
               <SelectTrigger><SelectValue placeholder="Selecione a empresa" /></SelectTrigger>
-              <SelectContent>{safeActiveCompanies.map((company) => <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                <SelectItem value={ALL_COMPANIES_VALUE}>Todas as empresas</SelectItem>
+                {safeActiveCompanies.map((company) => <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
@@ -191,7 +262,7 @@ const ReportsCompany: React.FC = () => {
                 const [month, year] = value.split("/").map(Number);
                 setSelectedMonth({ month, year });
               }}
-              disabled={!selectedCompany || availableCompetences.length === 0}
+              disabled={(!selectedCompany && !isAllCompaniesSelected) || availableCompetences.length === 0}
             >
               <SelectTrigger><SelectValue placeholder="Selecione a competência" /></SelectTrigger>
               <SelectContent>
@@ -203,8 +274,8 @@ const ReportsCompany: React.FC = () => {
             </Select>
           </div>
           <div className="md:col-span-2 flex gap-2">
-            <Button onClick={exportPdf} disabled={!dataset || dataset.rows.length === 0}><FileText className="mr-2 h-4 w-4" />Gerar PDF</Button>
-            <Button variant="outline" onClick={exportCsv} disabled={!dataset || dataset.rows.length === 0}><FileSpreadsheet className="mr-2 h-4 w-4" />Exportar CSV (Excel)</Button>
+            <Button onClick={exportPdf} disabled={isLoading || (!selectedCompany && !isAllCompaniesSelected)}><FileText className="mr-2 h-4 w-4" />Gerar PDF</Button>
+            <Button variant="outline" onClick={exportCsv} disabled={isLoading || (!selectedCompany && !isAllCompaniesSelected)}><FileSpreadsheet className="mr-2 h-4 w-4" />Exportar CSV (Excel)</Button>
             <Button variant="ghost" onClick={resetToDefaultFilters}>Limpar filtros</Button>
           </div>
         </CardContent>
@@ -215,24 +286,26 @@ const ReportsCompany: React.FC = () => {
         <CardContent>
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Carregando dados do relatório...</p>
-          ) : !selectedCompany ? (
+          ) : !selectedCompany && !isAllCompaniesSelected ? (
             <p className="text-sm text-muted-foreground">Selecione uma empresa para visualizar o relatório.</p>
           ) : availableCompetences.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Não há folhas não arquivadas para a empresa selecionada.</p>
+            <p className="text-sm text-muted-foreground">Não há folhas não arquivadas para a seleção atual.</p>
           ) : !dataset || dataset.rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Não há lançamentos para a empresa/competência selecionadas.</p>
+            <p className="text-sm text-muted-foreground">Nenhuma folha encontrada para a competência selecionada.</p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {dataset.isConsolidated ? <TableHead>Empresa</TableHead> : null}
                     {dataset.fixedColumns.map((column) => <TableHead key={column.key}>{column.label}</TableHead>)}
                     {dataset.dynamicColumns.map((column) => <TableHead key={column.rubricId}>{column.rubricName}</TableHead>)}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {dataset.rows.map((row) => (
-                    <TableRow key={row.employeeId}>
+                  {previewRows.map(({ row, companyName }, rowIndex) => (
+                    <TableRow key={`${row.employeeId}-${rowIndex}`}>
+                      {dataset.isConsolidated ? <TableCell>{companyName}</TableCell> : null}
                       <TableCell>{row.name}</TableCell>
                       <TableCell>{row.department}</TableCell>
                       <TableCell>{row.jobRole}</TableCell>
@@ -245,7 +318,8 @@ const ReportsCompany: React.FC = () => {
                     </TableRow>
                   ))}
                   <TableRow>
-                    <TableCell className="font-semibold">TOTAL</TableCell>
+                    {dataset.isConsolidated ? <TableCell className="font-semibold">TOTAL GERAL</TableCell> : null}
+                    <TableCell className="font-semibold">{dataset.isConsolidated ? "" : "TOTAL"}</TableCell>
                     <TableCell />
                     <TableCell />
                     <TableCell />
