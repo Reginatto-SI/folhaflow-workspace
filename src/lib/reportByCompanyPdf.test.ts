@@ -196,13 +196,13 @@ describe("reportByCompanyPdf", () => {
       {
         ...baseDataset,
         companyName: "Empresa A",
-        rows: [{ employeeId: "1", name: "Ana", department: "RH", jobRole: "Analista", admissionRegistration: "2026-01-02 / 10", rubricValues: { ctps: 1000, liquido: 900 } }],
+        rows: [{ employeeId: "1", name: "Ana", department: "RH", jobRole: "Analista", admissionRegistration: "2026-01-02 / 10", bankName: "", bankBranch: "", bankAccount: "", bankPixKey: "", rubricValues: { ctps: 1000, liquido: 900 } }],
         totalsByRubricId: { ctps: 1000, liquido: 900 },
       },
       {
         ...baseDataset,
         companyName: "Empresa B",
-        rows: [{ employeeId: "2", name: "Bia", department: "DP", jobRole: "Auxiliar", admissionRegistration: "2026-02-03 / 20", rubricValues: { ctps: 2000 } }],
+        rows: [{ employeeId: "2", name: "Bia", department: "DP", jobRole: "Auxiliar", admissionRegistration: "2026-02-03 / 20", bankName: "", bankBranch: "", bankAccount: "", bankPixKey: "", rubricValues: { ctps: 2000 } }],
         totalsByRubricId: { ctps: 2000, liquido: 0 },
       },
     ];
