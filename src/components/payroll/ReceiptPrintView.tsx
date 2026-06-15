@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Printer, X } from "lucide-react";
 import { Company, Department, Employee, JobRole, PayrollEntry, Rubric } from "@/types/payroll";
 import Receipt from "./Receipt";
+import { noTranslateAttributes, withNoTranslateClass } from "@/lib/noTranslate";
 
 export interface ReceiptPrintViewProps {
   open: boolean;
@@ -60,7 +61,8 @@ const ReceiptPrintView: React.FC<ReceiptPrintViewProps> = ({
     .filter((x): x is NonNullable<typeof x> => !!x);
 
   return createPortal(
-    <div className="receipt-print-root fixed inset-0 z-[100] bg-slate-200 overflow-auto">
+    // Comentário: raiz usada na impressão/PDF nativo protegida contra tradução automática.
+    <div className={withNoTranslateClass("receipt-print-root fixed inset-0 z-[100] bg-slate-200 overflow-auto")} {...noTranslateAttributes}>
       {/* Barra de ações — escondida ao imprimir */}
       <div className="receipt-toolbar sticky top-0 z-10 flex items-center justify-between gap-2 border-b bg-white px-4 py-2 shadow-sm print:hidden">
         <div className="text-sm font-medium text-slate-700">
@@ -76,7 +78,7 @@ const ReceiptPrintView: React.FC<ReceiptPrintViewProps> = ({
         </div>
       </div>
 
-      <div className="receipt-print-canvas py-6 px-4 flex flex-col items-center gap-6">
+      <div className={withNoTranslateClass("receipt-print-canvas py-6 px-4 flex flex-col items-center gap-6")} {...noTranslateAttributes}>
         {items.length === 0 ? (
           <div className="rounded border bg-white px-6 py-8 text-sm text-muted-foreground">
             Nenhum lançamento disponível para gerar recibo.

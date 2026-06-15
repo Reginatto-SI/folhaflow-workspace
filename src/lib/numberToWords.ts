@@ -1,6 +1,7 @@
 // Comentário: utilitário isolado de conversão de valor monetário em texto por extenso
 // (pt-BR). Usado APENAS para exibição no recibo de pagamento — não interfere em
 // nenhum cálculo da folha.
+// Comentário: vocabulário local e determinístico; não usa API externa, DOM, navegador ou locale ambíguo.
 
 const UNIDADES = [
   "", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove",

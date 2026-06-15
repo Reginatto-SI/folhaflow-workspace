@@ -129,7 +129,7 @@ const LEGACY_RECEIPT_LINES: LegacyReceiptLineDefinition[] = [
     getValue: (context) => getLegacyGrossSalaryValue(context),
   },
   {
-    label: "Diarias/Gratificações",
+    label: "Diárias/Gratificações",
     prefix: "(+)",
     fallbackOrder: 4,
     getValue: (context) =>
@@ -158,7 +158,7 @@ const LEGACY_RECEIPT_LINES: LegacyReceiptLineDefinition[] = [
     getValue: (context) => sumByClassifications(context, ["horas_extras"]),
   },
   {
-    label: "Premio/Desemp.",
+    label: "Prêmio/Desemp.",
     prefix: "(+)",
     fallbackOrder: 8,
     getValue: (context) =>

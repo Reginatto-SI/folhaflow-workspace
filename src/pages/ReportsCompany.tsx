@@ -10,6 +10,7 @@ import { buildReportByCompanyData } from "@/lib/reportByCompanyData";
 import { generateReportByCompanyPdf } from "@/lib/reportByCompanyPdf";
 import { exportReportByCompanyExcel } from "@/lib/reportByCompanyExcel";
 import { usePersistedFilters } from "@/hooks/usePersistedFilters";
+import { noTranslateAttributes, withNoTranslateClass } from "@/lib/noTranslate";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -169,7 +170,8 @@ const ReportsCompany: React.FC = () => {
   }, [dataset]);
 
   return (
-    <div className="space-y-4">
+    // Comentário: relatórios visuais/exportáveis não devem sofrer tradução automática do navegador.
+    <div className={withNoTranslateClass("space-y-4")} {...noTranslateAttributes}>
       <Card>
         <CardHeader><CardTitle>Relatório por Empresa</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -222,7 +224,7 @@ const ReportsCompany: React.FC = () => {
           ) : !dataset || dataset.rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">Não há lançamentos para a empresa/competência selecionadas.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className={withNoTranslateClass("overflow-x-auto")} {...noTranslateAttributes}>
               <Table>
                 <TableHeader>
                   <TableRow>

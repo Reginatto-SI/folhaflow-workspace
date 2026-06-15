@@ -80,10 +80,10 @@ describe("Receipt", () => {
     const verbasRows = (verbasTable as HTMLTableElement).querySelectorAll("tbody tr");
     expect(Array.from(verbasRows).map((row) => row.textContent?.replace(/\s+/g, " ").trim())).toEqual([
       "Salário BrutoR$ 1.200,00",
-      "(+) Diarias/Gratificações",
+      "(+) Diárias/Gratificações",
       "(+) 1/3 de férias",
       "(+) Hora extrasR$ 250,00",
-      "(+) Premio/Desemp.",
+      "(+) Prêmio/Desemp.",
       "(-) INSSR$ 100,00",
       "(-) Emprést. Consig.",
       "(-) Adiant. Gerencial",
@@ -91,6 +91,25 @@ describe("Receipt", () => {
       "(-) Descontos/Faltas",
       "(=) Líquido a receberR$ 1.350,00",
     ]);
+
+    const receiptSheet = screen.getByText("DISCRIMINAÇÃO DAS VERBAS").closest(".receipt-sheet");
+    expect(receiptSheet).toHaveClass("notranslate");
+    expect(receiptSheet).toHaveAttribute("translate", "no");
+    expect(receiptSheet).toHaveAttribute("lang", "pt-BR");
+    expect(verbasTable).toHaveClass("notranslate");
+    expect(screen.getByText("Valor por Extenso:").nextElementSibling).toHaveAttribute("translate", "no");
     expect(screen.getByText("www.reginattosistemas.com.br - (65) 99210-2030")).toBeInTheDocument();
   });
+
+  it("mantém valor por extenso em português do Brasil e protegido contra tradução", () => {
+    render(<Receipt entry={{ ...entry, netSalary: 833.33 }} employee={employee} company={company} rubrics={[]} isLast />);
+
+    const valorExtensoCell = screen.getByText("oitocentos e trinta e três reais e trinta e três centavos");
+    expect(valorExtensoCell).toHaveClass("notranslate");
+    expect(valorExtensoCell).toHaveAttribute("translate", "no");
+    expect(valorExtensoCell).toHaveAttribute("lang", "pt-BR");
+    expect(screen.getByText("Valor por Extenso:")).toHaveClass("notranslate");
+    expect(screen.getByText("VALOR RECEBIDO:")).toHaveAttribute("translate", "no");
+  });
+
 });
