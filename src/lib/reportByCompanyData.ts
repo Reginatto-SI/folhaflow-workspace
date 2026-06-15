@@ -19,6 +19,10 @@ export type ReportByCompanyRow = {
   department: string;
   jobRole: string;
   admissionRegistration: string;
+  bankName: string;
+  bankBranch: string;
+  bankAccount: string;
+  bankPixKey: string;
   rubricValues: Record<string, number>;
 };
 
@@ -221,6 +225,10 @@ export function buildReportByCompanyData(params: {
       department,
       jobRole,
       admissionRegistration,
+      bankName: employee?.bankName ?? "",
+      bankBranch: employee?.bankBranch ?? "",
+      bankAccount: employee?.bankAccount ?? "",
+      bankPixKey: employee?.bankPixKey ?? "",
       rubricValues,
       sortName: employee?.name ?? "",
       cpf: employee?.cpf,
