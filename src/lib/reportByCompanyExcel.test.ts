@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReportByCompanyCsv, formatBrlNumber } from "@/lib/reportByCompanyExcel";
+import { buildReportByCompanySheetData, formatBrlNumber } from "@/lib/reportByCompanyExcel";
 import type { ReportByCompanyDataset } from "@/lib/reportByCompanyData";
 
 const baseDataset = (overrides: Partial<ReportByCompanyDataset> = {}): ReportByCompanyDataset => ({
@@ -43,41 +43,51 @@ describe("formatBrlNumber", () => {
   });
 });
 
-describe("buildReportByCompanyCsv", () => {
-  const csv = buildReportByCompanyCsv(baseDataset());
-
-  it("inclui sep=; na primeira linha para o Excel pt-BR", () => {
-    expect(csv.split("\n")[0]).toBe("sep=;");
-  });
-
+describe("buildReportByCompanySheetData", () => {
   it("inclui colunas bancárias no cabeçalho", () => {
-    expect(csv).toContain("Banco");
-    expect(csv).toContain("Agência");
-    expect(csv).toContain("Conta");
-    expect(csv).toContain("Chave Pix");
+    const sheet = buildReportByCompanySheetData(baseDataset());
+    const header = sheet[2].map((cell) => cell.v);
+    expect(header).toEqual([
+      "Nome",
+      "Setor",
+      "Função/Cargo",
+      "Admissão/Registro",
+      "Banco",
+      "Agência",
+      "Conta",
+      "Chave Pix",
+      "Salário",
+    ]);
   });
 
-  it("preserva agência com zero à esquerda e conta com traço", () => {
-    expect(csv).toContain('"0012"');
-    expect(csv).toContain('"70378-8"');
-    expect(csv).toContain('"606.547.463-03"');
+  it("preserva campos bancários como texto, mantendo zeros à esquerda, traços e pontos", () => {
+    const sheet = buildReportByCompanySheetData(baseDataset());
+    const dataRow = sheet[3];
+    expect(dataRow[4]).toMatchObject({ v: "Banco do Brasil", t: "s" });
+    expect(dataRow[5]).toMatchObject({ v: "0012", t: "s" });
+    expect(dataRow[6]).toMatchObject({ v: "70378-8", t: "s" });
+    expect(dataRow[7]).toMatchObject({ v: "606.547.463-03", t: "s" });
   });
 
-  it("formata valores monetários em pt-BR", () => {
-    expect(csv).toContain('"2.324,20"');
-    expect(csv).not.toContain("2324.2");
+  it("rubricas saem como número com formato monetário pt-BR (sem R$)", () => {
+    const sheet = buildReportByCompanySheetData(baseDataset());
+    const valueCell = sheet[3][8];
+    expect(valueCell.t).toBe("n");
+    expect(valueCell.v).toBe(2324.2);
+    expect((valueCell as { z: string }).z).toBe("#,##0.00;-#,##0.00");
   });
 
   it("consolidado adiciona coluna Empresa e linha TOTAL GERAL", () => {
     const dataset = baseDataset();
-    const consolidated = buildReportByCompanyCsv({
+    const sheet = buildReportByCompanySheetData({
       ...dataset,
       isConsolidated: true,
       companyName: "Todas as Empresas",
       companySections: [dataset],
     });
-    expect(consolidated).toContain('"Empresa"');
-    expect(consolidated).toContain('"Empresa 1"');
-    expect(consolidated).toContain('"TOTAL GERAL"');
+    const header = sheet[2].map((cell) => cell.v);
+    expect(header[0]).toBe("Empresa");
+    const lastRow = sheet[sheet.length - 1];
+    expect(lastRow[0].v).toBe("TOTAL GERAL");
   });
 });

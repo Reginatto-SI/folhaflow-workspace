@@ -1,7 +1,10 @@
+import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import type { ReportByCompanyDataset } from "@/lib/reportByCompanyData";
 
-// Comentário: formatador pt-BR para valores monetários (sem "R$"), com 2 casas decimais e separador de milhar.
+// Comentário: formato numérico do Excel — com locale pt-BR exibe como 1.234,56 (sem R$).
+const BRL_NUMBER_FORMAT = "#,##0.00;-#,##0.00";
+
 const brlNumberFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -14,22 +17,7 @@ export const formatBrlNumber = (value: unknown): string => {
   return brlNumberFormatter.format(n);
 };
 
-const escapeCsvString = (raw: string): string => {
-  const formulaRisk = /^[=+\-@]/.test(raw);
-  const safeText = `${formulaRisk ? "'" : ""}${raw}`;
-  return `"${safeText.replace(/"/g, '""')}"`;
-};
-
-// Comentário: célula de texto preserva zeros à esquerda, traços e pontos (banco, agência, conta, Pix).
-const safeCsvText = (value: unknown): string => {
-  if (value === null || value === undefined) return '""';
-  return escapeCsvString(String(value));
-};
-
-// Comentário: célula monetária formata em pt-BR antes do escape; nunca usar safeCsvText para valores numéricos da folha.
-const safeCsvMoney = (value: unknown): string => escapeCsvString(formatBrlNumber(value));
-
-const buildReportFileName = (dataset: ReportByCompanyDataset, extension: "csv" | "pdf") => {
+const buildReportFileName = (dataset: ReportByCompanyDataset, extension: "xlsx" | "pdf") => {
   if (dataset.isConsolidated) return `relatorio-todas-empresas-${String(dataset.month).padStart(2, "0")}-${dataset.year}.${extension}`;
 
   const normalizedCompany = dataset.companyName
@@ -43,13 +31,22 @@ const buildReportFileName = (dataset: ReportByCompanyDataset, extension: "csv" |
 
 const BANK_HEADERS = ["Banco", "Agência", "Conta", "Chave Pix"] as const;
 
-type Cell = { kind: "text"; value: unknown } | { kind: "money"; value: unknown };
-const t = (value: unknown): Cell => ({ kind: "text", value });
-const m = (value: unknown): Cell => ({ kind: "money", value });
+type CellObject =
+  | { v: string; t: "s" }
+  | { v: number; t: "n"; z: string };
 
-const serializeCell = (cell: Cell): string => (cell.kind === "money" ? safeCsvMoney(cell.value) : safeCsvText(cell.value));
+const textCell = (value: unknown): CellObject => ({
+  v: value === null || value === undefined ? "" : String(value),
+  t: "s",
+});
 
-export const buildReportByCompanyCsv = (dataset: ReportByCompanyDataset): string => {
+// Comentário: célula monetária preserva o número (não string) para somas e formatação nativa no Excel.
+const moneyCell = (value: unknown): CellObject => {
+  const n = typeof value === "number" ? value : Number(value);
+  return { v: Number.isFinite(n) ? Number(n.toFixed(2)) : 0, t: "n", z: BRL_NUMBER_FORMAT };
+};
+
+export const buildReportByCompanySheetData = (dataset: ReportByCompanyDataset): CellObject[][] => {
   const headerLabels = [
     ...(dataset.isConsolidated ? ["Empresa"] : []),
     ...dataset.fixedColumns.map((column) => column.label),
@@ -57,69 +54,71 @@ export const buildReportByCompanyCsv = (dataset: ReportByCompanyDataset): string
     ...dataset.dynamicColumns.map((column) => column.rubricName),
   ];
 
-  const dataRows: Cell[][] = dataset.isConsolidated && dataset.companySections
+  const dataRows: CellObject[][] = dataset.isConsolidated && dataset.companySections
     ? dataset.companySections.flatMap((companyDataset) =>
         companyDataset.rows.map((row) => [
-          t(companyDataset.companyName),
-          t(row.name),
-          t(row.department),
-          t(row.jobRole),
-          t(row.admissionRegistration),
-          t(row.bankName),
-          t(row.bankBranch),
-          t(row.bankAccount),
-          t(row.bankPixKey),
-          ...dataset.dynamicColumns.map((column) => m(row.rubricValues[column.rubricId] ?? 0)),
+          textCell(companyDataset.companyName),
+          textCell(row.name),
+          textCell(row.department),
+          textCell(row.jobRole),
+          textCell(row.admissionRegistration),
+          textCell(row.bankName),
+          textCell(row.bankBranch),
+          textCell(row.bankAccount),
+          textCell(row.bankPixKey),
+          ...dataset.dynamicColumns.map((column) => moneyCell(row.rubricValues[column.rubricId] ?? 0)),
         ])
       )
     : dataset.rows.map((row) => [
-        t(row.name),
-        t(row.department),
-        t(row.jobRole),
-        t(row.admissionRegistration),
-        t(row.bankName),
-        t(row.bankBranch),
-        t(row.bankAccount),
-        t(row.bankPixKey),
-        ...dataset.dynamicColumns.map((column) => m(row.rubricValues[column.rubricId] ?? 0)),
+        textCell(row.name),
+        textCell(row.department),
+        textCell(row.jobRole),
+        textCell(row.admissionRegistration),
+        textCell(row.bankName),
+        textCell(row.bankBranch),
+        textCell(row.bankAccount),
+        textCell(row.bankPixKey),
+        ...dataset.dynamicColumns.map((column) => moneyCell(row.rubricValues[column.rubricId] ?? 0)),
       ]);
 
-  // Comentário: linha de totais — colunas fixas + bancárias ficam vazias; rubricas saem em pt-BR.
+  // Comentário: linha de totais — colunas fixas + bancárias ficam vazias; rubricas em formato monetário pt-BR.
   const fixedAndBankBlanks = dataset.fixedColumns.length - 1 + BANK_HEADERS.length;
-  const totalsRow: Cell[] = dataset.isConsolidated
-    ? [
-        t("TOTAL GERAL"),
-        ...Array.from({ length: fixedAndBankBlanks }, () => t("")),
-        ...dataset.dynamicColumns.map((column) => m(dataset.totalsByRubricId[column.rubricId] ?? 0)),
-      ]
-    : [
-        t("TOTAL"),
-        ...Array.from({ length: fixedAndBankBlanks }, () => t("")),
-        ...dataset.dynamicColumns.map((column) => m(dataset.totalsByRubricId[column.rubricId] ?? 0)),
-      ];
+  const totalsRow: CellObject[] = [
+    textCell(dataset.isConsolidated ? "TOTAL GERAL" : "TOTAL"),
+    ...Array.from({ length: fixedAndBankBlanks }, () => textCell("")),
+    ...dataset.dynamicColumns.map((column) => moneyCell(dataset.totalsByRubricId[column.rubricId] ?? 0)),
+  ];
 
-  const lines: string[] = [];
-  // Comentário: "sep=;" instrui o Excel pt-BR a usar ponto-e-vírgula como separador automaticamente.
-  lines.push("sep=;");
-  lines.push(serializeCell(t(dataset.title)));
-  lines.push("");
-  lines.push(headerLabels.map((label) => safeCsvText(label)).join(";"));
-  for (const row of dataRows) lines.push(row.map(serializeCell).join(";"));
-  lines.push(totalsRow.map(serializeCell).join(";"));
+  return [
+    [textCell(dataset.title)],
+    [textCell("")],
+    headerLabels.map(textCell),
+    ...dataRows,
+    totalsRow,
+  ];
+};
 
-  return lines.join("\n");
+const computeColumnWidths = (rows: CellObject[][]): { wch: number }[] => {
+  const widths: number[] = [];
+  for (const row of rows) {
+    row.forEach((cell, index) => {
+      const text = cell.t === "n" ? formatBrlNumber(cell.v) : String(cell.v ?? "");
+      const len = Math.min(text.length + 2, 40);
+      if (len > (widths[index] ?? 0)) widths[index] = len;
+    });
+  }
+  return widths.map((wch) => ({ wch: Math.max(wch, 10) }));
 };
 
 export const exportReportByCompanyExcel = (dataset: ReportByCompanyDataset) => {
-  const csv = buildReportByCompanyCsv(dataset);
+  const sheetData = buildReportByCompanySheetData(dataset);
 
-  // Comentário: BOM UTF-8 preservado; MIME e extensão .csv mantidos.
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = buildReportFileName(dataset, "csv");
-  a.click();
-  URL.revokeObjectURL(url);
-  toast.success("Exportação CSV concluída.");
+  const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+  worksheet["!cols"] = computeColumnWidths(sheetData);
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Folha");
+  XLSX.writeFile(workbook, buildReportFileName(dataset, "xlsx"));
+
+  toast.success("Exportação Excel concluída.");
 };
