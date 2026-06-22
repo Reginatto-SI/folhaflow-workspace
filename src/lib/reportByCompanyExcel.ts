@@ -137,21 +137,21 @@ const computeColumnWidths = (rows: CellObject[][]): { wch: number }[] => {
   });
 };
 
-const headerCellStyle = {
+const headerCellStyle: Partial<ExcelJS.Style> = {
   fill: { type: "pattern", pattern: "solid", fgColor: { argb: `FF${INSTITUTIONAL_RED}` } },
-  font: { color: { argb: "FFFFFFFF" }, bold: true },
-  alignment: { vertical: "center" },
+  font: { color: { argb: "FFFFFFFF" }, bold: true, size: 11 },
+  alignment: { vertical: "middle" },
   border: {
     top: { style: "thin", color: { argb: "FFB7B7B7" } },
     right: { style: "thin", color: { argb: "FFB7B7B7" } },
     bottom: { style: "thin", color: { argb: "FFB7B7B7" } },
     left: { style: "thin", color: { argb: "FFB7B7B7" } },
   },
-} satisfies Partial<ExcelJS.Style>;
+};
 
-const titleCellStyle = {
-  font: { bold: true, sz: 14 },
-} satisfies Partial<ExcelJS.Style>;
+const titleCellStyle: Partial<ExcelJS.Style> = {
+  font: { bold: true, size: 14 },
+};
 
 export const buildReportByCompanyWorksheet = (dataset: ReportByCompanyDataset): ExcelJS.Worksheet => {
   const sheetData = buildReportByCompanySheetData(dataset);
