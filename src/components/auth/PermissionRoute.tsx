@@ -1,4 +1,5 @@
 import React from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth, type AppPermission } from "@/contexts/AuthContext";
 import Forbidden from "./Forbidden";
 
@@ -8,7 +9,8 @@ type Props = {
 };
 
 const PermissionRoute: React.FC<Props> = ({ permission, children }) => {
-  const { hasPermission, loading } = useAuth();
+  const { hasPermission, getDefaultAuthenticatedPath, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -19,6 +21,11 @@ const PermissionRoute: React.FC<Props> = ({ permission, children }) => {
   }
 
   if (!hasPermission(permission)) {
+    const fallbackPath = getDefaultAuthenticatedPath();
+    // Redireciona para uma rota realmente permitida; se não houver rota segura, exibe o bloqueio padrão.
+    if (fallbackPath !== "/" && fallbackPath !== location.pathname) {
+      return <Navigate to={fallbackPath} replace />;
+    }
     return <Forbidden />;
   }
 
