@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { PayrollProvider } from "@/contexts/PayrollContext";
-import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import PermissionRoute from "@/components/auth/PermissionRoute";
 import AppLayout from "@/components/layout/AppLayout";
@@ -25,6 +25,11 @@ import Dashboard from "./pages/Dashboard";
 
 const queryClient = new QueryClient();
 
+const HomeRedirect = () => {
+  const { getDefaultAuthenticatedPath } = useAuth();
+  return <Navigate to={getDefaultAuthenticatedPath()} replace />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -41,7 +46,7 @@ const App = () => (
                     <SidebarProvider defaultOpen={false}>
                       <AppLayout>
                         <Routes>
-                          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                          <Route path="/" element={<HomeRedirect />} />
                           {/* Comentário: dashboard comparativo passa a ser a landing page padrão da área autenticada. */}
                           <Route
                             path="/dashboard"

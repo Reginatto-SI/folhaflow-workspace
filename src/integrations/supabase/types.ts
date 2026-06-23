@@ -612,7 +612,7 @@ export type Database = {
         | "relatorios.view"
         | "usuarios.manage"
         | "configuracoes.manage"
-      app_role: "admin" | "operacional" | "consulta"
+      app_role: "admin" | "operacional" | "consulta" | "desenvolvedor"
       rubric_classification:
         | "salario_ctps"
         | "salario_g"
@@ -765,7 +765,7 @@ export const Constants = {
         "usuarios.manage",
         "configuracoes.manage",
       ],
-      app_role: ["admin", "operacional", "consulta"],
+      app_role: ["admin", "operacional", "consulta", "desenvolvedor"],
       rubric_classification: [
         "salario_ctps",
         "salario_g",

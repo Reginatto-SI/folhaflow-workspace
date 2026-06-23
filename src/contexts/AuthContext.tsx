@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ type Profile = {
   is_active: boolean;
 };
 
-export type AppRole = "admin" | "operacional" | "consulta";
+export type AppRole = "admin" | "operacional" | "consulta" | "desenvolvedor";
 export type AppPermission =
   | "empresas.view"
   | "funcionarios.view"
@@ -25,8 +25,11 @@ type AuthContextType = {
   user: User | null;
   profile: Profile | null;
   role: AppRole | null;
+  roles: AppRole[];
   permissions: Set<AppPermission>;
   hasPermission: (perm: AppPermission) => boolean;
+  hasRole: (role: AppRole) => boolean;
+  getDefaultAuthenticatedPath: () => string;
   isAdmin: boolean;
   loading: boolean;
   isAuthenticated: boolean;
@@ -36,9 +39,22 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const MAIN_ROLE_PRIORITY: AppRole[] = ["admin", "operacional", "consulta", "desenvolvedor"];
+const DEFAULT_PATHS: { permission: AppPermission; path: string }[] = [
+  { permission: "relatorios.view", path: "/dashboard" },
+  { permission: "folha.operar", path: "/central-de-folha" },
+  { permission: "empresas.view", path: "/empresas" },
+  { permission: "funcionarios.view", path: "/funcionarios" },
+  { permission: "estrutura.view", path: "/setores" },
+  { permission: "usuarios.manage", path: "/usuarios" },
+  { permission: "configuracoes.manage", path: "/configuracoes" },
+  { permission: "rubricas.manage", path: "/rubricas" },
+];
+
 type AuthBundle = {
   profile: Profile | null;
   role: AppRole | null;
+  roles: AppRole[];
   permissions: Set<AppPermission>;
 };
 
@@ -46,42 +62,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [roles, setRoles] = useState<AppRole[]>([]);
   const [permissions, setPermissions] = useState<Set<AppPermission>>(new Set());
   const [loading, setLoading] = useState(true);
 
-  // Busca profile + role + permissões em paralelo (single roundtrip lógico)
+  // Busca profile + todas as roles e agrega as permissões vinculadas a cada role.
   const fetchAuthBundle = async (userId: string): Promise<AuthBundle> => {
     const [profileRes, roleRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).single(),
-      supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
+      supabase.from("user_roles").select("role").eq("user_id", userId),
     ]);
 
     const prof = (profileRes.data as Profile | null) ?? null;
-    const r = (roleRes.data?.role as AppRole | undefined) ?? null;
+    const userRoles = Array.from(new Set(((roleRes.data ?? []) as { role: AppRole }[]).map((item) => item.role)));
+    const mainRole = MAIN_ROLE_PRIORITY.find((candidate) => userRoles.includes(candidate)) ?? null;
 
     let perms = new Set<AppPermission>();
-    if (r) {
+    if (userRoles.length > 0) {
       const { data: permData } = await supabase
         .from("role_permissions")
         .select("permission")
-        .eq("role", r);
+        .in("role", userRoles);
       perms = new Set(((permData ?? []) as { permission: AppPermission }[]).map((p) => p.permission));
     }
-    return { profile: prof, role: r, permissions: perms };
+    return { profile: prof, role: mainRole, roles: userRoles, permissions: perms };
   };
 
   useEffect(() => {
     let isMounted = true;
+
+    const clearAuthState = () => {
+      setUser(null);
+      setProfile(null);
+      setRole(null);
+      setRoles([]);
+      setPermissions(new Set());
+    };
 
     const applySession = (session: Session | null, bundle: AuthBundle) => {
       if (!isMounted) return;
 
       if (bundle.profile && !bundle.profile.is_active) {
         supabase.auth.signOut();
-        setUser(null);
-        setProfile(null);
-        setRole(null);
-        setPermissions(new Set());
+        clearAuthState();
         setLoading(false);
         toast.error("Usuário inativo. Contate o administrador.");
         return;
@@ -90,6 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(session?.user ?? null);
       setProfile(bundle.profile);
       setRole(bundle.role);
+      setRoles(bundle.roles);
       setPermissions(bundle.permissions);
       setLoading(false);
     };
@@ -98,10 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
       if (!session?.user) {
-        setUser(null);
-        setProfile(null);
-        setRole(null);
-        setPermissions(new Set());
+        clearAuthState();
         setLoading(false);
         return;
       }
@@ -138,29 +159,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setProfile(null);
     setRole(null);
+    setRoles([]);
     setPermissions(new Set());
   };
 
-  const hasPermission = (perm: AppPermission) => permissions.has(perm);
+  const contextValue = useMemo(() => {
+    const hasPermission = (perm: AppPermission) => permissions.has(perm);
+    const hasRole = (candidate: AppRole) => roles.includes(candidate);
+    const getDefaultAuthenticatedPath = () => DEFAULT_PATHS.find((item) => permissions.has(item.permission))?.path ?? "/";
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        profile,
-        role,
-        permissions,
-        hasPermission,
-        isAdmin: role === "admin",
-        loading,
-        isAuthenticated: !!user && !!profile,
-        signIn,
-        signOut,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+    return {
+      user,
+      profile,
+      role,
+      roles,
+      permissions,
+      hasPermission,
+      hasRole,
+      getDefaultAuthenticatedPath,
+      isAdmin: roles.includes("admin"),
+      loading,
+      isAuthenticated: !!user && !!profile,
+      signIn,
+      signOut,
+    };
+  }, [loading, permissions, profile, role, roles, user]);
+
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
