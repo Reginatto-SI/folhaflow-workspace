@@ -14,6 +14,8 @@ import {
   Bell,
   LayoutDashboard,
   LogOut,
+  Pin,
+  PinOff,
   UserCircle,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -54,6 +56,7 @@ const MONTHS = [
 ];
 
 const APP_VERSION = "1.0";
+const SIDEBAR_PINNED_STORAGE_KEY = "app-sidebar:pinned";
 
 // Formata o ISO injetado em build-time como "DD/MM/AAAA HH:mm" (PT-BR).
 function formatBuildDateTime(iso: string): string {
@@ -122,6 +125,12 @@ function AppSidebar() {
   const { state, setOpen, isMobile } = useSidebar();
   const location = useLocation();
   const { hasPermission } = useAuth();
+  const [isPinned, setIsPinned] = React.useState(() => {
+    // Comentário: mantém o padrão colapsado; só expande fixo quando o usuário escolhe pinar.
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(SIDEBAR_PINNED_STORAGE_KEY) === "true";
+  });
+  const lastPinnedSync = React.useRef<{ isPinned: boolean; isMobile: boolean }>();
   const collapsed = state === "collapsed";
 
   // Filtra os menus pelo conjunto de permissões do usuário logado.
@@ -153,14 +162,35 @@ function AppSidebar() {
     }
   }, [isCadastrosRoute]);
 
+  React.useEffect(() => {
+    const alreadySynced =
+      lastPinnedSync.current?.isPinned === isPinned && lastPinnedSync.current?.isMobile === isMobile;
+
+    if (alreadySynced) return;
+
+    lastPinnedSync.current = { isPinned, isMobile };
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(SIDEBAR_PINNED_STORAGE_KEY, String(isPinned));
+    }
+
+    if (!isMobile) {
+      setOpen(isPinned);
+    }
+  }, [isPinned, isMobile, setOpen]);
+
+  const handlePinToggle = () => {
+    setIsPinned((current) => !current);
+  };
+
   // Sidebar mantém o estado colapsado como padrão.
-  // No desktop, usamos hover apenas como expansão temporária para revelar os labels.
+  // No desktop, hover expande temporariamente, exceto quando o usuário fixa a sidebar.
   const handleMouseEnter = () => {
-    if (!isMobile) setOpen(true);
+    if (!isMobile && !isPinned) setOpen(true);
   };
 
   const handleMouseLeave = () => {
-    if (!isMobile) setOpen(false);
+    if (!isMobile && !isPinned) setOpen(false);
   };
 
   return (
@@ -168,21 +198,44 @@ function AppSidebar() {
       <SidebarHeader className="border-b border-sidebar-border px-4 py-3 group-data-[collapsible=icon]:px-2">
         {/* O logo colapsado ficava deslocado porque o header mantinha padding horizontal de layout expandido (px-4). */}
         {/* Ajuste mínimo: no modo icon, reaproveitamos o mesmo "encaixe" horizontal (px-2) usado pelos botões do menu. */}
-        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-          {/* Mantemos o SVG oficial sempre montado e com eager loading para evitar atraso visual ao expandir a sidebar. */}
-          <img
-            src="/logo_Branca_Laranja.svg"
-            alt="Delicious Fish"
-            loading="eager"
-            decoding="sync"
-            className={`h-8 w-auto shrink-0 ${collapsed ? "hidden" : "block"}`}
-          />
-          {/* Sidebar colapsada usa marca compacta "DF" e oculta a logo completa nesse estado. */}
-          <div
-            className={`h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm ${collapsed ? "flex" : "hidden"}`}
-          >
-            DF
+        <div className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center">
+          <div className="flex items-center gap-2">
+            {/* Mantemos o SVG oficial sempre montado e com eager loading para evitar atraso visual ao expandir a sidebar. */}
+            <img
+              src="/logo_Branca_Laranja.svg"
+              alt="Delicious Fish"
+              loading="eager"
+              decoding="sync"
+              className={`h-8 w-auto shrink-0 ${collapsed ? "hidden" : "block"}`}
+            />
+            {/* Sidebar colapsada usa marca compacta "DF" e oculta a logo completa nesse estado. */}
+            <div
+              className={`h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm ${collapsed ? "flex" : "hidden"}`}
+            >
+              DF
+            </div>
           </div>
+
+          {!collapsed && !isMobile && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-pressed={isPinned}
+                  aria-label={isPinned ? "Desafixar menu lateral" : "Fixar menu lateral expandido"}
+                  className="h-7 w-7 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  onClick={handlePinToggle}
+                >
+                  {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>{isPinned ? "Voltar ao modo automático" : "Fixar menu expandido"}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </SidebarHeader>
 
