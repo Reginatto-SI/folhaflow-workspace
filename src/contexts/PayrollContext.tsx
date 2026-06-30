@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { Company, Department, Employee, JobRole, PayrollBatch, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
+import { Company, Department, Employee, EmployeeWorkerType, JobRole, PayrollBatch, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
 import { stripDerivedRubricsFromPayload } from "@/lib/payrollDuplicationGuard";
 import { calculatePayroll } from "@/lib/payrollSpreadsheet";
 import { supabase } from "@/integrations/supabase/client";
@@ -179,7 +179,8 @@ const mapEmployeeRowToModel = (row: {
   company_id: string;
   name: string;
   cpf: string;
-  admission_date: string;
+  admission_date: string | null;
+  worker_type?: EmployeeWorkerType | null;
   registration: string | null;
   work_card_number: string | null;
   notes: string | null;
@@ -199,7 +200,8 @@ const mapEmployeeRowToModel = (row: {
   companyId: row.company_id,
   name: row.name,
   cpf: row.cpf,
-  admissionDate: row.admission_date,
+  admissionDate: row.admission_date || "",
+  workerType: row.worker_type || (row.is_monthly ? "mensalista" : "contratado"),
   registration: row.registration || "",
   workCardNumber: row.work_card_number || "",
   notes: row.notes || "",
@@ -222,7 +224,8 @@ const mapEmployeeInsertToRow = (employee: Omit<Employee, "id">) => ({
   company_id: employee.companyId,
   name: normalizeRequiredText(employee.name),
   cpf: normalizeCpf(employee.cpf),
-  admission_date: employee.admissionDate,
+  admission_date: employee.admissionDate || null,
+  worker_type: employee.workerType,
   registration: normalizeText(employee.registration),
   work_card_number: normalizeText(employee.workCardNumber),
   notes: normalizeText(employee.notes),
@@ -230,7 +233,7 @@ const mapEmployeeInsertToRow = (employee: Omit<Employee, "id">) => ({
   department: normalizeText(employee.department),
   job_role_id: employee.jobRoleId || null,
   role: normalizeText(employee.role),
-  is_monthly: employee.isMonthly,
+  is_monthly: employee.workerType === "mensalista",
   is_on_leave: employee.isOnLeave,
   is_active: employee.isActive,
   bank_name: normalizeText(employee.bankName),
@@ -239,26 +242,30 @@ const mapEmployeeInsertToRow = (employee: Omit<Employee, "id">) => ({
   bank_pix_key: normalizeText(employee.bankPixKey),
 });
 
-const mapEmployeeUpdateToRow = (updates: Partial<Employee>) => ({
-  ...(updates.companyId !== undefined ? { company_id: updates.companyId } : {}),
-  ...(updates.name !== undefined ? { name: normalizeRequiredText(updates.name) } : {}),
-  ...(updates.cpf !== undefined ? { cpf: normalizeCpf(updates.cpf) } : {}),
-  ...(updates.admissionDate !== undefined ? { admission_date: updates.admissionDate } : {}),
-  ...(updates.registration !== undefined ? { registration: normalizeText(updates.registration) } : {}),
-  ...(updates.workCardNumber !== undefined ? { work_card_number: normalizeText(updates.workCardNumber) } : {}),
-  ...(updates.notes !== undefined ? { notes: normalizeText(updates.notes) } : {}),
-  ...(updates.departmentId !== undefined ? { department_id: updates.departmentId || null } : {}),
-  ...(updates.department !== undefined ? { department: normalizeText(updates.department) } : {}),
-  ...(updates.jobRoleId !== undefined ? { job_role_id: updates.jobRoleId || null } : {}),
-  ...(updates.role !== undefined ? { role: normalizeText(updates.role) } : {}),
-  ...(updates.isMonthly !== undefined ? { is_monthly: updates.isMonthly } : {}),
-  ...(updates.isOnLeave !== undefined ? { is_on_leave: updates.isOnLeave } : {}),
-  ...(updates.isActive !== undefined ? { is_active: updates.isActive } : {}),
-  ...(updates.bankName !== undefined ? { bank_name: normalizeText(updates.bankName) } : {}),
-  ...(updates.bankBranch !== undefined ? { bank_branch: normalizeText(updates.bankBranch) } : {}),
-  ...(updates.bankAccount !== undefined ? { bank_account: normalizeText(updates.bankAccount) } : {}),
-  ...(updates.bankPixKey !== undefined ? { bank_pix_key: normalizeText(updates.bankPixKey) } : {}),
-});
+const mapEmployeeUpdateToRow = (updates: Partial<Employee>) => {
+  // Comentário: workerType é a fonte da modalidade; isMonthly é legado e nunca atualiza sozinho a coluna antiga.
+  const workerType = updates.workerType ?? (updates.isMonthly !== undefined ? (updates.isMonthly ? "mensalista" : "contratado") : undefined);
+  return {
+    ...(updates.companyId !== undefined ? { company_id: updates.companyId } : {}),
+    ...(updates.name !== undefined ? { name: normalizeRequiredText(updates.name) } : {}),
+    ...(updates.cpf !== undefined ? { cpf: normalizeCpf(updates.cpf) } : {}),
+    ...(updates.admissionDate !== undefined ? { admission_date: updates.admissionDate || null } : {}),
+    ...(workerType !== undefined ? { worker_type: workerType, is_monthly: workerType === "mensalista" } : {}),
+    ...(updates.registration !== undefined ? { registration: normalizeText(updates.registration) } : {}),
+    ...(updates.workCardNumber !== undefined ? { work_card_number: normalizeText(updates.workCardNumber) } : {}),
+    ...(updates.notes !== undefined ? { notes: normalizeText(updates.notes) } : {}),
+    ...(updates.departmentId !== undefined ? { department_id: updates.departmentId || null } : {}),
+    ...(updates.department !== undefined ? { department: normalizeText(updates.department) } : {}),
+    ...(updates.jobRoleId !== undefined ? { job_role_id: updates.jobRoleId || null } : {}),
+    ...(updates.role !== undefined ? { role: normalizeText(updates.role) } : {}),
+    ...(updates.isOnLeave !== undefined ? { is_on_leave: updates.isOnLeave } : {}),
+    ...(updates.isActive !== undefined ? { is_active: updates.isActive } : {}),
+    ...(updates.bankName !== undefined ? { bank_name: normalizeText(updates.bankName) } : {}),
+    ...(updates.bankBranch !== undefined ? { bank_branch: normalizeText(updates.bankBranch) } : {}),
+    ...(updates.bankAccount !== undefined ? { bank_account: normalizeText(updates.bankAccount) } : {}),
+    ...(updates.bankPixKey !== undefined ? { bank_pix_key: normalizeText(updates.bankPixKey) } : {}),
+  };
+};
 
 const mapRubricRowToModel = (row: {
   id: string;
@@ -737,10 +744,89 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsLoading(false);
   }, [authLoading, canOperatePayroll, canViewEmployees, canViewStructure]);
 
+  const loadCatalogData = useCallback(async () => {
+    if (authLoading) return;
+
+    const departmentsRequest = canViewStructure
+      ? supabase.from("departments").select("id, company_id, name, is_active").order("name", { ascending: true })
+      : Promise.resolve({ data: [], error: null });
+    const jobRolesRequest = canViewStructure
+      ? supabase.from("job_roles").select("id, company_id, name, is_active").order("name", { ascending: true })
+      : Promise.resolve({ data: [], error: null });
+    const employeesRequest = (canViewEmployees || canOperatePayroll)
+      ? supabase.from("employees").select("*").order("name", { ascending: true })
+      : Promise.resolve({ data: [], error: null });
+
+    // Comentário: realtime nesta etapa recarrega apenas cadastros, evitando sobrescrever digitação na Central de Folha.
+    const [companiesRes, employeesRes, departmentsRes, rolesRes, rubricsRes] = await Promise.all([
+      supabase.from("companies").select("id, name, cnpj, address, city, state, is_active").order("name", { ascending: true }),
+      employeesRequest,
+      departmentsRequest,
+      jobRolesRequest,
+      supabase.from("rubricas").select(RUBRICA_SELECT_WITH_ITEMS).order("display_order", { ascending: true }),
+    ]);
+
+    const nextCatalogErrors: { departments?: string; jobRoles?: string; payrollEntries?: string } = {};
+    if (!companiesRes.error && companiesRes.data) {
+      const loadedCompanies = companiesRes.data.map(mapCompanyRowToModel);
+      setCompanies(loadedCompanies);
+      setSelectedCompany((prev) => {
+        if (prev && loadedCompanies.some((company) => company.id === prev.id && company.isActive)) return prev;
+        return loadedCompanies.find((c) => c.isActive) ?? null;
+      });
+    } else if (companiesRes.error) {
+      setLoadError(`Falha ao carregar empresas: ${companiesRes.error.message}`);
+    }
+    if (!employeesRes.error && employeesRes.data) setAllEmployees(employeesRes.data.map(mapEmployeeRowToModel));
+    if (!departmentsRes.error && departmentsRes.data) setAllDepartments(departmentsRes.data.map(mapDepartmentRowToModel));
+    else if (departmentsRes.error) nextCatalogErrors.departments = `Falha ao carregar setores: ${departmentsRes.error.message}`;
+    if (!rolesRes.error && rolesRes.data) setAllJobRoles(rolesRes.data.map(mapJobRoleRowToModel));
+    else if (rolesRes.error) nextCatalogErrors.jobRoles = `Falha ao carregar funções/cargos: ${rolesRes.error.message}`;
+    if (!rubricsRes.error && rubricsRes.data) setRubrics(rubricsRes.data.map((row) => mapRubricRowToModel(row as Parameters<typeof mapRubricRowToModel>[0])));
+    setPayrollCatalogErrors((prev) => ({ ...prev, ...nextCatalogErrors }));
+  }, [authLoading, canOperatePayroll, canViewEmployees, canViewStructure]);
+
   useEffect(() => {
     if (authLoading) return;
     void loadData();
   }, [authLoading, loadData]);
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    const watchedTables = [
+      "companies",
+      ...(canViewEmployees || canOperatePayroll ? ["employees"] : []),
+      ...(canViewStructure ? ["departments", "job_roles"] : []),
+      "rubricas",
+    ];
+    if (watchedTables.length === 0) return;
+
+    let reloadTimer: ReturnType<typeof window.setTimeout> | null = null;
+    const scheduleReload = () => {
+      if (reloadTimer) window.clearTimeout(reloadTimer);
+      reloadTimer = window.setTimeout(() => {
+        void loadCatalogData();
+      }, 350);
+    };
+
+    // Comentário: uma única inscrição controlada pelo provider invalida os cadastros carregados,
+    // sem polling e sem mutar cálculo de folha. RLS continua sendo aplicada pelo Supabase nas leituras.
+    const channel = supabase.channel(`payroll-catalog-realtime:${watchedTables.join("-")}`);
+    watchedTables.forEach((table) => {
+      channel.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table },
+        scheduleReload
+      );
+    });
+    channel.subscribe();
+
+    return () => {
+      if (reloadTimer) window.clearTimeout(reloadTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [authLoading, canOperatePayroll, canViewEmployees, canViewStructure, loadCatalogData]);
 
   // Comentário: nesta fase, a listagem de /funcionarios usa companyId como empresa registrada.
   // A participação em folha por múltiplas empresas do grupo será modelada em camada própria futura.
