@@ -23,13 +23,14 @@ type EmployeeTab = "dados-funcionario" | "dados-funcionais" | "dados-bancarios" 
 
 type EmployeeFormState = Omit<Employee, "id">;
 
-type EmployeeFormErrors = Partial<Record<"name" | "cpf" | "admissionDate" | "companyId" | "departmentId" | "jobRoleId" | "bankName" | "bankBranch" | "bankAccount", string>>;
+type EmployeeFormErrors = Partial<Record<"name" | "cpf" | "admissionDate" | "companyId" | "workerType" | "departmentId" | "jobRoleId" | "bankName" | "bankBranch" | "bankAccount", string>>;
 
 const getInitialForm = (companyId = ""): EmployeeFormState => ({
   companyId,
   name: "",
   cpf: "",
   admissionDate: "",
+  workerType: "contratado",
   registration: "",
   workCardNumber: "",
   notes: "",
@@ -82,6 +83,15 @@ const normalizeBankField = (value?: string) => {
 };
 const formatCpf = (value: string) => maskCpf(value || "");
 const slugify = (value: string) => normalizeText(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
+const parseWorkerType = (value: string): Employee["workerType"] | null => {
+  const normalized = normalizeText(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!normalized) return "contratado";
+  if (normalized === "contratado") return "contratado";
+  if (normalized === "diarista") return "diarista";
+  if (normalized === "mensalista") return "mensalista";
+  return null;
+};
 
 const toIsoDate = (value: unknown): string => {
   if (typeof value === "number") {
@@ -155,7 +165,7 @@ const Employees: React.FC = () => {
       if (filters.status === "active" && emp.isOnLeave) return false;
       if (filters.status === "on_leave" && !emp.isOnLeave) return false;
       if (filters.status === "inactive" && emp.isActive) return false;
-      if (filters.status === "monthly" && !emp.isMonthly) return false;
+      if (filters.status === "monthly" && emp.workerType !== "mensalista") return false;
       if (filters.departmentId && emp.departmentId !== filters.departmentId) return false;
       if (filters.jobRoleId && emp.jobRoleId !== filters.jobRoleId) return false;
       return true;
@@ -225,7 +235,7 @@ const Employees: React.FC = () => {
     const nextErrors: EmployeeFormErrors = {};
 
     if (!normalizeText(draft.name)) nextErrors.name = "Informe o nome completo.";
-    if (!draft.admissionDate) nextErrors.admissionDate = "Informe a data de admissão.";
+    if (draft.workerType === "contratado" && !draft.admissionDate) nextErrors.admissionDate = "Informe a data de admissão para contratado.";
     if (!draft.companyId) nextErrors.companyId = "Selecione a empresa registrada.";
 
     if (!isValidCpf(draft.cpf)) {
@@ -282,6 +292,8 @@ const Employees: React.FC = () => {
       companyId: form.companyId || filters.companyId || "",
       name: normalizedName,
       cpf: sanitizeDigits(form.cpf),
+      admissionDate: form.admissionDate || "",
+      workerType: form.workerType,
       registration: normalizedRegistration,
       departmentId: form.departmentId || "",
       department: normalizedDepartment,
@@ -350,7 +362,8 @@ const Employees: React.FC = () => {
         "Empresa Registrada": company?.name || "",
         "Setor": department?.name || employee.department || "",
         "Função/Cargo": jobRole?.name || employee.role || "",
-        "Data de Admissão": employee.admissionDate,
+        "Modalidade": getWorkerTypeLabel(employee.workerType),
+        "Data de Admissão": formatAdmissionDate(employee.admissionDate),
         "Status": employee.isOnLeave ? "Afastado" : employee.isActive ? "Ativo" : "Inativo",
       };
     });
@@ -393,17 +406,19 @@ const Employees: React.FC = () => {
   const handleDownloadTemplate = () => {
     const workbook = XLSX.utils.book_new();
     const employeesTemplate = XLSX.utils.aoa_to_sheet([
-      ["Nome", "CPF", "Empresa ID", "Empresa", "Setor ID", "Setor", "Função ID", "Função/Cargo", "Data de Admissão", "Status"],
+      ["Nome", "CPF", "Empresa ID", "Empresa", "Setor ID", "Setor", "Função ID", "Função/Cargo", "Modalidade", "Data de Admissão", "Status"],
     ]);
     const instructionsSheet = XLSX.utils.aoa_to_sheet([
       ["Instruções de preenchimento"],
       ["Preencha somente a aba Funcionarios."],
       ["Use preferencialmente os IDs das abas auxiliares (Empresa ID, Setor ID, Função ID)."],
       ["Não altere os nomes das colunas da aba Funcionarios."],
+      ["Modalidade é opcional: use Contratado, Diarista ou Mensalista. Em branco será tratado como Contratado."],
+      ["Data de Admissão é obrigatória apenas para modalidade Contratado."],
       ["Empresas, setores e funções/cargos devem existir previamente no sistema."],
       ["A importação não cria empresas, setores ou funções/cargos automaticamente."],
       ["CPF repetido é permitido quando representar outro vínculo funcional."],
-      ["Registros idênticos (CPF + empresa + setor + função + admissão) podem ser bloqueados por duplicidade."],
+      ["Registros idênticos (CPF + empresa + setor + função + modalidade + admissão) podem ser bloqueados por duplicidade."],
     ]);
     const companiesSheet = XLSX.utils.json_to_sheet(companies.map((company) => ({ "ID": company.id, "Nome/Razão social": company.name, "CNPJ": company.cnpj })));
     const departmentsSheet = XLSX.utils.json_to_sheet(allDepartments.map((department) => {
@@ -457,11 +472,14 @@ const Employees: React.FC = () => {
         const departmentNameRaw = normalizeText(String(row["Setor"] || ""));
         const jobRoleIdRaw = normalizeText(String(row["Função ID"] || ""));
         const jobRoleNameRaw = normalizeText(String(row["Função/Cargo"] || ""));
+        const workerType = parseWorkerType(String(row["Modalidade"] || ""));
+        const admissionRaw = normalizeText(String(row["Data de Admissão"] || ""));
         const admissionDate = toIsoDate(row["Data de Admissão"]);
         const statusRaw = normalizeText(String(row["Status"] || "Ativo")).toLowerCase();
         if (!name && !cpf && !companyIdRaw && !companyNameRaw) { ignored += 1; continue; }
         if (!name) { errorsList.push(`Linha ${line}: nome obrigatório.`); continue; }
         if (!isValidCpf(cpf)) { errorsList.push(`Linha ${line}: CPF inválido.`); continue; }
+        if (!workerType) { errorsList.push(`Linha ${line}: modalidade inválida. Use Contratado, Diarista ou Mensalista.`); continue; }
 
         // Comentário: vínculo por ID é prioridade; por nome usamos comparação normalizada (trim + espaços + minúsculas), sem aproximação.
         const company = companyIdRaw
@@ -476,13 +494,14 @@ const Employees: React.FC = () => {
           ? allJobRoles.find((item) => item.id === jobRoleIdRaw && item.companyId === company.id)
           : allJobRoles.find((item) => normalizeLookup(item.name) === normalizeLookup(jobRoleNameRaw) && item.companyId === company.id);
         if (!jobRole) { errorsList.push(`Linha ${line}: função/cargo não encontrada para a empresa informada.`); continue; }
-        if (!admissionDate) { errorsList.push(`Linha ${line}: data de admissão inválida.`); continue; }
+        if (workerType === "contratado" && !admissionDate) { errorsList.push(`Linha ${line}: data de admissão obrigatória para contratado.`); continue; }
+        if (workerType !== "contratado" && admissionRaw && !admissionDate) { errorsList.push(`Linha ${line}: data de admissão inválida.`); continue; }
         if (!["ativo", "inativo", "afastado"].includes(statusRaw)) { errorsList.push(`Linha ${line}: status inválido.`); continue; }
 
-        // Comentário: bloqueamos somente duplicidade idêntica (CPF+empresa+setor+função+admissão), não CPF repetido isolado.
-        const fullKey = `${cpf}|${company.id}|${department.id}|${jobRole.id}|${admissionDate}`;
+        // Comentário: bloqueamos somente duplicidade idêntica (CPF+empresa+setor+função+modalidade+admissão), não CPF repetido isolado.
+        const fullKey = `${cpf}|${company.id}|${department.id}|${jobRole.id}|${workerType}|${admissionDate}`;
         if (seenImportKeys.has(fullKey)) {
-          errorsList.push(`Linha ${line}: registro duplicado dentro da própria planilha com mesmo CPF, empresa, setor, função e data de admissão.`);
+          errorsList.push(`Linha ${line}: registro duplicado dentro da própria planilha com mesmo CPF, empresa, setor, função, modalidade e data de admissão.`);
           continue;
         }
         seenImportKeys.add(fullKey);
@@ -492,10 +511,11 @@ const Employees: React.FC = () => {
           && item.companyId === company.id
           && item.departmentId === department.id
           && item.jobRoleId === jobRole.id
+          && item.workerType === workerType
           && item.admissionDate === admissionDate
         );
         if (duplicateExact) {
-          errorsList.push(`Linha ${line}: possível duplicidade idêntica já cadastrada para CPF, empresa, setor, função e admissão.`);
+          errorsList.push(`Linha ${line}: possível duplicidade idêntica já cadastrada para CPF, empresa, setor, função, modalidade e admissão.`);
           continue;
         }
 
@@ -505,7 +525,7 @@ const Employees: React.FC = () => {
         }
 
         const statusMap = statusRaw === "afastado" ? { isOnLeave: true, isActive: true } : statusRaw === "inativo" ? { isOnLeave: false, isActive: false } : { isOnLeave: false, isActive: true };
-        await addEmployee({ companyId: company.id, name, cpf, admissionDate, registration: "", workCardNumber: "", notes: "", departmentId: department.id, department: department.name, jobRoleId: jobRole.id, role: jobRole.name, isMonthly: false, isOnLeave: statusMap.isOnLeave, isActive: statusMap.isActive, bankName: "", bankBranch: "", bankAccount: "", bankPixKey: "" });
+        await addEmployee({ companyId: company.id, name, cpf, admissionDate, workerType, registration: "", workCardNumber: "", notes: "", departmentId: department.id, department: department.name, jobRoleId: jobRole.id, role: jobRole.name, isMonthly: workerType === "mensalista", isOnLeave: statusMap.isOnLeave, isActive: statusMap.isActive, bankName: "", bankBranch: "", bankAccount: "", bankPixKey: "" });
         imported += 1;
       }
 
@@ -525,13 +545,16 @@ const Employees: React.FC = () => {
     }
   };
 
+  const getWorkerTypeLabel = (value: Employee["workerType"]) => value === "diarista" ? "Diarista" : value === "mensalista" ? "Mensalista" : "Contratado";
+  const formatAdmissionDate = (value?: string) => value ? new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR") : "Não informado";
+
   const fieldClass = (field: keyof EmployeeFormErrors) => cn(errors[field] && "border-destructive focus-visible:ring-destructive/40");
 
   const kpis = useMemo(() => {
     const total = filteredEmployees.length;
     const active = filteredEmployees.filter((e) => e.isActive && !e.isOnLeave).length;
     const onLeave = filteredEmployees.filter((e) => e.isOnLeave).length;
-    const monthly = filteredEmployees.filter((e) => e.isMonthly).length;
+    const monthly = filteredEmployees.filter((e) => e.workerType === "mensalista").length;
     return { total, active, onLeave, monthly };
   }, [filteredEmployees]);
 
@@ -687,7 +710,7 @@ const Employees: React.FC = () => {
                       {errors.cpf && <p className="text-xs text-destructive">{errors.cpf}</p>}
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Data de admissão *</Label>
+                      <Label>Data de admissão {form.workerType === "contratado" ? "*" : "(opcional)"}</Label>
                       <Input
                         className={fieldClass("admissionDate")}
                         type="date"
@@ -695,6 +718,24 @@ const Employees: React.FC = () => {
                         onChange={(event) => setForm((prev) => ({ ...prev, admissionDate: event.target.value }))}
                       />
                       {errors.admissionDate && <p className="text-xs text-destructive">{errors.admissionDate}</p>}
+                      {form.workerType !== "contratado" && <p className="text-xs text-muted-foreground">Opcional para diarista ou mensalista.</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Modalidade operacional *</Label>
+                      <Select
+                        value={form.workerType}
+                        onValueChange={(value) => setForm((prev) => ({ ...prev, workerType: value as Employee["workerType"] }))}
+                      >
+                        <SelectTrigger className={fieldClass("workerType")}>
+                          <SelectValue placeholder="Selecione a modalidade" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="contratado">Contratado</SelectItem>
+                          <SelectItem value="diarista">Diarista</SelectItem>
+                          <SelectItem value="mensalista">Mensalista</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">A modalidade é apenas cadastral e não cria valores automáticos de folha.</p>
                     </div>
                     <div className="space-y-1.5">
                       <Label>Nº da carteira de trabalho (CTPS)</Label>
@@ -817,7 +858,7 @@ const Employees: React.FC = () => {
                     </div>
                   </div>
                   {/* Comentário: salário não pertence ao cadastro de funcionário; remuneração é tratada apenas na Central de Folha. */}
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                     <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
                       <Checkbox checked={form.isActive} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked === true }))} />
                       Ativo
@@ -825,10 +866,6 @@ const Employees: React.FC = () => {
                     <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
                       <Checkbox checked={form.isOnLeave} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isOnLeave: checked === true }))} />
                       Afastado
-                    </label>
-                    <label className="flex min-h-14 items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
-                      <Checkbox checked={form.isMonthly} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isMonthly: checked === true }))} />
-                      Mensalista
                     </label>
                   </div>
                 </section>
@@ -967,6 +1004,7 @@ const Employees: React.FC = () => {
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Setor</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Função</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Empresa registrada</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Modalidade</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Admissão</th>
                 <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">Status</th>
                 <th className="w-20" />
@@ -980,7 +1018,8 @@ const Employees: React.FC = () => {
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{employee.department || "-"}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{employee.role || "-"}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{companies.find((company) => company.id === employee.companyId)?.name || "-"}</td>
-                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{new Date(employee.admissionDate).toLocaleDateString("pt-BR")}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{getWorkerTypeLabel(employee.workerType)}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{formatAdmissionDate(employee.admissionDate)}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-center">
                     <Badge
                       variant={employee.isOnLeave ? "secondary" : employee.isActive ? "default" : "secondary"}
@@ -1003,7 +1042,7 @@ const Employees: React.FC = () => {
               ))}
               {filteredEmployees.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={9} className="py-8 text-center text-muted-foreground">
                     {allEmployees.length === 0
                       ? "Nenhum funcionário cadastrado."
                       : hasCompanyFilter && !filters.search && !filters.status && !filters.departmentId && !filters.jobRoleId

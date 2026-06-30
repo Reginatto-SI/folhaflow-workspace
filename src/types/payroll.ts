@@ -27,13 +27,17 @@ export interface JobRole {
   isActive: boolean;
 }
 
+export type EmployeeWorkerType = "contratado" | "diarista" | "mensalista";
+
 export interface Employee {
   id: string;
   // Comentário: nesta fase, companyId representa a empresa formal de registro (empresa registrada), não o vínculo completo de folha multiempresa.
   companyId: string;
   name: string;
   cpf: string;
-  admissionDate: string;
+  admissionDate?: string;
+  // Comentário: modalidade operacional simples do cadastro; não define cálculo nem valores de folha.
+  workerType: EmployeeWorkerType;
   registration?: string;
   // Comentário: campo novo para carteira de trabalho no cadastro-base de RH.
   workCardNumber?: string;
@@ -44,6 +48,7 @@ export interface Employee {
   // Comentário: vínculo estruturado por ID em transição gradual; ainda convivendo com campo legado de texto.
   jobRoleId?: string;
   role?: string;
+  // Comentário: legado derivado de workerType para compatibilidade com telas/testes antigos; não usar como fonte da modalidade.
   isMonthly: boolean;
   isOnLeave: boolean;
   isActive: boolean;
