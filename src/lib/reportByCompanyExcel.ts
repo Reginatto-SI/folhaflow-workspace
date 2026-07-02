@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { toast } from "sonner";
 import type { ReportByCompanyDataset } from "@/lib/reportByCompanyData";
+import { formatPayrollReportFilename } from "@/lib/payrollReportFilename";
 
 // Comentário: formato numérico do Excel — com locale pt-BR exibe como 1.234,56 (sem R$).
 const BRL_NUMBER_FORMAT = "#,##0.00;-#,##0.00";
@@ -29,13 +30,11 @@ export const formatAdmissionRegistrationForExcel = (value: string): string => {
 const buildReportFileName = (dataset: ReportByCompanyDataset, extension: "xlsx" | "pdf") => {
   if (dataset.isConsolidated) return `relatorio-todas-empresas-${String(dataset.month).padStart(2, "0")}-${dataset.year}.${extension}`;
 
-  const normalizedCompany = dataset.companyName
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-  return `relatorio-empresa-${normalizedCompany || "empresa"}-${String(dataset.month).padStart(2, "0")}-${dataset.year}.${extension}`;
+  return formatPayrollReportFilename({
+    competencia: { month: dataset.month, year: dataset.year, competenceLabel: dataset.competenceLabel },
+    empresaNome: dataset.companyName || "Empresa",
+    extension,
+  });
 };
 
 const BANK_HEADERS = ["Banco", "Agência", "Conta", "Chave Pix"] as const;

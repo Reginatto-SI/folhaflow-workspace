@@ -87,6 +87,21 @@ const officialColumns = [
 ];
 
 describe("reportByCompanyPdf", () => {
+  it("salva o PDF da empresa com o padrão operacional de nome de arquivo", () => {
+    saveMock.mockClear();
+    autoTableMock.mockClear();
+
+    generateReportByCompanyPdf({
+      ...datasetWithColumns([column({ rubricId: "ctps", rubricCode: "salario_ctps", rubricName: "Salário CTPS", rubricClassification: "salario_ctps", order: 1 })]),
+      companyName: "COND GRUPO",
+      competenceLabel: "JUNHO DE 26",
+      month: 6,
+      year: 2026,
+    });
+
+    expect(saveMock).toHaveBeenCalledWith("JUNHO -26 - Folha de Pagamento COND GRUPO.pdf");
+  });
+
   it("monta as colunas dinâmicas na ordem oficial completa e remove Salário Real", () => {
     const pdfColumns = buildPayrollPdfDynamicColumns(datasetWithColumns(officialColumns));
 

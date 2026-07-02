@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { ReportByCompanyDataset, ReportDynamicColumn } from "@/lib/reportByCompanyData";
+import { formatPayrollReportFilename } from "@/lib/payrollReportFilename";
 
 const FOOTER_TEXT = "Gerado por Reginatto SI — www.reginattosistemas.com.br — Contato: (65) 99210-2030";
 const DARK_HIGHLIGHT: [number, number, number] = [71, 85, 105];
@@ -267,12 +268,14 @@ export const getPayrollPdfBodyColumnStyle = (columnIndex: number): PayrollPdfBod
 export const getPayrollPdfBodyColumnHalign = (columnIndex: number): "left" | "center" =>
   getPayrollPdfBodyColumnStyle(columnIndex).halign;
 
-const normalizeFileToken = (value: string): string => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 const buildReportFileName = (dataset: ReportByCompanyDataset): string => {
   if (dataset.isConsolidated) return `relatorio-todas-empresas-${String(dataset.month).padStart(2, "0")}-${dataset.year}.pdf`;
 
-  const competence = new Date(dataset.year, dataset.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  return `${normalizeFileToken(dataset.companyName || "empresa")}-${normalizeFileToken(competence || `${dataset.month}-${dataset.year}`)}.pdf`;
+  return formatPayrollReportFilename({
+    competencia: { month: dataset.month, year: dataset.year, competenceLabel: dataset.competenceLabel },
+    empresaNome: dataset.companyName || "Empresa",
+    extension: "pdf",
+  });
 };
 
 export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
