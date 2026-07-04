@@ -48,9 +48,9 @@ const getInitialForm = (companyId = ""): EmployeeFormState => ({
 });
 
 // Comentário: CPF sempre é persistido sem máscara para manter consistência e facilitar validação futura no banco.
-const sanitizeDigits = (value: string) => value.replace(/\D/g, "");
+const sanitizeDigits = (value?: string | null) => (value || "").replace(/\D/g, "");
 
-const maskCpf = (value: string) => {
+const maskCpf = (value?: string | null) => {
   const digits = sanitizeDigits(value).slice(0, 11);
   return digits
     .replace(/(\d{3})(\d)/, "$1.$2")
@@ -81,7 +81,7 @@ const normalizeBankField = (value?: string) => {
   const normalized = normalizeText(value);
   return normalized.length >= 2 ? normalized : "";
 };
-const formatCpf = (value: string) => maskCpf(value || "");
+const formatCpf = (value?: string | null) => maskCpf(value ?? "");
 const slugify = (value: string) => normalizeText(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 const parseWorkerType = (value: string): Employee["workerType"] | null => {
@@ -158,7 +158,7 @@ const Employees: React.FC = () => {
         const q = filters.search.toLowerCase();
         const cpfDigits = sanitizeDigits(filters.search);
         const matchName = emp.name.toLowerCase().includes(q);
-        const matchCpf = cpfDigits.length > 0 && emp.cpf.includes(cpfDigits);
+        const matchCpf = cpfDigits.length > 0 && (emp.cpf ?? "").includes(cpfDigits);
         if (!matchName && !matchCpf) return false;
       }
       if (filters.status === "active" && !emp.isActive) return false;
@@ -235,10 +235,9 @@ const Employees: React.FC = () => {
     const nextErrors: EmployeeFormErrors = {};
 
     if (!normalizeText(draft.name)) nextErrors.name = "Informe o nome completo.";
-    if (draft.workerType === "contratado" && !draft.admissionDate) nextErrors.admissionDate = "Informe a data de admissão para contratado.";
     if (!draft.companyId) nextErrors.companyId = "Selecione a empresa registrada.";
 
-    if (!isValidCpf(draft.cpf)) {
+    if (sanitizeDigits(draft.cpf).length > 0 && !isValidCpf(draft.cpf)) {
       nextErrors.cpf = "CPF inválido. Verifique os 11 dígitos.";
     }
 
@@ -698,7 +697,7 @@ const Employees: React.FC = () => {
                       {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                     </div>
                     <div className="space-y-1.5">
-                      <Label>CPF *</Label>
+                      <Label>CPF</Label>
                       <Input
                         className={fieldClass("cpf")}
                         inputMode="numeric"
@@ -708,9 +707,10 @@ const Employees: React.FC = () => {
                         onChange={(event) => setForm((prev) => ({ ...prev, cpf: maskCpf(event.target.value) }))}
                       />
                       {errors.cpf && <p className="text-xs text-destructive">{errors.cpf}</p>}
+                      <p className="text-xs text-muted-foreground">Pode ser preenchido posteriormente.</p>
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Data de admissão {form.workerType === "contratado" ? "*" : "(opcional)"}</Label>
+                      <Label>Data de admissão</Label>
                       <Input
                         className={fieldClass("admissionDate")}
                         type="date"
@@ -718,7 +718,7 @@ const Employees: React.FC = () => {
                         onChange={(event) => setForm((prev) => ({ ...prev, admissionDate: event.target.value }))}
                       />
                       {errors.admissionDate && <p className="text-xs text-destructive">{errors.admissionDate}</p>}
-                      {form.workerType !== "contratado" && <p className="text-xs text-muted-foreground">Opcional para diarista ou mensalista.</p>}
+                      <p className="text-xs text-muted-foreground">Pode ser preenchido posteriormente.</p>
                     </div>
                     <div className="space-y-1.5">
                       <Label>Modalidade operacional *</Label>
@@ -1014,7 +1014,7 @@ const Employees: React.FC = () => {
               {pagedEmployees.map((employee) => (
                 <tr key={employee.id} className="border-b transition-colors hover:bg-muted/30">
                   <td className="px-4 py-2 leading-tight whitespace-nowrap font-medium">{employee.name}</td>
-                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{maskCpf(employee.cpf)}</td>
+                  <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{maskCpf(employee.cpf ?? "")}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{employee.department || "-"}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{employee.role || "-"}</td>
                   <td className="px-4 py-2 leading-tight whitespace-nowrap text-muted-foreground">{companies.find((company) => company.id === employee.companyId)?.name || "-"}</td>

@@ -96,7 +96,7 @@ const normalizeRequiredText = (value: string) => value.trim().replace(/\s+/g, " 
 
 // Comentário: CPF é identidade global do colaborador no grupo.
 // Mantemos somente dígitos para alinhar validação/consulta e regra de unicidade global no banco.
-const normalizeCpf = (value: string) => value.replace(/\D/g, "");
+const normalizeCpf = (value?: string | null) => value ? value.replace(/\D/g, "") || null : null;
 
 const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; address: string | null; city?: string | null; state?: string | null; is_active: boolean }): Company => ({
   id: row.id,
@@ -178,7 +178,7 @@ const mapEmployeeRowToModel = (row: {
   id: string;
   company_id: string;
   name: string;
-  cpf: string;
+  cpf: string | null;
   admission_date: string | null;
   worker_type?: EmployeeWorkerType | null;
   registration: string | null;
@@ -199,7 +199,7 @@ const mapEmployeeRowToModel = (row: {
   id: row.id,
   companyId: row.company_id,
   name: row.name,
-  cpf: row.cpf,
+  cpf: row.cpf ?? "",
   admissionDate: row.admission_date || "",
   workerType: row.worker_type || (row.is_monthly ? "mensalista" : "contratado"),
   registration: row.registration || "",
