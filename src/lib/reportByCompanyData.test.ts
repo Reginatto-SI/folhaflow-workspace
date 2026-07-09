@@ -92,6 +92,30 @@ describe("buildReportByCompanyData - ordenação de funcionários", () => {
 });
 
 
+describe("buildReportByCompanyData - IDs financeiros estruturados", () => {
+  it("resolve Salário Fiscal por code técnico explícito e G2/Líquido pelos resolvedores canônicos da Central", () => {
+    const rubrics: Rubric[] = [
+      { ...rubric, id: "fiscal", code: "SAL_FISCAL", name: "Qualquer label", nature: "calculada", calculationMethod: "formula", classification: null, order: 1 },
+      { ...rubric, id: "g2", code: "g2_complemento", name: "Outro label", nature: "calculada", calculationMethod: "formula", classification: null, order: 2 },
+      { ...rubric, id: "liq", code: "salario_liquido", name: "Mais um label", nature: "calculada", calculationMethod: "formula", classification: null, order: 3 },
+    ];
+
+    const dataset = buildReportByCompanyData({
+      company,
+      month: { month: 4, year: 2026 },
+      batch,
+      allBatches: [batch],
+      allEmployees: [makeEmployee("e1", "Ana", "111")],
+      allEntries: [{ ...makeEntry("e1", 10), earnings: { fiscal: 100, g2: 20, liq: 90 } }],
+      rubrics,
+    });
+
+    expect(dataset.financialRubricIds).toEqual({ salarioFiscalId: "fiscal", salarioG2Id: "g2", liquidoId: "liq" });
+    expect(dataset.rows[0].rubricValues.fiscal).toBe(100);
+  });
+});
+
+
 const makeCompany = (id: string, name: string): Company => ({
   id,
   name,

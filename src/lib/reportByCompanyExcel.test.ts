@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReportByCompanySheetData, buildReportByCompanyWorksheet, formatAdmissionRegistrationForExcel, formatBrlNumber } from "@/lib/reportByCompanyExcel";
+import { buildFinancialSheetData, buildReportByCompanySheetData, buildReportByCompanyWorkbook, buildReportByCompanyWorksheet, formatAdmissionRegistrationForExcel, formatBrlNumber } from "@/lib/reportByCompanyExcel";
 import type { ReportByCompanyDataset } from "@/lib/reportByCompanyData";
 
 const baseDataset = (overrides: Partial<ReportByCompanyDataset> = {}): ReportByCompanyDataset => ({
@@ -15,7 +15,9 @@ const baseDataset = (overrides: Partial<ReportByCompanyDataset> = {}): ReportByC
     { key: "admissionRegistration", label: "Admissão/Registro" },
   ],
   dynamicColumns: [
-    { rubricId: "r1", rubricCode: "SAL", rubricName: "Salário", rubricType: "provento", rubricClassification: "salario_ctps", order: 1, isCanonicalSalarioReal: false },
+    { rubricId: "r1", rubricCode: "SALARIO_FISCAL", rubricName: "Salário Fiscal", rubricType: "provento", rubricClassification: null, order: 1, isCanonicalSalarioReal: false },
+    { rubricId: "g2", rubricCode: "G2_COMPLEMENTO", rubricName: "G2 Complemento", rubricType: "provento", rubricClassification: null, order: 2, isCanonicalSalarioReal: false },
+    { rubricId: "liq", rubricCode: "SALARIO_LIQUIDO", rubricName: "Salário Líquido", rubricType: "provento", rubricClassification: null, order: 3, isCanonicalSalarioReal: false },
   ],
   rows: [
     {
@@ -24,14 +26,16 @@ const baseDataset = (overrides: Partial<ReportByCompanyDataset> = {}): ReportByC
       department: "RH",
       jobRole: "Analista",
       admissionRegistration: "2025-01-01 / 10",
+      cpf: "606.547.463-03",
       bankName: "Banco do Brasil",
       bankBranch: "0012",
       bankAccount: "70378-8",
       bankPixKey: "606.547.463-03",
-      rubricValues: { r1: 2324.2 },
+      rubricValues: { r1: 2324.2, g2: 120.5, liq: 2100.25 },
     },
   ],
-  totalsByRubricId: { r1: 2324.2 },
+  totalsByRubricId: { r1: 2324.2, g2: 120.5, liq: 2100.25 },
+  financialRubricIds: { salarioFiscalId: "r1", salarioG2Id: "g2", liquidoId: "liq" },
   ...overrides,
 });
 
@@ -73,8 +77,10 @@ describe("buildReportByCompanySheetData", () => {
       "Banco",
       "Agência",
       "Conta",
-      "Chave Pix",
-      "Salário",
+      "Chave PIX",
+      "Salário Fiscal",
+      "G2 Complemento",
+      "Salário Líquido",
     ]);
   });
 
@@ -134,14 +140,14 @@ describe("buildReportByCompanyWorksheet", () => {
   it("aplica cabeçalho estilizado, filtro dinâmico e congelamento em A4", () => {
     const worksheet = buildReportByCompanyWorksheet(baseDataset());
 
-    expect(worksheet.autoFilter).toBe("A3:I3");
+    expect(worksheet.autoFilter).toBe("A3:K3");
     expect(worksheet.views[0]).toMatchObject({ topLeftCell: "A4", ySplit: 3, state: "frozen" });
     expect(worksheet.getCell("A3").style).toMatchObject({
       fill: { fgColor: { argb: "FFC4151C" } },
       font: { color: { argb: "FFFFFFFF" }, bold: true },
-      alignment: { vertical: "center" },
+      alignment: { vertical: "middle" },
     });
-    expect(worksheet.getCell("I3").style).toMatchObject({
+    expect(worksheet.getCell("K3").style).toMatchObject({
       fill: { fgColor: { argb: "FFC4151C" } },
       font: { color: { argb: "FFFFFFFF" }, bold: true },
     });
@@ -156,8 +162,8 @@ describe("buildReportByCompanyWorksheet", () => {
       companySections: [dataset],
     });
 
-    expect(worksheet.autoFilter).toBe("A3:J3");
-    expect(worksheet.getCell("J3").style).toMatchObject({ font: { bold: true } });
+    expect(worksheet.autoFilter).toBe("A3:L3");
+    expect(worksheet.getCell("L3").style).toMatchObject({ font: { bold: true } });
   });
 
   it("define larguras mínimas para colunas de leitura e monetárias", () => {
@@ -169,5 +175,100 @@ describe("buildReportByCompanyWorksheet", () => {
     expect(columns[4].width).toBeGreaterThanOrEqual(20);
     expect(columns[7].width).toBeGreaterThanOrEqual(24);
     expect(columns[8].width).toBeGreaterThanOrEqual(14);
+  });
+});
+
+
+describe("buildFinancialSheetData", () => {
+  it("gera aba Financeiro somente com as colunas solicitadas e valores já presentes no dataset", () => {
+    const sheet = buildFinancialSheetData(baseDataset());
+    expect(sheet[2].map((cell) => cell.v)).toEqual([
+      "Empresa",
+      "Nome",
+      "Setor",
+      "CPF",
+      "Banco",
+      "Agência",
+      "Conta",
+      "Chave PIX",
+      "Salário Fiscal",
+      "Salário G2",
+      "Líquido",
+      "Valor PIX",
+      "Cheque",
+    ]);
+    expect(sheet[3].map((cell) => cell.v)).toEqual([
+      "Empresa 1",
+      "Ana",
+      "RH",
+      "606.547.463-03",
+      "Banco do Brasil",
+      "0012",
+      "70378-8",
+      "606.547.463-03",
+      2324.2,
+      120.5,
+      2100.25,
+      "",
+      "",
+    ]);
+  });
+
+
+  it("mantém Valor PIX e Cheque vazios quando não existe forma de pagamento explícita", () => {
+    const sheet = buildFinancialSheetData(baseDataset({
+      rows: [{
+        ...baseDataset().rows[0],
+        bankPixKey: "pix-chave-preenchida",
+        rubricValues: { r1: 1000, g2: 200, liq: 900 },
+      }],
+    }));
+
+    expect(sheet[3][7]).toMatchObject({ v: "pix-chave-preenchida", t: "s" });
+    expect(sheet[3][11]).toMatchObject({ v: "", t: "s" });
+    expect(sheet[3][12]).toMatchObject({ v: "", t: "s" });
+  });
+
+  it("deixa salários financeiros vazios quando os IDs estruturados não estão disponíveis", () => {
+    const sheet = buildFinancialSheetData(baseDataset({
+      financialRubricIds: { salarioFiscalId: null, salarioG2Id: null, liquidoId: null },
+    }));
+
+    expect(sheet[3][8]).toMatchObject({ v: "", t: "s" });
+    expect(sheet[3][9]).toMatchObject({ v: "", t: "s" });
+    expect(sheet[3][10]).toMatchObject({ v: "", t: "s" });
+  });
+
+  it("preserva CPF, agência, conta e chave PIX como texto na aba Financeiro", () => {
+    const sheet = buildFinancialSheetData(baseDataset());
+
+    expect(sheet[3][3]).toMatchObject({ v: "606.547.463-03", t: "s" });
+    expect(sheet[3][5]).toMatchObject({ v: "0012", t: "s" });
+    expect(sheet[3][6]).toMatchObject({ v: "70378-8", t: "s" });
+    expect(sheet[3][7]).toMatchObject({ v: "606.547.463-03", t: "s" });
+  });
+
+  it("mantém a empresa correta por funcionário na aba Financeiro consolidada", () => {
+    const datasetA = baseDataset({ companyName: "Empresa A" });
+    const datasetB = baseDataset({
+      companyName: "Empresa B",
+      rows: [{ ...baseDataset().rows[0], employeeId: "e2", name: "Bia", rubricValues: { r1: 10, g2: 20, liq: 30 } }],
+    });
+
+    const sheet = buildFinancialSheetData(baseDataset({
+      isConsolidated: true,
+      companyName: "Todas as Empresas",
+      companySections: [datasetA, datasetB],
+    }));
+
+    expect(sheet[3][0].v).toBe("Empresa A");
+    expect(sheet[3][1].v).toBe("Ana");
+    expect(sheet[4][0].v).toBe("Empresa B");
+    expect(sheet[4][1].v).toBe("Bia");
+  });
+
+  it("cria workbook oficial com abas Relatório Geral e Financeiro", () => {
+    const workbook = buildReportByCompanyWorkbook(baseDataset());
+    expect(workbook.worksheets.map((worksheet) => worksheet.name)).toEqual(["Relatório Geral", "Financeiro"]);
   });
 });

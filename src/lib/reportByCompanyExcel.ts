@@ -37,7 +37,22 @@ const buildReportFileName = (dataset: ReportByCompanyDataset, extension: "xlsx" 
   });
 };
 
-const BANK_HEADERS = ["Banco", "Agência", "Conta", "Chave Pix"] as const;
+const BANK_HEADERS = ["Banco", "Agência", "Conta", "Chave PIX"] as const;
+const FINANCIAL_HEADERS = [
+  "Empresa",
+  "Nome",
+  "Setor",
+  "CPF",
+  "Banco",
+  "Agência",
+  "Conta",
+  "Chave PIX",
+  "Salário Fiscal",
+  "Salário G2",
+  "Líquido",
+  "Valor PIX",
+  "Cheque",
+] as const;
 
 type CellObject =
   | { v: string; t: "s" }
@@ -114,7 +129,8 @@ const TEXT_COLUMN_MIN_WIDTHS: Record<string, number> = {
   Banco: 20,
   Agência: 14,
   Conta: 16,
-  "Chave Pix": 24,
+  "Chave PIX": 24,
+  CPF: 16,
 };
 
 const MONEY_COLUMN_MIN_WIDTH = 14;
@@ -152,12 +168,48 @@ const titleCellStyle: Partial<ExcelJS.Style> = {
   font: { bold: true, size: 14 },
 };
 
-export const buildReportByCompanyWorksheet = (dataset: ReportByCompanyDataset): ExcelJS.Worksheet => {
-  const sheetData = buildReportByCompanySheetData(dataset);
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Folha", {
-    views: [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4", activeCell: "A4" }],
-  });
+const getFinancialColumnIds = (dataset: ReportByCompanyDataset) => dataset.financialRubricIds;
+
+const getRubricMoneyCell = (row: ReportByCompanyDataset["rows"][number], rubricId: string | null): CellObject => {
+  if (!rubricId) return textCell("");
+  return moneyCell(row.rubricValues[rubricId] ?? 0);
+};
+
+const getFinancialCompanyRows = (dataset: ReportByCompanyDataset) =>
+  dataset.isConsolidated && dataset.companySections
+    ? dataset.companySections.flatMap((companyDataset) =>
+        companyDataset.rows.map((row) => ({ companyName: companyDataset.companyName, row }))
+      )
+    : dataset.rows.map((row) => ({ companyName: dataset.companyName, row }));
+
+export const buildFinancialSheetData = (dataset: ReportByCompanyDataset): CellObject[][] => {
+  const { salarioFiscalId, salarioG2Id, liquidoId } = getFinancialColumnIds(dataset);
+
+  return [
+    [textCell(`${dataset.title} - Financeiro`)],
+    [textCell("")],
+    FINANCIAL_HEADERS.map(textCell),
+    ...getFinancialCompanyRows(dataset).map(({ companyName, row }) => [
+      textCell(companyName),
+      textCell(row.name),
+      textCell(row.department),
+      textCell(row.cpf),
+      textCell(row.bankName),
+      textCell(row.bankBranch),
+      textCell(row.bankAccount),
+      textCell(row.bankPixKey),
+      getRubricMoneyCell(row, salarioFiscalId),
+      getRubricMoneyCell(row, salarioG2Id),
+      getRubricMoneyCell(row, liquidoId),
+      // Comentário: o modelo atual só possui dados bancários/chave PIX, sem forma de pagamento explícita.
+      // Portanto Valor PIX/Cheque permanecem vazios para não inferir pagamento pela existência de chave PIX.
+      textCell(""),
+      textCell(""),
+    ]),
+  ];
+};
+
+const populateWorksheet = (worksheet: ExcelJS.Worksheet, sheetData: CellObject[][]) => {
   const headerColumnCount = sheetData[HEADER_ROW_INDEX]?.length ?? 0;
   const lastColumn = worksheet.getColumn(headerColumnCount || 1).letter;
 
@@ -170,7 +222,7 @@ export const buildReportByCompanyWorksheet = (dataset: ReportByCompanyDataset): 
   worksheet.getRow(3).height = 24;
   worksheet.getCell("A1").style = titleCellStyle;
 
-  // Comentário: AutoFilter e estilos usam a última coluna real do cabeçalho, sem fixar 25 colunas.
+  // Comentário: AutoFilter e estilos usam a última coluna real do cabeçalho, sem fixar quantidade de colunas.
   if (headerColumnCount > 0) {
     worksheet.autoFilter = `A3:${lastColumn}3`;
 
@@ -185,8 +237,26 @@ export const buildReportByCompanyWorksheet = (dataset: ReportByCompanyDataset): 
       worksheet.getRow(rowIndex + 1).getCell(columnIndex + 1).numFmt = BRL_NUMBER_FORMAT;
     });
   });
+};
 
-  return worksheet;
+export const buildReportByCompanyWorkbook = (dataset: ReportByCompanyDataset): ExcelJS.Workbook => {
+  const workbook = new ExcelJS.Workbook();
+  const generalWorksheet = workbook.addWorksheet("Relatório Geral", {
+    views: [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4", activeCell: "A4" }],
+  });
+  const financialWorksheet = workbook.addWorksheet("Financeiro", {
+    views: [{ state: "frozen", xSplit: 0, ySplit: 3, topLeftCell: "A4", activeCell: "A4" }],
+  });
+
+  populateWorksheet(generalWorksheet, buildReportByCompanySheetData(dataset));
+  populateWorksheet(financialWorksheet, buildFinancialSheetData(dataset));
+
+  return workbook;
+};
+
+export const buildReportByCompanyWorksheet = (dataset: ReportByCompanyDataset): ExcelJS.Worksheet => {
+  // Comentário: compatibilidade para testes/consumidores antigos; a exportação oficial usa o workbook com duas abas.
+  return buildReportByCompanyWorkbook(dataset).getWorksheet("Relatório Geral") as ExcelJS.Worksheet;
 };
 
 const downloadWorkbook = async (workbook: ExcelJS.Workbook, fileName: string) => {
@@ -201,8 +271,8 @@ const downloadWorkbook = async (workbook: ExcelJS.Workbook, fileName: string) =>
 };
 
 export const exportReportByCompanyExcel = async (dataset: ReportByCompanyDataset) => {
-  const worksheet = buildReportByCompanyWorksheet(dataset);
-  await downloadWorkbook(worksheet.workbook, buildReportFileName(dataset, "xlsx"));
+  const workbook = buildReportByCompanyWorkbook(dataset);
+  await downloadWorkbook(workbook, buildReportFileName(dataset, "xlsx"));
 
   toast.success("Exportação Excel concluída.");
 };
