@@ -205,7 +205,7 @@ const ReportsCompany: React.FC = () => {
       return;
     }
 
-    // Comentário: página de relatórios e Central reutilizam a mesma rotina de exportação Excel (CSV compatível).
+    // Comentário: página de relatórios e Central reutilizam a mesma rotina de exportação XLSX com abas.
     exportReportByCompanyExcel(dataset);
   }, [dataset]);
 
@@ -277,7 +277,7 @@ const ReportsCompany: React.FC = () => {
           </div>
           <div className="md:col-span-2 flex gap-2">
             <Button onClick={exportPdf} disabled={isLoading || (!selectedCompany && !isAllCompaniesSelected)}><FileText className="mr-2 h-4 w-4" />Gerar PDF</Button>
-            <Button variant="outline" onClick={exportCsv} disabled={isLoading || (!selectedCompany && !isAllCompaniesSelected)}><FileSpreadsheet className="mr-2 h-4 w-4" />Exportar CSV (Excel)</Button>
+            <Button variant="outline" onClick={exportCsv} disabled={isLoading || (!selectedCompany && !isAllCompaniesSelected)}><FileSpreadsheet className="mr-2 h-4 w-4" />Exportar Excel</Button>
             <Button variant="ghost" onClick={resetToDefaultFilters}>Limpar filtros</Button>
           </div>
         </CardContent>

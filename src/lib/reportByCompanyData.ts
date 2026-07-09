@@ -19,11 +19,18 @@ export type ReportByCompanyRow = {
   department: string;
   jobRole: string;
   admissionRegistration: string;
+  cpf: string;
   bankName: string;
   bankBranch: string;
   bankAccount: string;
   bankPixKey: string;
   rubricValues: Record<string, number>;
+};
+
+export type ReportFinancialRubricIds = {
+  salarioFiscalId: string | null;
+  salarioG2Id: string | null;
+  liquidoId: string | null;
 };
 
 export type ReportByCompanyDataset = {
@@ -36,6 +43,7 @@ export type ReportByCompanyDataset = {
   dynamicColumns: ReportDynamicColumn[];
   rows: ReportByCompanyRow[];
   totalsByRubricId: Record<string, number>;
+  financialRubricIds: ReportFinancialRubricIds;
   isConsolidated?: boolean;
   companySections?: ReportByCompanyDataset[];
 };
@@ -51,14 +59,14 @@ const toNumber = (value: unknown) => {
 const employeeNameCollator = new Intl.Collator("pt-BR", { sensitivity: "base", numeric: true });
 
 const compareReportEmployeeNames = (
-  a: { sortName: string; cpf?: string; sourceIndex: number },
-  b: { sortName: string; cpf?: string; sourceIndex: number },
+  a: { sortName: string; sortCpf?: string; sourceIndex: number },
+  b: { sortName: string; sortCpf?: string; sourceIndex: number },
 ) => {
   const nameA = a.sortName.trim();
   const nameB = b.sortName.trim();
 
   if (!nameA && !nameB) {
-    const cpfCompare = employeeNameCollator.compare(a.cpf ?? "", b.cpf ?? "");
+    const cpfCompare = employeeNameCollator.compare(a.sortCpf ?? "", b.sortCpf ?? "");
     return cpfCompare || a.sourceIndex - b.sourceIndex;
   }
   if (!nameA) return 1;
@@ -67,9 +75,19 @@ const compareReportEmployeeNames = (
   const nameCompare = employeeNameCollator.compare(nameA, nameB);
   if (nameCompare !== 0) return nameCompare;
 
-  const cpfCompare = employeeNameCollator.compare(a.cpf ?? "", b.cpf ?? "");
+  const cpfCompare = employeeNameCollator.compare(a.sortCpf ?? "", b.sortCpf ?? "");
   return cpfCompare || a.sourceIndex - b.sourceIndex;
 };
+
+const SALARIO_FISCAL_CODES = new Set(["SALARIO_FISCAL", "salario_fiscal", "SAL_FISCAL", "sal_fiscal"]);
+
+const resolveReportFinancialRubricIds = (rubrics: Rubric[], canonicalIds: { g2ComplementoId: string | null; salarioLiquidoId: string | null }): ReportFinancialRubricIds => ({
+  // Comentário: Salário Fiscal ainda não possui classificação/canônica própria no modelo.
+  // Usamos somente codes técnicos explícitos já existentes no cadastro/migrations; sem busca por nome, includes ou cálculo.
+  salarioFiscalId: rubrics.find((rubric) => rubric.isActive && SALARIO_FISCAL_CODES.has(rubric.code))?.id ?? null,
+  salarioG2Id: canonicalIds.g2ComplementoId,
+  liquidoId: canonicalIds.salarioLiquidoId,
+});
 
 const readValueFromPayload = (entry: PayrollEntry, key: string) => {
   const earningsValue = entry.earnings?.[key];
@@ -144,6 +162,7 @@ export function buildConsolidatedReportByCompanyData(companyDatasets: ReportByCo
     dynamicColumns,
     rows: orderedCompanyDatasets.flatMap((dataset) => dataset.rows),
     totalsByRubricId,
+    financialRubricIds: firstCompanyDataset.financialRubricIds,
     isConsolidated: true,
     companySections: orderedCompanyDatasets,
   };
@@ -166,6 +185,7 @@ export function buildReportByCompanyData(params: {
 
   const rubricById = new Map(rubrics.map((rubric) => [rubric.id, rubric]));
   const canonicalIds = resolveCanonicalDerivedRubricIds(rubrics);
+  const financialRubricIds = resolveReportFinancialRubricIds(rubrics, canonicalIds);
 
   const activeRubrics = [...rubrics]
     .filter((rubric) => rubric.isActive)
@@ -225,13 +245,14 @@ export function buildReportByCompanyData(params: {
       department,
       jobRole,
       admissionRegistration,
+      cpf: employee?.cpf ?? "",
       bankName: employee?.bankName ?? "",
       bankBranch: employee?.bankBranch ?? "",
       bankAccount: employee?.bankAccount ?? "",
       bankPixKey: employee?.bankPixKey ?? "",
       rubricValues,
       sortName: employee?.name ?? "",
-      cpf: employee?.cpf,
+      sortCpf: employee?.cpf,
       sourceIndex,
     };
   });
@@ -239,7 +260,7 @@ export function buildReportByCompanyData(params: {
   // Comentário: relatórios/exportações saem A-Z por funcionário para previsibilidade operacional; a ordenação não altera cálculo nem totais.
   const rows = [...rowsWithSort]
     .sort((a, b) => compareReportEmployeeNames(a, b))
-    .map(({ sortName: _sortName, cpf: _cpf, sourceIndex: _sourceIndex, ...row }) => row);
+    .map(({ sortName: _sortName, sortCpf: _sortCpf, sourceIndex: _sourceIndex, ...row }) => row);
 
   const totalsByRubricId = activeRubrics.reduce<Record<string, number>>((acc, rubric) => {
     acc[rubric.rubricId] = rows.reduce((sum, row) => sum + toNumber(row.rubricValues[rubric.rubricId]), 0);
@@ -263,5 +284,6 @@ export function buildReportByCompanyData(params: {
     dynamicColumns: activeRubrics,
     rows,
     totalsByRubricId,
+    financialRubricIds,
   };
 }
