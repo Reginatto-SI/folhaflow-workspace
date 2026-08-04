@@ -60,7 +60,6 @@ const entry = (earnings: Record<string, number>): PayrollEntry => ({
   id: "entry-1",
   employeeId: employee.id,
   companyId: "comp-1",
-  workerType: "mensalista",
   month: 4,
   year: 2026,
   baseSalary: 0,

@@ -159,7 +159,6 @@ const entry: PayrollEntry = {
   id: "entry-1",
   employeeId: "emp-1",
   companyId: "comp-1",
-  workerType: "mensalista",
   month: 3,
   year: 2026,
   baseSalary: 0,

@@ -54,7 +54,6 @@ const makeEmployee = (id: string, name: string, cpf: string): Employee => ({
 const makeEntry = (employeeId: string, value: number): PayrollEntry => ({
   id: `p-${employeeId}`,
   companyId: "c1",
-  workerType: "mensalista",
   employeeId,
   payrollBatchId: "b1",
   month: 4,
