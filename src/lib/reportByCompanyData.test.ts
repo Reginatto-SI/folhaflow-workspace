@@ -393,18 +393,22 @@ describe("buildReportByCompanyData - Salário Fiscal na aba Financeiro", () => {
 
     const general = buildReportByCompanySheetData(dataset);
     const financial = buildFinancialSheetData(dataset);
-    const generalHeaderRow = general.find((row) => row.some((cell) => cell.value === "Salário Fiscal")) ?? [];
-    const generalHeader = generalHeaderRow.map((cell) => cell.value);
-    const generalColumn = generalHeader.indexOf("Salário Fiscal");
-    expect(generalColumn).toBeGreaterThan(0);
-    const generalDataRow = general[general.indexOf(generalHeaderRow) + 1];
-    expect(generalDataRow[generalColumn].value).toBe(2500);
 
-    const financialHeaderRow = financial.find((row) => row.some((cell) => String(cell.value).includes("Fiscal"))) ?? [];
-    const financialColumn = financialHeaderRow.findIndex((cell) => String(cell.value).includes("Fiscal"));
-    expect(financialColumn).toBeGreaterThan(0);
-    const financialDataRow = financial[financial.indexOf(financialHeaderRow) + 1];
-    expect(financialDataRow[financialColumn].value).toBe(2500);
+    const findColumn = (rows: Array<Array<{ v: string | number }>>, label: string) => {
+      const headerRowIndex = rows.findIndex((row) => row.some((cell) => cell.v === label));
+      expect(headerRowIndex).toBeGreaterThanOrEqual(0);
+      const columnIndex = rows[headerRowIndex].findIndex((cell) => cell.v === label);
+      return { headerRowIndex, columnIndex };
+    };
+
+    const generalPosition = findColumn(general as Array<Array<{ v: string | number }>>, "Salário Fiscal");
+    const generalValue = (general as Array<Array<{ v: string | number }>>)[generalPosition.headerRowIndex + 1][generalPosition.columnIndex].v;
+
+    const financialPosition = findColumn(financial as Array<Array<{ v: string | number }>>, "Salário Fiscal");
+    const financialValue = (financial as Array<Array<{ v: string | number }>>)[financialPosition.headerRowIndex + 1][financialPosition.columnIndex].v;
+
+    expect(generalValue).toBe(2500);
+    expect(financialValue).toBe(2500);
   });
 
   it("não resolve o Salário Fiscal quando o cadastro usa code legado (causa raiz reproduzida)", () => {
