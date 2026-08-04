@@ -283,6 +283,7 @@ const makeRubric = (id: string, order: number): Rubric => ({
 const makeCompanyEmployee = (id: string, companyId: string, name: string): Employee => ({
   id,
   companyId,
+  workerType: "mensalista",
   name,
   cpf: id,
   admissionDate: "2025-01-01",
