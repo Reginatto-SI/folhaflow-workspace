@@ -180,7 +180,7 @@ const mapEmployeeRowToModel = (row: {
   name: string;
   cpf: string | null;
   admission_date: string | null;
-  worker_type?: EmployeeWorkerType | null;
+  worker_type?: string | null;
   registration: string | null;
   work_card_number: string | null;
   notes: string | null;
