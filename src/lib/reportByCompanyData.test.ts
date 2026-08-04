@@ -393,15 +393,18 @@ describe("buildReportByCompanyData - Salário Fiscal na aba Financeiro", () => {
 
     const general = buildReportByCompanySheetData(dataset);
     const financial = buildFinancialSheetData(dataset);
-    const generalHeader = general[2].map((cell) => cell.value);
+    const generalHeaderRow = general.find((row) => row.some((cell) => cell.value === "Salário Fiscal")) ?? [];
+    const generalHeader = generalHeaderRow.map((cell) => cell.value);
     const generalColumn = generalHeader.indexOf("Salário Fiscal");
     expect(generalColumn).toBeGreaterThan(0);
-    expect(general[3][generalColumn].value).toBe(2500);
+    const generalDataRow = general[general.indexOf(generalHeaderRow) + 1];
+    expect(generalDataRow[generalColumn].value).toBe(2500);
 
-    const financialHeader = financial[2].map((cell) => cell.value);
-    const financialColumn = financialHeader.findIndex((label) => String(label).includes("Fiscal"));
+    const financialHeaderRow = financial.find((row) => row.some((cell) => String(cell.value).includes("Fiscal"))) ?? [];
+    const financialColumn = financialHeaderRow.findIndex((cell) => String(cell.value).includes("Fiscal"));
     expect(financialColumn).toBeGreaterThan(0);
-    expect(financial[3][financialColumn].value).toBe(2500);
+    const financialDataRow = financial[financial.indexOf(financialHeaderRow) + 1];
+    expect(financialDataRow[financialColumn].value).toBe(2500);
   });
 
   it("não resolve o Salário Fiscal quando o cadastro usa code legado (causa raiz reproduzida)", () => {
