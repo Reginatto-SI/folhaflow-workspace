@@ -24,6 +24,7 @@ const makeRubric = (overrides: Partial<Rubric>): Rubric => ({
 const employee: Employee = {
   id: "employee-1",
   companyId: "company-1",
+  workerType: "mensalista",
   name: "Funcionário Teste",
   cpf: "000.000.000-00",
   admissionDate: "2026-01-01",

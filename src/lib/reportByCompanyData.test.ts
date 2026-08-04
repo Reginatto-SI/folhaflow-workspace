@@ -15,6 +15,7 @@ const company = {
 const batch = {
   id: "b1",
   companyId: "c1",
+  workerType: "mensalista",
   month: 4,
   year: 2026,
   status: "em_edicao",
@@ -38,6 +39,7 @@ const rubric = {
 const makeEmployee = (id: string, name: string, cpf: string): Employee => ({
   id,
   companyId: "c1",
+  workerType: "mensalista",
   name,
   cpf,
   admissionDate: "2025-01-01",
@@ -52,6 +54,7 @@ const makeEmployee = (id: string, name: string, cpf: string): Employee => ({
 const makeEntry = (employeeId: string, value: number): PayrollEntry => ({
   id: `p-${employeeId}`,
   companyId: "c1",
+  workerType: "mensalista",
   employeeId,
   payrollBatchId: "b1",
   month: 4,
@@ -257,6 +260,7 @@ const makeCompany = (id: string, name: string): Company => ({
 const makeBatch = (id: string, companyId: string): PayrollBatch => ({
   id,
   companyId,
+  workerType: "mensalista",
   month: 4,
   year: 2026,
   status: "em_edicao",

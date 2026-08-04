@@ -53,12 +53,14 @@ const ROLE_LABEL: Record<AppRole, string> = {
   admin: "Administrador",
   operacional: "Operacional",
   consulta: "Consulta",
+  desenvolvedor: "Desenvolvedor",
 };
 
 const ROLE_BADGE: Record<AppRole, "default" | "secondary" | "outline"> = {
   admin: "default",
   operacional: "secondary",
   consulta: "outline",
+  desenvolvedor: "secondary",
 };
 
 const getInitialForm = (): FormState => ({ name: "", email: "", password: "", role: "operacional" });

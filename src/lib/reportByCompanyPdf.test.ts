@@ -54,6 +54,7 @@ const datasetWithColumns = (dynamicColumns: ReportDynamicColumn[]): ReportByComp
   title: "Folha - Empresa (ABRIL DE 26)",
   companyName: "Empresa",
   competenceLabel: "ABRIL DE 26",
+  financialRubricIds: { salarioFiscalId: null, salarioG2Id: null, liquidoId: null },
   month: 4,
   year: 2026,
   fixedColumns: [
@@ -211,13 +212,13 @@ describe("reportByCompanyPdf", () => {
       {
         ...baseDataset,
         companyName: "Empresa A",
-        rows: [{ employeeId: "1", name: "Ana", department: "RH", jobRole: "Analista", admissionRegistration: "2026-01-02 / 10", bankName: "", bankBranch: "", bankAccount: "", bankPixKey: "", rubricValues: { ctps: 1000, liquido: 900 } }],
+        rows: [{ employeeId: "1", name: "Ana", cpf: "", department: "RH", jobRole: "Analista", admissionRegistration: "2026-01-02 / 10", bankName: "", bankBranch: "", bankAccount: "", bankPixKey: "", rubricValues: { ctps: 1000, liquido: 900 } }],
         totalsByRubricId: { ctps: 1000, liquido: 900 },
       },
       {
         ...baseDataset,
         companyName: "Empresa B",
-        rows: [{ employeeId: "2", name: "Bia", department: "DP", jobRole: "Auxiliar", admissionRegistration: "2026-02-03 / 20", bankName: "", bankBranch: "", bankAccount: "", bankPixKey: "", rubricValues: { ctps: 2000 } }],
+        rows: [{ employeeId: "2", name: "Bia", cpf: "", department: "DP", jobRole: "Auxiliar", admissionRegistration: "2026-02-03 / 20", bankName: "", bankBranch: "", bankAccount: "", bankPixKey: "", rubricValues: { ctps: 2000 } }],
         totalsByRubricId: { ctps: 2000, liquido: 0 },
       },
     ];

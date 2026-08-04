@@ -45,6 +45,7 @@ const makeDerivedRubric = (overrides: Partial<Rubric>): Rubric => ({
 const employee: Employee = {
   id: "emp-1",
   companyId: "comp-1",
+  workerType: "mensalista",
   name: "Ana Silva",
   cpf: "12345678901",
   admissionDate: "2026-01-01",
@@ -59,6 +60,7 @@ const entry = (earnings: Record<string, number>): PayrollEntry => ({
   id: "entry-1",
   employeeId: employee.id,
   companyId: "comp-1",
+  workerType: "mensalista",
   month: 4,
   year: 2026,
   baseSalary: 0,

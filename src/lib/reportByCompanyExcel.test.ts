@@ -304,7 +304,7 @@ describe("buildFinancialSheetData", () => {
 
     const headerIndex = (worksheet: ExcelJS.Worksheet, label: string) => {
       const header = worksheet.getRow(3);
-      const index = header.values.findIndex((value) => value === label);
+      const index = (header.values as ExcelJS.CellValue[]).findIndex((value) => value === label);
       expect(index).toBeGreaterThan(0);
       return index;
     };
