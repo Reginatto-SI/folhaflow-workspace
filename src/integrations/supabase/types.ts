@@ -107,8 +107,8 @@ export type Database = {
           registration: string | null
           role: string | null
           updated_at: string
-          worker_type: "contratado" | "diarista" | "mensalista"
           work_card_number: string | null
+          worker_type: string
         }
         Insert: {
           admission_date?: string | null
@@ -131,8 +131,8 @@ export type Database = {
           registration?: string | null
           role?: string | null
           updated_at?: string
-          worker_type?: "contratado" | "diarista" | "mensalista"
           work_card_number?: string | null
+          worker_type?: string
         }
         Update: {
           admission_date?: string | null
@@ -155,8 +155,8 @@ export type Database = {
           registration?: string | null
           role?: string | null
           updated_at?: string
-          worker_type?: "contratado" | "diarista" | "mensalista"
           work_card_number?: string | null
+          worker_type?: string
         }
         Relationships: [
           {

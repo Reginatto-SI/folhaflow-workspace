@@ -1,61 +1,88 @@
-# Ajuste de Exportação Excel/CSV — Relatório por Empresa
+# Diagnóstico e correção — Salário Fiscal na aba Financeiro
 
-Escopo restrito a `src/lib/reportByCompanyData.ts` (dataset) e `src/lib/reportByCompanyExcel.ts` (exportação). PDF, Central de Folha, cálculo, recibos e layout da tela permanecem intocados.
+## 1. Causa raiz encontrada (confirmada no banco)
 
-## 1) Dataset (`reportByCompanyData.ts`)
+A rubrica **Salário Fiscal** está cadastrada com o código técnico **`3`** (código legado numérico), e não com um código canônico.
 
-Estender `ReportByCompanyRow` com campos bancários lidos diretamente do cadastro do funcionário (sem persistência nova, sem inferência):
+Evidência (consulta em `rubricas`):
 
-- `bankName: string`
-- `bankBranch: string`
-- `bankAccount: string`
-- `bankPixKey: string`
+```text
+id: cb3556c7-936f-4fef-b12a-065ff4b874da
+name: Salário Fiscal
+code: 3
+is_active: true
+nature: base   | calculation_method: manual | classification: salario_ctps
+```
 
-Em `buildReportByCompanyData`, ao montar cada linha, preencher esses 4 campos a partir do `employee` já resolvido (`employee?.bankName ?? ""`, etc.). Quando vazio, exporta vazio. Nenhuma alteração em rubricas, totais, ordenação ou regra de batch arquivado. Consolidado herda automaticamente via `companySections`/`rows`.
+Nenhuma rubrica no banco possui código contendo "fiscal" (`select count(*) from rubricas where code ilike '%fiscal%'` → 0).
 
-## 2) Exportação (`reportByCompanyExcel.ts`)
+O exportador resolve a coluna financeira assim (`src/lib/reportByCompanyData.ts`):
 
-### Formatação pt-BR de valores monetários
-Criar helper local `formatBrlNumber(value: number): string` usando `Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })`. Resultado: `2.324,20`, `10.000,00`, `0,00`. Sem `R$`.
+```text
+SALARIO_FISCAL_CODES = { "salario_fiscal", "sal_fiscal" }
+salarioFiscalId = rubrics.find(r => r.isActive && SALARIO_FISCAL_CODES.has(code))?.id ?? null
+```
 
-### Helper de célula CSV
-- `safeCsvText(value)`: para texto (nomes, setor, banco, agência, conta, Pix). Mantém o escape de fórmula (`'` na frente quando começa com `= + - @`) e aspas duplas. Garante que `0012`, `70378-8` e `606.547.463-03` saem como texto puro.
-- `safeCsvMoney(value)`: aplica `formatBrlNumber` e envolve em aspas. Não usar `safeCsvCell` genérico para dinheiro.
+Como o código real é `3`, **`financialRubricIds.salarioFiscalId` é sempre `null`**, em todas as empresas e todas as competências. A aba `Financeiro` lê a célula por esse id → sempre vazia.
 
-### Estrutura de colunas
-Ordem final no header e em cada linha:
+Já a aba `Relatório Geral` não depende dessa resolução: ela percorre **todas as rubricas ativas** como colunas dinâmicas (por `rubricId`), então o Salário Fiscal aparece normalmente.
 
-1. `Empresa` (apenas no consolidado)
-2. `Nome` (Funcionário)
-3. `Setor`
-4. `Função/Cargo`
-5. `Admissão/Registro`
-6. `Banco`
-7. `Agência`
-8. `Conta`
-9. `Chave Pix`
-10. ...rubricas dinâmicas (valores monetários formatados pt-BR)
+**Ponto exato de divergência:** Geral usa `dataset.dynamicColumns[rubricId]`; Financeiro usa `dataset.financialRubricIds.salarioFiscalId`, que nunca resolve.
 
-CPF fica fora desta entrega (não está em `ReportByCompanyRow` hoje; evitar mudança grande).
+- ID usado no Relatório Geral: `cb3556c7-936f-4fef-b12a-065ff4b874da`
+- ID resolvido para a aba Financeiro: `null`
 
-Linha de totais:
-- Individual: `TOTAL` + 8 colunas vazias (fixas + bancárias) + totais por rubrica formatados em pt-BR.
-- Consolidado: `TOTAL GERAL` + 9 colunas vazias (Empresa + fixas + bancárias) + totais por rubrica formatados em pt-BR.
+Isso não é específico de nenhuma competência — as tentativas anteriores falharam porque atacavam serialização/formatos, não a resolução do id.
 
-### CSV compatível com Excel pt-BR
-- Manter separador `;` e BOM UTF-8 já existentes.
-- Adicionar 1ª linha `sep=;` antes do BOM/título para o Excel detectar o separador automaticamente em pt-BR.
-- MIME `text/csv;charset=utf-8;` e extensão `.csv` permanecem.
+## 2. Achado secundário — lacuna de dados em Agosto/2026
 
-## 3) Testes
+Contagem de lançamentos com Salário Fiscal preenchido por competência:
 
-- Atualizar `src/lib/reportByCompanyData.test.ts` para cobrir os 4 novos campos bancários nas linhas (incluindo funcionário sem dados bancários → strings vazias).
-- Adicionar teste leve em uma suíte nova `src/lib/reportByCompanyExcel.test.ts` validando: (a) `formatBrlNumber(2324.2) === "2.324,20"`, (b) header inclui Banco/Agência/Conta/Chave Pix, (c) agência `0012` preservada, (d) valor monetário formatado em pt-BR, (e) primeira linha contém `sep=;`.
+```text
+04/2026: 152 / 153
+06/2026: 149 / 149
+07/2026: 148 / 149
+08/2026:  12 / 150   <-- 138 lançamentos sem Salário Fiscal
+```
 
-## Critérios de aceite
+Em 08/2026 o payload `earnings` de 138 lançamentos contém apenas Salário CTPS e Salário G. É ausência real de dado (provável duplicação/criação da folha antes do preenchimento), **não** um problema de relatório. Nenhum dado será alterado sem sua autorização.
 
-- PDF, Central de Folha, cálculo e recibos inalterados.
-- Excel/CSV individual e consolidado exibem Banco, Agência, Conta, Chave Pix.
-- Valores monetários saem como `1.234,56` (nunca `1234.56`, nunca `R$`).
-- Campos bancários preservam zeros à esquerda, traços e pontos.
-- Build verde; testes do relatório passam.
+## 3. Correção proposta (mínima)
+
+**Saneamento de cadastro, uma única linha, idempotente:** atualizar o `code` da rubrica `cb3556c7-...` de `3` para `salario_fiscal`, que é exatamente o contrato já esperado pelo código.
+
+```sql
+update public.rubricas
+set code = 'salario_fiscal'
+where id = 'cb3556c7-936f-4fef-b12a-065ff4b874da'
+  and code = '3'
+  and name = 'Salário Fiscal';
+```
+
+- Idempotente (condição no `where`), não apaga nada, não toca outras rubricas, competências ou empresas.
+- Os payloads de folha são chaveados por **UUID**, não por code, então nenhum valor histórico muda.
+- Nada mais no código depende do literal `3`.
+
+Depois disso, `salarioFiscalId` resolve para o mesmo id usado pela aba Geral, garantindo `Financeiro == Geral`.
+
+**Blindagem adicional em código (sem heurística por nome):** em `resolveReportFinancialRubricIds`, se a resolução por código falhar, o dataset passa a emitir um aviso rastreável em vez de silenciosamente exportar coluna vazia — a inconsistência fica visível, não mascarada. Nenhum fallback por nome, nenhum recálculo, nenhuma segunda estratégia de identificação.
+
+## 4. Testes
+
+Em `src/lib/reportByCompanyExcel.test.ts` / `reportByCompanyData.test.ts`:
+
+1. Rubrica com o code canônico → `salarioFiscalId` resolvido; Geral e Financeiro com o mesmo valor.
+2. Rubrica com code legado `3` → resolução falha e o aviso é emitido (reproduz a causa raiz).
+3. Fluxo real: dataset construído a partir de rubricas/entries simulados (sem injetar `financialRubricIds` prontos).
+4. Valor positivo, valor zero e funcionário sem lançamento de fiscal.
+5. Batch ativo x batch arquivado.
+6. Workbook serializado e reaberto, colunas localizadas pelo cabeçalho, igualdade célula a célula entre `Relatório Geral` e `Financeiro`.
+7. Regressão: G2 e Líquido continuam inalterados.
+
+## 5. Fora de escopo
+
+PDF, layout, ordem de colunas, colunas PIX/Cheque, RLS, fórmulas e a lacuna de dados de 08/2026 permanecem intocados.
+
+## Decisão necessária
+
+Quer que eu inclua, no mesmo trabalho, um relatório detalhado dos 138 lançamentos de 08/2026 sem Salário Fiscal (somente leitura, sem alterar dados)?
