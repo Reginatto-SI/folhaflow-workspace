@@ -359,3 +359,70 @@ describe("buildConsolidatedReportByCompanyData", () => {
     expect(consolidated?.companySections?.[1].totalsByRubricId.c ?? 0).toBe(0);
   });
 });
+
+describe("buildReportByCompanyData - Salário Fiscal na aba Financeiro", () => {
+  const fiscalRubric = (code: string): Rubric => ({
+    ...rubric,
+    id: "fiscal-1",
+    name: "Salário Fiscal",
+    code,
+    order: 2,
+  });
+
+  const buildWithFiscalCode = (code: string) =>
+    buildReportByCompanyData({
+      company,
+      month: { month: 4, year: 2026 },
+      batch,
+      allBatches: [batch],
+      allEmployees: [makeEmployee("e1", "Ana", "111")],
+      allEntries: [
+        {
+          ...makeEntry("e1", 1000),
+          earnings: { salario: 1000, "fiscal-1": 2500 },
+        },
+      ],
+      rubrics: [rubric, fiscalRubric(code)],
+    });
+
+  it("resolve o Salário Fiscal pelo code canônico e mantém Geral e Financeiro com o mesmo valor", () => {
+    const dataset = buildWithFiscalCode("salario_fiscal");
+
+    expect(dataset.financialRubricIds.salarioFiscalId).toBe("fiscal-1");
+    expect(dataset.rows[0].rubricValues["fiscal-1"]).toBe(2500);
+
+    const general = buildReportByCompanySheetData(dataset);
+    const financial = buildFinancialSheetData(dataset);
+    const generalHeader = general[2].map((cell) => cell.value);
+    const generalColumn = generalHeader.indexOf("Salário Fiscal");
+    expect(generalColumn).toBeGreaterThan(0);
+    expect(general[3][generalColumn].value).toBe(2500);
+
+    const financialHeader = financial[2].map((cell) => cell.value);
+    const financialColumn = financialHeader.findIndex((label) => String(label).includes("Fiscal"));
+    expect(financialColumn).toBeGreaterThan(0);
+    expect(financial[3][financialColumn].value).toBe(2500);
+  });
+
+  it("não resolve o Salário Fiscal quando o cadastro usa code legado (causa raiz reproduzida)", () => {
+    const dataset = buildWithFiscalCode("3");
+    expect(dataset.financialRubricIds.salarioFiscalId).toBeNull();
+    // Geral continua exibindo o valor, evidenciando a divergência entre as abas.
+    expect(dataset.rows[0].rubricValues["fiscal-1"]).toBe(2500);
+  });
+
+  it("mantém zero quando o funcionário não possui valor de Salário Fiscal", () => {
+    const dataset = buildReportByCompanyData({
+      company,
+      month: { month: 4, year: 2026 },
+      batch,
+      allBatches: [batch],
+      allEmployees: [makeEmployee("e1", "Ana", "111")],
+      allEntries: [makeEntry("e1", 1000)],
+      rubrics: [rubric, fiscalRubric("salario_fiscal")],
+    });
+
+    expect(dataset.financialRubricIds.salarioFiscalId).toBe("fiscal-1");
+    expect(dataset.rows[0].rubricValues["fiscal-1"]).toBe(0);
+  });
+});
