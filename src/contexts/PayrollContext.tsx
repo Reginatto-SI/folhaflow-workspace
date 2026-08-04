@@ -201,7 +201,7 @@ const mapEmployeeRowToModel = (row: {
   name: row.name,
   cpf: row.cpf ?? "",
   admissionDate: row.admission_date || "",
-  workerType: row.worker_type || (row.is_monthly ? "mensalista" : "contratado"),
+  workerType: (row.worker_type as EmployeeWorkerType | null) || (row.is_monthly ? "mensalista" : "contratado"),
   registration: row.registration || "",
   workCardNumber: row.work_card_number || "",
   notes: row.notes || "",
