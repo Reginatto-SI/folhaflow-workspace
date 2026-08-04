@@ -214,7 +214,10 @@ const populateWorksheet = (worksheet: ExcelJS.Worksheet, sheetData: CellObject[]
   const lastColumn = worksheet.getColumn(headerColumnCount || 1).letter;
 
   sheetData.forEach((row) => {
-    worksheet.addRow(row.map((cell) => cell.v));
+    // Comentário: strings vazias representam ausência de dado. Gravamos `null` no
+    // XLSX para que não sejam serializadas como referências da tabela sharedStrings
+    // (cujo índice interno, por exemplo `1`, não é conteúdo visível da célula).
+    worksheet.addRow(row.map((cell) => cell.t === "s" && cell.v === "" ? null : cell.v));
   });
 
   worksheet.columns = computeColumnWidths(sheetData).map(({ wch }) => ({ width: wch }));
