@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildConsolidatedReportByCompanyData, buildReportByCompanyData } from "@/lib/reportByCompanyData";
+import { buildFinancialSheetData, buildReportByCompanySheetData } from "@/lib/reportByCompanyExcel";
+import { buildPayrollPdfDynamicColumns, buildPayrollPdfEmployeeRows } from "@/lib/reportByCompanyPdf";
 import type { Company, Employee, PayrollBatch, PayrollEntry, Rubric } from "@/types/payroll";
 
 const company = {
@@ -112,6 +114,134 @@ describe("buildReportByCompanyData - IDs financeiros estruturados", () => {
 
     expect(dataset.financialRubricIds).toEqual({ salarioFiscalId: "fiscal", salarioG2Id: "g2", liquidoId: "liq" });
     expect(dataset.rows[0].rubricValues.fiscal).toBe(100);
+  });
+
+  it("preserva o Salário Fiscal calculado pela Central nas duas abas, inclusive zero, sem misturar competências", () => {
+    const augustBatch = { ...batch, id: "batch-ago-2026", month: 8 } as PayrollBatch;
+    const sourceRubric: Rubric = {
+      ...rubric,
+      id: "base-fiscal",
+      code: "BASE_FISCAL",
+      name: "Base Fiscal",
+      nature: "base",
+      calculationMethod: "manual",
+      order: 1,
+    };
+    const fiscalRubric: Rubric = {
+      ...rubric,
+      id: "fiscal",
+      code: "SAL_FISCAL",
+      name: "Salário Fiscal",
+      nature: "calculada",
+      calculationMethod: "formula",
+      classification: null,
+      formulaItems: [{ id: "formula-fiscal", sourceRubricId: sourceRubric.id, operation: "add", order: 1 }],
+      order: 2,
+    };
+    const augustEntry = (employeeId: string, earnings: Record<string, number>) => ({
+      ...makeEntry(employeeId, 0),
+      id: `p-ago-${employeeId}`,
+      payrollBatchId: augustBatch.id,
+      month: 8,
+      earnings,
+    });
+    const positiveEntry = augustEntry("e1", { [sourceRubric.id]: 3284.07 });
+    const zeroEntry = augustEntry("e2", { [sourceRubric.id]: 0 });
+    const missingEntry = augustEntry("e4", {});
+    const julyEntry = { ...augustEntry("e3", { [sourceRubric.id]: 9999 }), id: "p-jul-e3", month: 7 };
+
+    const dataset = buildReportByCompanyData({
+      company,
+      month: { month: 8, year: 2026 },
+      batch: augustBatch,
+      allBatches: [augustBatch],
+      allEmployees: [
+        makeEmployee("e1", "Ana", "111"),
+        makeEmployee("e2", "Bia", "222"),
+        makeEmployee("e3", "Cris", "333"),
+        makeEmployee("e4", "Dora", "444"),
+      ],
+      allEntries: [positiveEntry, zeroEntry, missingEntry, julyEntry],
+      rubrics: [sourceRubric, fiscalRubric],
+    });
+
+    // O JSON persiste somente a rubrica manual; Salário Fiscal vem do mapa normalizado da Central.
+    expect(positiveEntry.earnings).not.toHaveProperty(fiscalRubric.id);
+    expect(dataset.rows.map((row) => row.rubricValues.fiscal)).toEqual([3284.07, 0, 0]);
+    expect(dataset.totalsByRubricId.fiscal).toBe(3284.07);
+
+    const generalRows = buildReportByCompanySheetData(dataset);
+    const financialRows = buildFinancialSheetData(dataset);
+    expect(generalRows[3][9]).toMatchObject({ v: 3284.07, t: "n" });
+    expect(generalRows[4][9]).toMatchObject({ v: 0, t: "n" });
+    expect(financialRows[3][8]).toMatchObject({ v: 3284.07, t: "n" });
+    expect(financialRows[4][8]).toMatchObject({ v: 0, t: "n" });
+
+    const pdfDynamicColumns = buildPayrollPdfDynamicColumns(dataset);
+    const fiscalPdfColumnIndex = pdfDynamicColumns.findIndex((column) => column.rubricId === fiscalRubric.id);
+    const fiscalPdfCellIndex = 4 + fiscalPdfColumnIndex;
+    const pdfRows = buildPayrollPdfEmployeeRows(dataset, pdfDynamicColumns);
+
+    expect(fiscalPdfColumnIndex).toBeGreaterThanOrEqual(0);
+    expect(pdfRows[0][fiscalPdfCellIndex]).toBe("R$ 3.284,07");
+    expect(pdfRows[1][fiscalPdfCellIndex]).toBe("");
+  });
+
+  it("prioriza valor persistido e mantém julho de 2026 sem regressão", () => {
+    const julyBatch = { ...batch, id: "batch-jul-2026", month: 7 } as PayrollBatch;
+    const sourceRubric: Rubric = { ...rubric, id: "base-jul", code: "BASE_JUL", order: 1 };
+    const fiscalRubric: Rubric = {
+      ...rubric,
+      id: "fiscal-jul",
+      code: "SALARIO_FISCAL",
+      name: "Salário Fiscal",
+      nature: "calculada",
+      calculationMethod: "formula",
+      classification: null,
+      formulaItems: [{ id: "formula-jul", sourceRubricId: sourceRubric.id, operation: "add", order: 1 }],
+      order: 2,
+    };
+    const persistedValue = 2500;
+    const dataset = buildReportByCompanyData({
+      company,
+      month: { month: 7, year: 2026 },
+      batch: julyBatch,
+      allBatches: [julyBatch],
+      allEmployees: [makeEmployee("e1", "Ana", "111")],
+      allEntries: [{
+        ...makeEntry("e1", 0),
+        month: 7,
+        payrollBatchId: julyBatch.id,
+        // O resultado atual da fórmula seria 3000; julho deve conservar o valor persistido.
+        earnings: { [sourceRubric.id]: 3000, [fiscalRubric.id]: persistedValue },
+      }],
+      rubrics: [sourceRubric, fiscalRubric],
+    });
+
+    expect(dataset.rows[0].rubricValues[fiscalRubric.id]).toBe(persistedValue);
+    expect(dataset.rows[0].rubricValues[sourceRubric.id]).toBe(3000);
+  });
+
+  it("aceita código técnico legado em agosto e ignora batch arquivado", () => {
+    const currentBatch = { ...batch, id: "batch-ago-atual", month: 8 } as PayrollBatch;
+    const archivedBatch = { ...batch, id: "batch-ago-arquivado", month: 8, isArchived: true } as PayrollBatch;
+    const fiscalRubric: Rubric = { ...rubric, id: "fiscal-novo", code: " SAL_FISCAL ", name: "Salário Fiscal", order: 1 };
+    const entry = (id: string, payrollBatchId: string, value: number): PayrollEntry => ({
+      ...makeEntry("e1", 0), id, month: 8, payrollBatchId, earnings: { SALARIO_FISCAL: value },
+    });
+
+    const dataset = buildReportByCompanyData({
+      company,
+      month: { month: 8, year: 2026 },
+      batch: currentBatch,
+      allBatches: [currentBatch, archivedBatch],
+      allEmployees: [makeEmployee("e1", "Ana", "111")],
+      allEntries: [entry("entry-atual", currentBatch.id, 1800), entry("entry-arquivado", archivedBatch.id, 9999)],
+      rubrics: [fiscalRubric],
+    });
+
+    expect(dataset.rows).toHaveLength(1);
+    expect(dataset.rows[0].rubricValues[fiscalRubric.id]).toBe(1800);
   });
 });
 

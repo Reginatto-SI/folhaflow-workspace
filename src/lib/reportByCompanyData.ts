@@ -79,12 +79,15 @@ const compareReportEmployeeNames = (
   return cpfCompare || a.sourceIndex - b.sourceIndex;
 };
 
-const SALARIO_FISCAL_CODES = new Set(["SALARIO_FISCAL", "salario_fiscal", "SAL_FISCAL", "sal_fiscal"]);
+const normalizeTechnicalRubricCode = (value: string) => value.trim().toLowerCase();
+const SALARIO_FISCAL_CODES = new Set(["salario_fiscal", "sal_fiscal"]);
+const isSalarioFiscalRubric = (rubric: Pick<Rubric, "code">) =>
+  SALARIO_FISCAL_CODES.has(normalizeTechnicalRubricCode(rubric.code));
 
 const resolveReportFinancialRubricIds = (rubrics: Rubric[], canonicalIds: { g2ComplementoId: string | null; salarioLiquidoId: string | null }): ReportFinancialRubricIds => ({
   // Comentário: Salário Fiscal ainda não possui classificação/canônica própria no modelo.
   // Usamos somente codes técnicos explícitos já existentes no cadastro/migrations; sem busca por nome, includes ou cálculo.
-  salarioFiscalId: rubrics.find((rubric) => rubric.isActive && SALARIO_FISCAL_CODES.has(rubric.code))?.id ?? null,
+  salarioFiscalId: rubrics.find((rubric) => rubric.isActive && isSalarioFiscalRubric(rubric))?.id ?? null,
   salarioG2Id: canonicalIds.g2ComplementoId,
   liquidoId: canonicalIds.salarioLiquidoId,
 });
@@ -97,11 +100,26 @@ const readValueFromPayload = (entry: PayrollEntry, key: string) => {
   return null;
 };
 
+const readValueFromPayloadByNormalizedCodes = (entry: PayrollEntry, codes: Set<string>) => {
+  for (const payload of [entry.earnings, entry.deductions]) {
+    const matchedEntry = Object.entries(payload ?? {}).find(([key, value]) =>
+      codes.has(normalizeTechnicalRubricCode(key)) && typeof value === "number"
+    );
+    if (matchedEntry) return matchedEntry[1];
+  }
+  return null;
+};
+
 const readRubricValueFromEntry = (
   entry: PayrollEntry,
-  rubric: Pick<Rubric, "id" | "code" | "classification">,
+  rubric: Pick<Rubric, "id" | "code" | "classification" | "nature">,
   canonicalIds: { salarioRealId: string | null; g2ComplementoId: string | null; salarioLiquidoId: string | null },
-  canonicalComputed?: { salarioReal: number; g2Complemento: number; salarioLiquido: number }
+  canonicalComputed?: {
+    valuesByRubricId: Record<string, number>;
+    salarioReal: number;
+    g2Complemento: number;
+    salarioLiquido: number;
+  }
 ) => {
   // Comentário: regra crítica do relatório — NÃO recalcular folha.
   // Para rubricas canônicas finais (PRD-12), priorizamos o mesmo resultado
@@ -123,6 +141,19 @@ const readRubricValueFromEntry = (
 
   const byCode = readValueFromPayload(entry, rubric.code);
   if (typeof byCode === "number") return byCode;
+
+  if (isSalarioFiscalRubric(rubric)) {
+    // Comentário: cadastros legados persistiram a mesma chave técnica com as duas
+    // variantes oficiais. A compatibilidade é por código estável, nunca pelo label.
+    const byLegacyCode = readValueFromPayloadByNormalizedCodes(entry, SALARIO_FISCAL_CODES);
+    if (typeof byLegacyCode === "number") return byLegacyCode;
+
+    // Comentário: a Central não materializa rubricas de fórmula em earnings/deductions.
+    // O fallback fica restrito ao Salário Fiscal calculado e só ocorre após esgotar o
+    // valor persistido, evitando sobrescrever silenciosamente as demais rubricas.
+    const computedFiscalValue = canonicalComputed?.valuesByRubricId[rubric.id];
+    if (rubric.nature === "calculada" && typeof computedFiscalValue === "number") return computedFiscalValue;
+  }
 
   // Campos persistidos oficiais (sem recálculo):
   // - `net_salary` cobre a rubrica canônica salario_liquido quando ainda não materializada no payload.
@@ -236,6 +267,7 @@ export function buildReportByCompanyData(params: {
         id: column.rubricId,
         code: column.rubricCode,
         classification: rubricById.get(column.rubricId)?.classification ?? null,
+        nature: rubricById.get(column.rubricId)?.nature ?? "base",
       }, canonicalIds, canonicalComputed));
     });
 

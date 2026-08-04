@@ -166,6 +166,19 @@ export const buildPayrollPdfDynamicColumns = (dataset: ReportByCompanyDataset): 
   }, []);
 };
 
+// Comentário: mapper puro compartilhado pela geração e pelos testes; recebe somente
+// o dataset normalizado e não consulta nem recalcula valores da folha.
+export const buildPayrollPdfEmployeeRows = (
+  dataset: ReportByCompanyDataset,
+  pdfDynamicColumns = buildPayrollPdfDynamicColumns(dataset),
+): string[][] => dataset.rows.map((row) => [
+  row.name,
+  row.department,
+  formatJobRoleForPrint(row.jobRole),
+  formatAdmissionRegistrationForPrint(row.admissionRegistration),
+  ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(row.rubricValues[column.rubricId])),
+]);
+
 
 const JOB_ROLE_PRINT_LINE_LENGTH = 15;
 const JOB_ROLE_MAX_PRINT_LINES = 2;
@@ -305,14 +318,6 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
     .map((column, index) => (isHighlightedPayrollPdfColumn(column) ? index + 4 : null))
     .filter((index): index is number => index !== null));
 
-  const buildEmployeeRows = (companyDataset: ReportByCompanyDataset) => companyDataset.rows.map((row) => [
-    row.name,
-    row.department,
-    formatJobRoleForPrint(row.jobRole),
-    formatAdmissionRegistrationForPrint(row.admissionRegistration),
-    ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(row.rubricValues[column.rubricId])),
-  ]);
-
   const buildTotalRow = (label: string, companyDataset: ReportByCompanyDataset) => [
     label,
     "",
@@ -434,7 +439,7 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
 
       const bodyRows = [
         [`${companyDataset.companyName} — ${companyDataset.competenceLabel}`, "", "", "", ...pdfDynamicColumns.map(() => "")],
-        ...buildEmployeeRows(companyDataset),
+        ...buildPayrollPdfEmployeeRows(companyDataset, pdfDynamicColumns),
         buildTotalRow("TOTAL", companyDataset),
       ];
 
@@ -453,7 +458,7 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
     });
   } else {
     const bodyRows = [
-      ...buildEmployeeRows(dataset),
+      ...buildPayrollPdfEmployeeRows(dataset, pdfDynamicColumns),
       buildTotalRow("TOTAL", dataset),
     ];
 
