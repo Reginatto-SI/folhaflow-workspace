@@ -45,6 +45,7 @@ const makeDerivedRubric = (overrides: Partial<Rubric>): Rubric => ({
 const employee: Employee = {
   id: "emp-1",
   companyId: "comp-1",
+  workerType: "mensalista",
   name: "Ana Silva",
   cpf: "12345678901",
   admissionDate: "2026-01-01",

@@ -180,7 +180,7 @@ const mapEmployeeRowToModel = (row: {
   name: string;
   cpf: string | null;
   admission_date: string | null;
-  worker_type?: EmployeeWorkerType | null;
+  worker_type?: string | null;
   registration: string | null;
   work_card_number: string | null;
   notes: string | null;
@@ -201,7 +201,7 @@ const mapEmployeeRowToModel = (row: {
   name: row.name,
   cpf: row.cpf ?? "",
   admissionDate: row.admission_date || "",
-  workerType: row.worker_type || (row.is_monthly ? "mensalista" : "contratado"),
+  workerType: (row.worker_type as EmployeeWorkerType | null) || (row.is_monthly ? "mensalista" : "contratado"),
   registration: row.registration || "",
   workCardNumber: row.work_card_number || "",
   notes: row.notes || "",
@@ -802,12 +802,12 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ];
     if (watchedTables.length === 0) return;
 
-    let reloadTimer: ReturnType<typeof window.setTimeout> | null = null;
+    let reloadTimer: number | null = null;
     const scheduleReload = () => {
       if (reloadTimer) window.clearTimeout(reloadTimer);
       reloadTimer = window.setTimeout(() => {
         void loadCatalogData();
-      }, 350);
+      }, 350) as unknown as number;
     };
 
     // Comentário: uma única inscrição controlada pelo provider invalida os cadastros carregados,

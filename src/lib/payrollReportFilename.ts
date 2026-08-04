@@ -85,7 +85,7 @@ const formatCompetenceForFilename = (competencia: PayrollReportCompetence): stri
     if (parsed) return `${parsed.monthName} -${parsed.yearSuffix}`;
   }
 
-  if (competencia && typeof competencia === "object") {
+  if (competencia && typeof competencia === "object" && !(competencia instanceof Date)) {
     const parsedFromFields = fromMonthYear(competencia.month, competencia.year);
     if (parsedFromFields) return `${parsedFromFields.monthName} -${parsedFromFields.yearSuffix}`;
 

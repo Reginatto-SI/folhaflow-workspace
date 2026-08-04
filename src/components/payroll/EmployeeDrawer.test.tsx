@@ -7,6 +7,7 @@ import { Employee, PayrollEntry, Rubric } from "@/types/payroll";
 const employee: Employee = {
   id: "emp-1",
   companyId: "comp-1",
+  workerType: "mensalista",
   name: "João Silva",
   cpf: "12345678900",
   admissionDate: "2024-01-01",
