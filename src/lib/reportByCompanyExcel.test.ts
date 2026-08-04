@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import ExcelJS from "exceljs";
 import { buildFinancialSheetData, buildReportByCompanySheetData, buildReportByCompanyWorkbook, buildReportByCompanyWorksheet, formatAdmissionRegistrationForExcel, formatBrlNumber } from "@/lib/reportByCompanyExcel";
 import type { ReportByCompanyDataset } from "@/lib/reportByCompanyData";
 
@@ -270,5 +271,74 @@ describe("buildFinancialSheetData", () => {
   it("cria workbook oficial com abas Relatório Geral e Financeiro", () => {
     const workbook = buildReportByCompanyWorkbook(baseDataset());
     expect(workbook.worksheets.map((worksheet) => worksheet.name)).toEqual(["Relatório Geral", "Financeiro"]);
+  });
+
+  it("serializa e reabre o XLSX preservando salários distintos e campos de pagamento vazios", async () => {
+    const firstRow = baseDataset().rows[0];
+    const dataset = baseDataset({
+      rows: [
+        {
+          ...firstRow,
+          employeeId: "e1",
+          name: "Ana Alves Pereira",
+          rubricValues: { r1: 2734.23, g2: 0, liq: 2734.23 },
+        },
+        {
+          ...firstRow,
+          employeeId: "e2",
+          name: "Ana Beatriz Silva Barros",
+          rubricValues: { r1: 2781.25, g2: 969.02, liq: 3750.27 },
+        },
+      ],
+      totalsByRubricId: { r1: 5515.48, g2: 969.02, liq: 6484.5 },
+    });
+
+    const serialized = await buildReportByCompanyWorkbook(dataset).xlsx.writeBuffer();
+    const reopened = new ExcelJS.Workbook();
+    await reopened.xlsx.load(serialized);
+
+    const general = reopened.getWorksheet("Relatório Geral");
+    const financial = reopened.getWorksheet("Financeiro");
+    expect(general).toBeDefined();
+    expect(financial).toBeDefined();
+
+    const headerIndex = (worksheet: ExcelJS.Worksheet, label: string) => {
+      const header = worksheet.getRow(3);
+      const index = header.values.findIndex((value) => value === label);
+      expect(index).toBeGreaterThan(0);
+      return index;
+    };
+    const rowIndexByEmployee = (worksheet: ExcelJS.Worksheet, nameColumn: number, employeeName: string) => {
+      let matchedRow = 0;
+      worksheet.eachRow((row) => {
+        if (row.getCell(nameColumn).value === employeeName) matchedRow = row.number;
+      });
+      expect(matchedRow).toBeGreaterThan(0);
+      return matchedRow;
+    };
+
+    const financialNameColumn = headerIndex(financial!, "Nome");
+    const financialFiscalColumn = headerIndex(financial!, "Salário Fiscal");
+    const pixColumn = headerIndex(financial!, "Valor PIX");
+    const chequeColumn = headerIndex(financial!, "Cheque");
+    const generalNameColumn = headerIndex(general!, "Nome");
+    const generalFiscalColumn = headerIndex(general!, "Salário Fiscal");
+
+    for (const [employeeName, expectedFiscal] of [
+      ["Ana Alves Pereira", 2734.23],
+      ["Ana Beatriz Silva Barros", 2781.25],
+    ] as const) {
+      const financialRow = rowIndexByEmployee(financial!, financialNameColumn, employeeName);
+      const generalRow = rowIndexByEmployee(general!, generalNameColumn, employeeName);
+      const financialFiscalCell = financial!.getRow(financialRow).getCell(financialFiscalColumn);
+
+      expect(financialFiscalCell.value).toBe(expectedFiscal);
+      expect(financialFiscalCell.type).toBe(ExcelJS.ValueType.Number);
+      expect(financialFiscalCell.numFmt).toBe("#,##0.00;-#,##0.00");
+      expect(financialFiscalCell.value).toBe(general!.getRow(generalRow).getCell(generalFiscalColumn).value);
+      expect(financialFiscalCell.value).not.toBe("1");
+      expect(financial!.getRow(financialRow).getCell(pixColumn).value).toBeNull();
+      expect(financial!.getRow(financialRow).getCell(chequeColumn).value).toBeNull();
+    }
   });
 });
