@@ -84,13 +84,29 @@ const SALARIO_FISCAL_CODES = new Set(["salario_fiscal", "sal_fiscal"]);
 const isSalarioFiscalRubric = (rubric: Pick<Rubric, "code">) =>
   SALARIO_FISCAL_CODES.has(normalizeTechnicalRubricCode(rubric.code));
 
-const resolveReportFinancialRubricIds = (rubrics: Rubric[], canonicalIds: { g2ComplementoId: string | null; salarioLiquidoId: string | null }): ReportFinancialRubricIds => ({
+let warnedMissingSalarioFiscalCode = false;
+
+const resolveReportFinancialRubricIds = (rubrics: Rubric[], canonicalIds: { g2ComplementoId: string | null; salarioLiquidoId: string | null }): ReportFinancialRubricIds => {
   // Comentário: Salário Fiscal ainda não possui classificação/canônica própria no modelo.
   // Usamos somente codes técnicos explícitos já existentes no cadastro/migrations; sem busca por nome, includes ou cálculo.
-  salarioFiscalId: rubrics.find((rubric) => rubric.isActive && isSalarioFiscalRubric(rubric))?.id ?? null,
-  salarioG2Id: canonicalIds.g2ComplementoId,
-  liquidoId: canonicalIds.salarioLiquidoId,
-});
+  const salarioFiscalId = rubrics.find((rubric) => rubric.isActive && isSalarioFiscalRubric(rubric))?.id ?? null;
+
+  // Comentário: sem fallback por nome. Quando o code técnico não resolve, a coluna
+  // financeira sairia silenciosamente vazia; aqui a inconsistência de cadastro fica rastreável.
+  if (!salarioFiscalId && !warnedMissingSalarioFiscalCode && import.meta.env?.DEV) {
+    warnedMissingSalarioFiscalCode = true;
+    console.warn(
+      "[Relatório por Empresa] Nenhuma rubrica ativa com code técnico de Salário Fiscal foi encontrada; a coluna Financeiro ficará vazia. Corrija o code no cadastro de rubricas.",
+      { expectedCodes: [...SALARIO_FISCAL_CODES] }
+    );
+  }
+
+  return {
+    salarioFiscalId,
+    salarioG2Id: canonicalIds.g2ComplementoId,
+    liquidoId: canonicalIds.salarioLiquidoId,
+  };
+};
 
 const readValueFromPayload = (entry: PayrollEntry, key: string) => {
   const earningsValue = entry.earnings?.[key];
