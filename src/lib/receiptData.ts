@@ -202,16 +202,25 @@ const LEGACY_RECEIPT_LINES: LegacyReceiptLineDefinition[] = [
 export function buildReceiptData(entry: PayrollEntry, rubrics: Rubric[]): ReceiptData {
   const result = calculatePayrollFromEntry({ entry, rubrics });
 
+  // Exceção de apresentação do recibo: destaca a Comissão cadastrada, sem
+  // inferir cálculo/classificação nem alterar os valores retornados pelo motor.
+  const commissions = rubrics.filter((rubric) =>
+    rubric.isActive && rubric.type === "provento" &&
+    normalizeRubricText(rubric.name.replace(/^\s*\(\+\)\s*/, "")) === "comissao" &&
+    toSafeNumber(result.valuesByRubricId[rubric.id]) !== 0,
+  );
+  const commissionIds = new Set(commissions.map((rubric) => rubric.id));
+
   // PRD-07: identifica rubricas com quantidade complementar para exibir linhas dedicadas
   // (ex.: "(+) Compra de Férias (10 dias)"). Apenas visual — não altera totais.
   const rubricMeta = entry.rubricMeta || {};
   const individualized = rubrics.filter((rubric) => {
-    if (!rubric.isActive || !rubric.usesComplementaryQuantity) return false;
+    if (!rubric.isActive || !rubric.usesComplementaryQuantity || commissionIds.has(rubric.id)) return false;
     const qty = Number(rubricMeta[rubric.id]?.quantity ?? 0);
     const value = toSafeNumber(result.valuesByRubricId[rubric.id]);
     return qty > 0 && value !== 0;
   });
-  const individualizedRubricIds = new Set(individualized.map((rubric) => rubric.id));
+  const individualizedRubricIds = new Set([...individualized.map((rubric) => rubric.id), ...commissionIds]);
 
   const context: LegacyReceiptContext = {
     entry,
@@ -254,6 +263,16 @@ export function buildReceiptData(entry: PayrollEntry, rubrics: Rubric[]): Receip
     .map((item) => item.line);
 
   const lines: ReceiptLine[] = orderedLines;
+  const grossSalaryIndex = lines.findIndex((line) => line.label === "Salário Bruto");
+  lines.splice(grossSalaryIndex + 1, 0, ...commissions.map((rubric): ReceiptLine => {
+    const qty = Number(rubricMeta[rubric.id]?.quantity ?? 0);
+    const unit = (rubric.complementaryQuantityLabel || "dias").trim() || "dias";
+    return {
+      label: rubric.usesComplementaryQuantity && qty > 0 ? `${rubric.name} (${qty} ${unit})` : rubric.name,
+      prefix: "(+)",
+      value: toSafeNumber(result.valuesByRubricId[rubric.id]),
+    };
+  }));
 
   const baseSalary = lines[0]?.value || 0;
 

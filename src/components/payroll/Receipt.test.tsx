@@ -1,6 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import Receipt from "./Receipt";
+import ReceiptPrintView from "./ReceiptPrintView";
+import { buildReceiptData } from "@/lib/receiptData";
+import { calculatePayrollFromEntry } from "@/lib/payrollSpreadsheet";
 import { Company, Employee, PayrollEntry, Rubric } from "@/types/payroll";
 
 const makeRubric = (overrides: Partial<Rubric>): Rubric => ({
@@ -113,4 +116,69 @@ describe("Receipt", () => {
     expect(screen.getByText("VALOR RECEBIDO:")).toHaveAttribute("translate", "no");
   });
 
+});
+
+
+describe("Comissão no recibo", () => {
+  const rubrics = [
+    makeRubric({ id: "salario_ctps", name: "Salário CTPS", classification: "salario_ctps" }),
+    makeRubric({ id: "commission-existing", name: "Comissão", order: 99 }),
+    makeRubric({ id: "daily", name: "Diária", order: 4 }),
+    makeRubric({ id: "horas_extras", name: "Horas extras", classification: "horas_extras", order: 7 }),
+    makeRubric({ id: "inss", name: "INSS", type: "desconto", classification: "inss", order: 10 }),
+  ];
+  const commissionedEntry = {
+    ...entry,
+    earnings: { ...entry.earnings, "commission-existing": 350, daily: 80 },
+  };
+
+  it.each([1, 2])("exibe Comissão após Salário Bruto na emissão com %i recibo(s)", (count) => {
+    const entries = Array.from({ length: count }, (_, i) => ({ ...commissionedEntry, id: `entry-${i}` }));
+    const before = structuredClone({ entries, rubrics });
+    render(<ReceiptPrintView open onClose={() => {}} entries={entries}
+      allEmployees={[employee]} allDepartments={[]} allJobRoles={[]}
+      company={company} rubrics={rubrics} />);
+
+    const tables = screen.getAllByText("DISCRIMINAÇÃO DAS VERBAS").map((heading) => heading.closest("table")!);
+    expect(tables).toHaveLength(count);
+    const baseline = buildReceiptData(entry, rubrics.filter((r) => r.id !== "commission-existing"));
+    for (const table of tables) {
+      const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
+      const labels = rows.map((row) => row.cells[0].textContent);
+      expect(labels.slice(0, 2)).toEqual(["Salário Bruto", "(+) Comissão"]);
+      expect(rows[1].cells[1]).toHaveTextContent("R$ 350,00");
+      expect(labels.filter((label) => label !== "(+) Comissão")).toEqual(
+        baseline.lines.map((line) => `${line.prefix} ${line.label}`.trim()),
+      );
+      expect(labels.filter((label) => label === "(+) Comissão")).toHaveLength(1);
+      expect(rows[2].cells[1]).toHaveTextContent("R$ 80,00");
+      expect(rows.at(-1)?.cells[1]).toHaveTextContent("R$ 1.350,00");
+    }
+    expect({ entries, rubrics }).toEqual(before);
+  });
+
+  it.each([0, undefined])("omite Comissão sem valor aplicável (%s)", (value) => {
+    const receiptEntry = { ...entry, earnings: { ...entry.earnings } };
+    if (value !== undefined) receiptEntry.earnings["commission-existing"] = value;
+    expect(buildReceiptData(receiptEntry, rubrics).lines.some((line) => line.label === "Comissão")).toBe(false);
+  });
+
+  it("não exibe rubrica inativa nem desconto homônimo", () => {
+    const excluded = rubrics.map((r) => r.id === "commission-existing" ? { ...r, isActive: false } : r);
+    expect(buildReceiptData(commissionedEntry, excluded).lines.some((line) => line.label === "Comissão")).toBe(false);
+    const discount = rubrics.map((r) => r.id === "commission-existing" ? { ...r, type: "desconto" as const } : r);
+    expect(buildReceiptData(commissionedEntry, discount).lines.some((line) => line.label === "Comissão")).toBe(false);
+  });
+
+  it("preserva quantidade complementar, valores do motor e não duplica Comissão", () => {
+    const withQuantity = rubrics.map((r) => r.id === "commission-existing"
+      ? { ...r, usesComplementaryQuantity: true, complementaryQuantityLabel: "vendas" } : r);
+    const receiptEntry = { ...commissionedEntry, rubricMeta: { "commission-existing": { quantity: 2 } } };
+    const before = calculatePayrollFromEntry({ entry: receiptEntry, rubrics: withQuantity });
+    const data = buildReceiptData(receiptEntry, withQuantity);
+    expect(data.lines[1]).toEqual({ label: "Comissão (2 vendas)", prefix: "(+)", value: 350 });
+    expect(data.lines.filter((line) => line.label.startsWith("Comissão"))).toHaveLength(1);
+    expect(data.lines.find((line) => line.label === "Diárias/Gratificações")?.value).toBe(80);
+    expect(calculatePayrollFromEntry({ entry: receiptEntry, rubrics: withQuantity })).toEqual(before);
+  });
 });
