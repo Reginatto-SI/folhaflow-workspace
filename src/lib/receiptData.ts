@@ -199,16 +199,22 @@ const LEGACY_RECEIPT_LINES: LegacyReceiptLineDefinition[] = [
   },
 ];
 
+// Comentário: identifica a rubrica de Comissão pelo code técnico ("comissao"/"comissoes")
+// ou, como fallback do cadastro atual, pelo nome normalizado iniciando com "comiss".
+export const isCommissionRubric = (rubric: Rubric) => {
+  if (!rubric.isActive || rubric.type !== "provento" || rubric.nature === "calculada") return false;
+  const code = normalizeRubricText(rubric.code);
+  if (code === "comissao" || code === "comissoes") return true;
+  const name = normalizeRubricText(rubric.name.replace(/^\s*\(\+\)\s*/, ""));
+  return name.startsWith("comiss");
+};
+
 export function buildReceiptData(entry: PayrollEntry, rubrics: Rubric[]): ReceiptData {
   const result = calculatePayrollFromEntry({ entry, rubrics });
 
-  // Exceção de apresentação do recibo: destaca a Comissão cadastrada, sem
-  // inferir cálculo/classificação nem alterar os valores retornados pelo motor.
-  const commissions = rubrics.filter((rubric) =>
-    rubric.isActive && rubric.type === "provento" &&
-    normalizeRubricText(rubric.name.replace(/^\s*\(\+\)\s*/, "")) === "comissao" &&
-    toSafeNumber(result.valuesByRubricId[rubric.id]) !== 0,
-  );
+  // Linha fixa "(+) Comissão" logo abaixo do Salário Bruto: sempre visível
+  // (valor em branco quando zerada), usando apenas os valores do motor.
+  const commissions = rubrics.filter(isCommissionRubric);
   const commissionIds = new Set(commissions.map((rubric) => rubric.id));
 
   // PRD-07: identifica rubricas com quantidade complementar para exibir linhas dedicadas
@@ -264,15 +270,17 @@ export function buildReceiptData(entry: PayrollEntry, rubrics: Rubric[]): Receip
 
   const lines: ReceiptLine[] = orderedLines;
   const grossSalaryIndex = lines.findIndex((line) => line.label === "Salário Bruto");
-  lines.splice(grossSalaryIndex + 1, 0, ...commissions.map((rubric): ReceiptLine => {
-    const qty = Number(rubricMeta[rubric.id]?.quantity ?? 0);
-    const unit = (rubric.complementaryQuantityLabel || "dias").trim() || "dias";
-    return {
-      label: rubric.usesComplementaryQuantity && qty > 0 ? `${rubric.name} (${qty} ${unit})` : rubric.name,
-      prefix: "(+)",
-      value: toSafeNumber(result.valuesByRubricId[rubric.id]),
-    };
-  }));
+  const commissionValue = commissions.reduce((sum, r) => sum + toSafeNumber(result.valuesByRubricId[r.id]), 0);
+  const singleCommission = commissions.length === 1 ? commissions[0] : null;
+  const commissionQty = singleCommission ? Number(rubricMeta[singleCommission.id]?.quantity ?? 0) : 0;
+  const commissionUnit = (singleCommission?.complementaryQuantityLabel || "dias").trim() || "dias";
+  lines.splice(grossSalaryIndex + 1, 0, {
+    label: singleCommission?.usesComplementaryQuantity && commissionQty > 0
+      ? `Comissão (${commissionQty} ${commissionUnit})`
+      : "Comissão",
+    prefix: "(+)",
+    value: commissionValue,
+  });
 
   const baseSalary = lines[0]?.value || 0;
 

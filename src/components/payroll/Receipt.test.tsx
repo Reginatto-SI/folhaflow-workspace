@@ -84,6 +84,7 @@ describe("Receipt", () => {
     const verbasRows = (verbasTable as HTMLTableElement).querySelectorAll("tbody tr");
     expect(Array.from(verbasRows).map((row) => row.textContent?.replace(/\s+/g, " ").trim())).toEqual([
       "Salário BrutoR$ 1.200,00",
+      "(+) Comissão",
       "(+) Diárias/Gratificações",
       "(+) 1/3 de férias",
       "(+) Hora extrasR$ 250,00",
@@ -148,7 +149,7 @@ describe("Comissão no recibo", () => {
       expect(labels.slice(0, 2)).toEqual(["Salário Bruto", "(+) Comissão"]);
       expect(rows[1].cells[1]).toHaveTextContent("R$ 350,00");
       expect(labels.filter((label) => label !== "(+) Comissão")).toEqual(
-        baseline.lines.map((line) => `${line.prefix} ${line.label}`.trim()),
+        baseline.lines.map((line) => `${line.prefix} ${line.label}`.trim()).filter((label) => label !== "(+) Comissão"),
       );
       expect(labels.filter((label) => label === "(+) Comissão")).toHaveLength(1);
       expect(rows[2].cells[1]).toHaveTextContent("R$ 80,00");
@@ -157,17 +158,37 @@ describe("Comissão no recibo", () => {
     expect({ entries, rubrics }).toEqual(before);
   });
 
-  it.each([0, undefined])("omite Comissão sem valor aplicável (%s)", (value) => {
+  it.each([0, undefined])("mantém linha fixa de Comissão zerada (%s)", (value) => {
     const receiptEntry = { ...entry, earnings: { ...entry.earnings } };
     if (value !== undefined) receiptEntry.earnings["commission-existing"] = value;
-    expect(buildReceiptData(receiptEntry, rubrics).lines.some((line) => line.label === "Comissão")).toBe(false);
+    const lines = buildReceiptData(receiptEntry, rubrics).lines;
+    expect(lines[1]).toEqual({ label: "Comissão", prefix: "(+)", value: 0 });
+  });
+
+  it("soma Comissão ao líquido via fórmula canônica (2.300 + 1.000 - 200 = 3.100)", () => {
+    const rs = [
+      makeRubric({ id: "sg", name: "Salário G", code: "2", classification: "salario_g", order: 1 }),
+      makeRubric({ id: "com", name: "(+) Comissão", code: "18", order: 2 }),
+      makeRubric({ id: "inss", name: "(-)INSS", code: "10", type: "desconto", classification: "inss", order: 3 }),
+      makeRubric({ id: "liq", name: "Salário Líquido", code: "salario_liquido", nature: "calculada", calculationMethod: "formula", order: 4,
+        formulaItems: [
+          { id: "a", sourceRubricId: "sg", operation: "add", order: 1 },
+          { id: "b", sourceRubricId: "com", operation: "add", order: 2 },
+          { id: "c", sourceRubricId: "inss", operation: "subtract", order: 3 },
+        ] as Rubric["formulaItems"] }),
+    ];
+    const e = { ...entry, earnings: { sg: 2300, com: 1000 }, deductions: { inss: 200 }, netSalary: undefined };
+    const data = buildReceiptData(e as PayrollEntry, rs);
+    expect(data.lines[0].value).toBe(2300);
+    expect(data.lines[1]).toEqual({ label: "Comissão", prefix: "(+)", value: 1000 });
+    expect(data.netSalary).toBe(3100);
   });
 
   it("não exibe rubrica inativa nem desconto homônimo", () => {
     const excluded = rubrics.map((r) => r.id === "commission-existing" ? { ...r, isActive: false } : r);
-    expect(buildReceiptData(commissionedEntry, excluded).lines.some((line) => line.label === "Comissão")).toBe(false);
+    expect(buildReceiptData(commissionedEntry, excluded).lines[1].value).toBe(0);
     const discount = rubrics.map((r) => r.id === "commission-existing" ? { ...r, type: "desconto" as const } : r);
-    expect(buildReceiptData(commissionedEntry, discount).lines.some((line) => line.label === "Comissão")).toBe(false);
+    expect(buildReceiptData(commissionedEntry, discount).lines[1].value).toBe(0);
   });
 
   it("preserva quantidade complementar, valores do motor e não duplica Comissão", () => {
