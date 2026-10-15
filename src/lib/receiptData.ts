@@ -199,16 +199,22 @@ const LEGACY_RECEIPT_LINES: LegacyReceiptLineDefinition[] = [
   },
 ];
 
+// Comentário: identifica a rubrica de Comissão pelo code técnico ("comissao"/"comissoes")
+// ou, como fallback do cadastro atual, pelo nome normalizado iniciando com "comiss".
+export const isCommissionRubric = (rubric: Rubric) => {
+  if (!rubric.isActive || rubric.type !== "provento" || rubric.nature === "calculada") return false;
+  const code = normalizeRubricText(rubric.code);
+  if (code === "comissao" || code === "comissoes") return true;
+  const name = normalizeRubricText(rubric.name.replace(/^\s*\(\+\)\s*/, ""));
+  return name.startsWith("comiss");
+};
+
 export function buildReceiptData(entry: PayrollEntry, rubrics: Rubric[]): ReceiptData {
   const result = calculatePayrollFromEntry({ entry, rubrics });
 
-  // Exceção de apresentação do recibo: destaca a Comissão cadastrada, sem
-  // inferir cálculo/classificação nem alterar os valores retornados pelo motor.
-  const commissions = rubrics.filter((rubric) =>
-    rubric.isActive && rubric.type === "provento" &&
-    normalizeRubricText(rubric.name.replace(/^\s*\(\+\)\s*/, "")) === "comissao" &&
-    toSafeNumber(result.valuesByRubricId[rubric.id]) !== 0,
-  );
+  // Linha fixa "(+) Comissão" logo abaixo do Salário Bruto: sempre visível
+  // (valor em branco quando zerada), usando apenas os valores do motor.
+  const commissions = rubrics.filter(isCommissionRubric);
   const commissionIds = new Set(commissions.map((rubric) => rubric.id));
 
   // PRD-07: identifica rubricas com quantidade complementar para exibir linhas dedicadas
