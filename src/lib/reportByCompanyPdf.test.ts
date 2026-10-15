@@ -38,6 +38,8 @@ import {
   getPayrollPdfBodyColumnStyle,
   isHighlightedPayrollPdfColumn,
 } from "@/lib/reportByCompanyPdf";
+import jsPDF from "jspdf";
+import { buildConsolidatedReportByCompanyData } from "@/lib/reportByCompanyData";
 import type { ReportByCompanyDataset, ReportDynamicColumn } from "@/lib/reportByCompanyData";
 
 const column = (overrides: Partial<ReportDynamicColumn> & Pick<ReportDynamicColumn, "rubricId" | "rubricName" | "order">): ReportDynamicColumn => ({
@@ -322,5 +324,109 @@ describe("reportByCompanyPdf", () => {
   it("preserva moeda brasileira para valores diferentes de zero", () => {
     expect(formatPdfCurrencyBlankWhenZero(3000)).toBe("R$ 3.000,00");
     expect(formatPdfCurrencyBlankWhenZero(-25.5)).toBe("-R$ 25,50");
+  });
+});
+
+
+describe("Comissão no relatório PDF", () => {
+  const commission = column({ rubricId: "commission-existing", rubricCode: "18", rubricName: "(+) Comissão", rubricClassification: "outros_rendimentos", order: 18 });
+  const base = datasetWithColumns([...officialColumns, commission]);
+  const makeRow = (employeeId: string, name: string, commissionValue: number) => ({
+    employeeId, name, cpf: "", department: "Comercial", jobRole: "Vendedor", admissionRegistration: "2026-01-01 / 10",
+    bankName: "", bankBranch: "", bankAccount: "", bankPixKey: "",
+    rubricValues: { salario_g: 1650, "commission-existing": commissionValue, vales: 365, liquido: 1635, outros: 0 },
+  });
+  const company: ReportByCompanyDataset = {
+    ...base, companyName: "FILIAL CBA", title: "Folha - FILIAL CBA (SETEMBRO DE 26)", competenceLabel: "SETEMBRO DE 26", month: 9,
+    rows: [makeRow("vitor", "Vitor Cesar Liborio de Almeida", 350), makeRow("zero", "Funcionário sem comissão", 0)],
+    totalsByRubricId: { salario_g: 3300, "commission-existing": 350, vales: 730, liquido: 3270, outros: 0 },
+  };
+
+  it("inclui código 18 após Salário G sem mudar as outras colunas", () => {
+    const before = structuredClone(company);
+    const columns = buildPayrollPdfDynamicColumns(company);
+    const ids = columns.map((item) => item.rubricId);
+    expect(ids.indexOf(commission.rubricId)).toBe(ids.indexOf("salario_g") + 1);
+    expect(ids.filter((id) => id !== commission.rubricId)).toEqual(
+      buildPayrollPdfDynamicColumns(datasetWithColumns(officialColumns)).map((item) => item.rubricId),
+    );
+    expect(columns.filter((item) => item.rubricId === commission.rubricId)).toHaveLength(1);
+    expect(company).toEqual(before);
+  });
+
+  it("prioriza código 18 mesmo quando um nome homônimo vem antes", () => {
+    const legacy = { ...commission, rubricId: "legacy", rubricCode: "77", order: 1 };
+    const renamed = { ...commission, rubricName: "Comissão cadastrada" };
+    const columns = buildPayrollPdfDynamicColumns(datasetWithColumns([legacy, renamed]));
+    expect(columns.map((item) => item.rubricId)).toEqual([commission.rubricId]);
+  });
+
+  it.each(["Comissão", "(+) Comissão", "(+)COMISSAO", "  comissão  "])("aceita somente o nome exato normalizado como fallback: %s", (name) => {
+    const legacy = { ...commission, rubricCode: "77", rubricName: name };
+    expect(buildPayrollPdfDynamicColumns(datasetWithColumns([legacy]))).toEqual([legacy]);
+  });
+
+  it("não confunde códigos parecidos, outros nomes ou descontos com Comissão", () => {
+    const candidates = [
+      { ...commission, rubricId: "180", rubricCode: "180", rubricName: "Outra rubrica" },
+      { ...commission, rubricId: "premio-comissao", rubricCode: "77", rubricName: "Prêmio de Comissão" },
+      { ...commission, rubricId: "desconto", rubricType: "desconto" as const },
+      { ...commission, rubricId: "class-incompativel", rubricCode: "77", rubricClassification: "insalubridade" as const },
+    ];
+    // Prêmio continua na sua coluna existente; nenhuma candidata vira Comissão.
+    expect(buildPayrollPdfDynamicColumns(datasetWithColumns(candidates)).map((item) => item.rubricId)).toEqual(["premio-comissao"]);
+  });
+
+  it("mantém A4 paisagem, valores homologados, zero em branco e total da empresa", () => {
+    autoTableMock.mockClear();
+    const before = structuredClone(company);
+    generateReportByCompanyPdf(company);
+    const options = autoTableMock.mock.calls[0][1];
+    const columns = buildPayrollPdfDynamicColumns(company);
+    const commissionIndex = 4 + columns.findIndex((item) => item.rubricId === commission.rubricId);
+    expect(options.head[0][commissionIndex]).toBe("(+)\nComissão");
+    expect(options.head[0][commissionIndex - 1]).toBe("Salário\nG");
+    expect(options.body[0][commissionIndex - 1]).toBe("R$ 1.650,00");
+    expect(options.body[0][commissionIndex]).toBe("R$ 350,00");
+    expect(options.body[1][commissionIndex]).toBe("");
+    expect(options.body.at(-1)[0]).toBe("TOTAL");
+    expect(options.body.at(-1)[commissionIndex]).toBe("R$ 350,00");
+    expect(options.body[0][4 + columns.findIndex((item) => item.rubricId === "outros")]).toBe("");
+    expect(options.body[0][4 + columns.findIndex((item) => item.rubricId === "vales")]).toBe("R$ 365,00");
+    expect(options.body[0][4 + columns.findIndex((item) => item.rubricId === "liquido")]).toBe("R$ 1.635,00");
+    expect(jsPDF).toHaveBeenLastCalledWith({ orientation: "landscape", unit: "mm", format: "a4" });
+    expect(Object.values(options.columnStyles).reduce((width: number, style: { cellWidth: number }) => width + style.cellWidth, 0)).toBeCloseTo(285);
+    expect(options.columnStyles[0].cellWidth).toBe(32);
+    generateReportByCompanyPdf({ ...company, dynamicColumns: officialColumns });
+    const baseline = autoTableMock.mock.calls[1][1];
+    expect(options.head[0].filter((_: string, index: number) => index !== commissionIndex)).toEqual(baseline.head[0]);
+    expect(options.body.map((row: string[]) => row.filter((_, index) => index !== commissionIndex))).toEqual(baseline.body);
+    expect(company).toEqual(before);
+  });
+
+  it("reaproveita os totais por empresa e geral no consolidado, inclusive empresa sem Comissão", () => {
+    autoTableMock.mockClear();
+    const second: ReportByCompanyDataset = {
+      ...company, companyName: "FILIAL B", rows: [makeRow("bia", "Bia", 125)],
+      totalsByRubricId: { "commission-existing": 125, salario_g: 1650, vales: 365, liquido: 1635 },
+    };
+    const withoutCommission: ReportByCompanyDataset = {
+      ...company, companyName: "FILIAL SEM COMISSÃO", dynamicColumns: officialColumns,
+      rows: [{ ...makeRow("ana", "Ana", 0), rubricValues: { salario_g: 1650, liquido: 1285 } }],
+      totalsByRubricId: { salario_g: 1650, liquido: 1285 },
+    };
+    const consolidated = buildConsolidatedReportByCompanyData([company, second, withoutCommission])!;
+    const before = structuredClone(consolidated);
+    generateReportByCompanyPdf(consolidated);
+    const commissionIndex = 4 + buildPayrollPdfDynamicColumns(consolidated).findIndex((item) => item.rubricId === commission.rubricId);
+    expect(autoTableMock).toHaveBeenCalledTimes(4);
+    for (const [i, section] of consolidated.companySections!.entries()) {
+      const options = autoTableMock.mock.calls[i][1];
+      expect(options.head[0][commissionIndex]).toBe("(+)\nComissão");
+      expect(options.body.at(-1)[commissionIndex]).toBe(formatPdfCurrencyBlankWhenZero(section.totalsByRubricId[commission.rubricId]));
+    }
+    expect(autoTableMock.mock.calls[3][1].body[0][0]).toBe("TOTAL GERAL");
+    expect(autoTableMock.mock.calls[3][1].body[0][commissionIndex]).toBe("R$ 475,00");
+    expect(consolidated).toEqual(before);
   });
 });
