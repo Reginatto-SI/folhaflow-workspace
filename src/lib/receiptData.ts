@@ -270,15 +270,17 @@ export function buildReceiptData(entry: PayrollEntry, rubrics: Rubric[]): Receip
 
   const lines: ReceiptLine[] = orderedLines;
   const grossSalaryIndex = lines.findIndex((line) => line.label === "Salário Bruto");
-  lines.splice(grossSalaryIndex + 1, 0, ...commissions.map((rubric): ReceiptLine => {
-    const qty = Number(rubricMeta[rubric.id]?.quantity ?? 0);
-    const unit = (rubric.complementaryQuantityLabel || "dias").trim() || "dias";
-    return {
-      label: rubric.usesComplementaryQuantity && qty > 0 ? `${rubric.name} (${qty} ${unit})` : rubric.name,
-      prefix: "(+)",
-      value: toSafeNumber(result.valuesByRubricId[rubric.id]),
-    };
-  }));
+  const commissionValue = commissions.reduce((sum, r) => sum + toSafeNumber(result.valuesByRubricId[r.id]), 0);
+  const singleCommission = commissions.length === 1 ? commissions[0] : null;
+  const commissionQty = singleCommission ? Number(rubricMeta[singleCommission.id]?.quantity ?? 0) : 0;
+  const commissionUnit = (singleCommission?.complementaryQuantityLabel || "dias").trim() || "dias";
+  lines.splice(grossSalaryIndex + 1, 0, {
+    label: singleCommission?.usesComplementaryQuantity && commissionQty > 0
+      ? `Comissão (${commissionQty} ${commissionUnit})`
+      : "Comissão",
+    prefix: "(+)",
+    value: commissionValue,
+  });
 
   const baseSalary = lines[0]?.value || 0;
 
