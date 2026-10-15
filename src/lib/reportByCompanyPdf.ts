@@ -43,6 +43,7 @@ const PDF_LABEL_ALIASES: Record<string, string> = {
   "nome": "Nome", "setor": "Setor", "função/cargo": "Função/\nCargo", "funcao/cargo": "Função/\nCargo",
   "admissão/registro": "Admissão/\nRegistro", "admissao/registro": "Admissão/\nRegistro", "salário ctps": "Salário\nCTPS", "salario ctps": "Salário\nCTPS",
   "salário g": "Salário\nG", "salario g": "Salário\nG", "salário fiscal": "Salário\nFiscal", "salario fiscal": "Salário\nFiscal",
+  "(+) comissao": "(+)\nComissão", "comissao": "(+)\nComissão",
   "(+) outros rendim.": "(+)\nOutros\nRendim.", "(+) horas extras": "(+)\nHoras\nExtras", "(+) 1/3 de férias": "(+)\n1/3\nFérias",
   "(+) 1/3 de ferias": "(+)\n1/3\nFérias", "(+) premio/desemp.": "(+)\nPrêmio/\nDesemp.", "(+) prêmio/desemp.": "(+)\nPrêmio/\nDesemp.",
   "(-)inss": "(-)\nINSS", "(-) emprést. consig.": "(-)\nEmpr.\nConsig.", "(-) emprest. consig.": "(-)\nEmpr.\nConsig.",
@@ -68,6 +69,7 @@ export type PayrollPdfDynamicColumn = ReportDynamicColumn;
 
 type OfficialPayrollPdfColumnRule = {
   key: string;
+  preferredCode?: string;
   isResultColumn?: boolean;
   matches: (column: ReportDynamicColumn) => boolean;
 };
@@ -104,6 +106,15 @@ const hasCompatibleCompraFeriasClassification = (column: ReportDynamicColumn) =>
 const OFFICIAL_PAYROLL_PDF_COLUMN_RULES: OfficialPayrollPdfColumnRule[] = [
   { key: "salario_ctps", matches: (column) => hasClassification(column, "salario_ctps") },
   { key: "salario_g", matches: (column) => hasClassification(column, "salario_g") },
+  {
+    key: "comissao",
+    preferredCode: "18",
+    matches: (column) => column.rubricType === "provento" && (
+      column.rubricCode.trim() === "18" ||
+      ((column.rubricClassification === null || hasClassification(column, "outros_rendimentos")) &&
+        normalizePdfColumnToken(column.rubricName).replace(/^\(\+\)\s*/, "") === "comissao")
+    ),
+  },
   {
     key: "outros_rendimentos",
     matches: (column) => hasClassification(column, "outros_rendimentos") && hasAnyToken(column, ["outros rendim", "outros rendimento", "outros rendimentos"]),
@@ -155,9 +166,12 @@ export const buildPayrollPdfDynamicColumns = (dataset: ReportByCompanyDataset): 
   // Comentário: a ordem do PDF segue a sequência oficial informada pelo produto.
   // Salário Real canônico é sempre removido e rubricas inexistentes não são inventadas.
   return OFFICIAL_PAYROLL_PDF_COLUMN_RULES.reduce<PayrollPdfDynamicColumn[]>((columns, rule) => {
-    const column = dataset.dynamicColumns.find((candidate) =>
-      !candidate.isCanonicalSalarioReal && !usedRubricIds.has(candidate.rubricId) && rule.matches(candidate)
-    );
+    const matches = (candidate: ReportDynamicColumn) =>
+      !candidate.isCanonicalSalarioReal && !usedRubricIds.has(candidate.rubricId) && rule.matches(candidate);
+    // Código cadastrado tem prioridade sobre o fallback exato por nome, independentemente da ordem do dataset.
+    const column = (rule.preferredCode
+      ? dataset.dynamicColumns.find((candidate) => matches(candidate) && candidate.rubricCode.trim() === rule.preferredCode)
+      : undefined) ?? dataset.dynamicColumns.find(matches);
     if (!column) return columns;
 
     usedRubricIds.add(column.rubricId);
