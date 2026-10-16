@@ -2,6 +2,7 @@ import React from "react";
 import { Download, Filter, Percent } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
@@ -18,6 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { buildReportSummaryData } from "@/lib/reportSummaryData";
 import { resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
+import type { PayrollBatch } from "@/types/payroll";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const PCT = (value: number | null) => (value === null ? "—" : `${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`);
@@ -112,6 +114,60 @@ const Dashboard: React.FC = () => {
       rubrics: rubrics ?? [],
     });
   }, [canRead, appliedFiltersValid, appliedFilters.compareKey, companies, allPayrollBatches, allEmployees, allPayrollEntries, resolveMonth, rubrics]);
+
+  const operationalStatuses = React.useMemo(() => {
+    if (!appliedFiltersValid) return [];
+
+    const periods = [{ key: appliedFilters.baseKey, label: "Competência base" }];
+    if (appliedFilters.compareKey) periods.push({ key: appliedFilters.compareKey, label: "Comparação" });
+
+    return periods.map((period) => {
+      const { month, year } = resolveMonth(period.key);
+      const batches = (allPayrollBatches ?? []).filter((batch) =>
+        !batch.isArchived && batch.month === month && batch.year === year &&
+        companies.some((company) => company.id === batch.companyId) &&
+        (appliedFilters.companyId === "all" || batch.companyId === appliedFilters.companyId));
+      const hasOngoing = batches.some((batch) => batch.status === "em_edicao" || batch.status === "em_revisao");
+      const companyCounts = new Map<string, number>();
+      batches.forEach((batch) => companyCounts.set(batch.companyId, (companyCounts.get(batch.companyId) ?? 0) + 1));
+      const ambiguousCompanies = [...companyCounts.values()].filter((count) => count > 1).length;
+
+      if (ambiguousCompanies > 0) return {
+        ...period, hasOngoing, summary: "Status não consolidado",
+        detail: `Há múltiplas folhas não arquivadas para ${ambiguousCompanies} ${ambiguousCompanies === 1 ? "empresa" : "empresas"} nesta competência.`,
+      };
+      if (!batches.length) return {
+        ...period, hasOngoing, summary: "Sem folha elegível",
+        detail: "Nenhuma folha não arquivada encontrada para esta seleção.",
+      };
+
+      const statusLabels: Record<PayrollBatch["status"], { label: string; detail: string }> = {
+        em_edicao: { label: "Em edição", detail: "Folha ainda em edição." },
+        em_revisao: { label: "Em revisão", detail: "Folha em processo de conferência." },
+        finalizado: { label: "Finalizada", detail: "Folha marcada como finalizada no sistema." },
+      };
+      if (batches.some((batch) => !Object.prototype.hasOwnProperty.call(statusLabels, batch.status))) return {
+        ...period, hasOngoing, summary: "Status operacional indisponível",
+        detail: "Há folhas com status não reconhecido nesta seleção.",
+      };
+      if (appliedFilters.companyId !== "all") return {
+        ...period, hasOngoing, summary: statusLabels[batches[0].status].label,
+        detail: statusLabels[batches[0].status].detail,
+      };
+
+      const counts = { finalizado: 0, em_revisao: 0, em_edicao: 0 };
+      batches.forEach((batch) => { counts[batch.status] += 1; });
+      const countsByStatus = [
+        { count: counts.finalizado, singular: "finalizada", plural: "finalizadas" },
+        { count: counts.em_revisao, singular: "em revisão", plural: "em revisão" },
+        { count: counts.em_edicao, singular: "em edição", plural: "em edição" },
+      ].filter(({ count }) => count > 0);
+      const summary = countsByStatus.map(({ count, singular, plural }) =>
+        `${count} ${countsByStatus.length === 1 ? (count === 1 ? "folha " : "folhas ") : ""}${count === 1 ? singular : plural}`,
+      ).join(" · ");
+      return { ...period, hasOngoing, summary, detail: null };
+    });
+  }, [appliedFiltersValid, appliedFilters, allPayrollBatches, companies, resolveMonth]);
 
   // O resumo usa UUIDs nas linhas de rubrica; as chaves gerenciais permanecem literais.
   const metricRubricIds = React.useMemo(() => {
@@ -266,6 +322,14 @@ const Dashboard: React.FC = () => {
 
     {filtersChanged && <p role="status" className="text-sm text-muted-foreground">Há filtros selecionados ainda não aplicados.</p>}
     {appliedFiltersValid && <p className="text-sm text-muted-foreground">Exibindo: {formatCompetence(appliedFilters.baseKey)} · {selectedCompanyName || "Todas as empresas"} · {appliedFilters.compareKey ? `Comparação: ${formatCompetence(appliedFilters.compareKey)}` : "Sem comparação"}</p>}
+    {operationalStatuses.length > 0 && <section aria-label="Status operacional das folhas" className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-2">{operationalStatuses.map((period) => <div key={period.label} role="group" aria-label={period.label} className="space-y-1 rounded-md border bg-muted/30 p-3">
+        <p className="text-sm font-medium">{period.label}: {formatCompetence(period.key)}</p>
+        <Badge variant="secondary">{period.summary}</Badge>
+        {period.detail && <p className="text-xs text-muted-foreground">{period.detail}</p>}
+      </div>)}</div>
+      {operationalStatuses[0].hasOngoing && <p className="text-xs text-muted-foreground">Os valores apresentados podem sofrer alterações enquanto houver folhas em andamento.</p>}
+    </section>}
     {!appliedFiltersValid ? <Alert><AlertDescription>{availableCompetences.length ? "Selecione filtros válidos e clique em Aplicar filtros." : "Nenhuma competência disponível para consulta nas empresas acessíveis."}</AlertDescription></Alert> : !hasBaseData ? <Alert><AlertDescription>Não há lançamentos na competência base para a empresa selecionada.</AlertDescription></Alert> : null}
     {hasBaseData && appliedFilters.compareKey && !hasComparisonData && <Alert><AlertDescription>A competência de comparação não possui lançamentos para esta seleção. Os valores comparativos estão indisponíveis.</AlertDescription></Alert>}
 
