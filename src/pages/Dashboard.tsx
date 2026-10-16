@@ -20,6 +20,8 @@ import { usePayroll } from "@/contexts/PayrollContext";
 import { buildReportSummaryData } from "@/lib/reportSummaryData";
 import { resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
 import type { PayrollBatch } from "@/types/payroll";
+import type { DashboardPdfData } from "@/lib/dashboardPdf";
+import { toast } from "sonner";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const PCT = (value: number | null) => (value === null ? "—" : `${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`);
@@ -58,6 +60,7 @@ const Dashboard: React.FC = () => {
   const [compareKey, setCompareKey] = React.useState("");
   const [companyId, setCompanyId] = React.useState("all");
   const [appliedFilters, setAppliedFilters] = React.useState({ baseKey: "", compareKey: "", companyId: "all" });
+  const [isExporting, setIsExporting] = React.useState(false);
 
   const hasCompetence = React.useCallback((key: string, targetCompanyId: string) =>
     availableCompetences.some((c) => `${c.month}/${c.year}` === key) &&
@@ -299,6 +302,55 @@ const Dashboard: React.FC = () => {
       .sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))[0] ?? null,
   } : null;
 
+  // Os cards e o PDF compartilham os mesmos valores de apresentação.
+  const displayedMetrics = cardMetrics.map((metric) => {
+    const atual = getMetricValue(baseDataset, metric.key);
+    const anterior = hasComparisonData && getMetricRow(compareDataset, metric.key) ? getMetricValue(compareDataset, metric.key) : null;
+    const diff = anterior === null || !getMetricRow(baseDataset, metric.key) ? null : atual - anterior;
+    const pct = diff === null ? null : calcPct(atual, anterior);
+    return { ...metric, atual: getMetricRow(baseDataset, metric.key) ? atual : null, anterior, diff, pct };
+  });
+
+  const exportDisabledReason = filtersChanged
+    ? "Clique em Aplicar filtros antes de exportar o PDF."
+    : !canRead || !appliedFiltersValid || !hasBaseData
+      ? "A exportação requer uma competência base válida e lançamentos carregados, sem erros."
+      : isExporting ? "Gerando o PDF..." : null;
+
+  const handleExportPdf = async () => {
+    if (exportDisabledReason) {
+      toast.error(exportDisabledReason);
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const data: DashboardPdfData = {
+        baseCompetence: { ...resolveMonth(appliedFilters.baseKey), label: formatCompetence(appliedFilters.baseKey) },
+        comparisonLabel: appliedFilters.compareKey ? formatCompetence(appliedFilters.compareKey) : null,
+        companyName: selectedCompanyName || "Todas as empresas",
+        statuses: operationalStatuses.map((status) => ({ period: status.label, competence: formatCompetence(status.key), summary: status.summary, detail: status.detail })),
+        provisional: operationalStatuses[0]?.hasOngoing ?? false,
+        indicators: displayedMetrics.map((metric) => ({ label: metric.label, current: metric.atual === null ? "—" : metric.format(metric.atual), previous: metric.anterior === null ? "—" : metric.format(metric.anterior), difference: metric.diff === null ? "—" : metric.format(metric.diff), percentage: PCT(metric.pct) })),
+        indicatorNotes: cardMetrics.filter((metric) => metric.description).map((metric) => `${metric.label}: ${metric.description}`),
+        evolution: evolutionData.map((row) => [row.competencia, BRL(row.rendimentos), row.salarioLiquido === null ? "—" : BRL(row.salarioLiquido)]),
+        highlights: isAllCompaniesView && variations ? [
+          ["Maior aumento (R$)", variations.maxUp?.company ?? "—", variations.maxUp ? `+${BRL(variations.maxUp.diff)}` : "—"],
+          ["Maior redução (R$)", variations.maxDown?.company ?? "—", variations.maxDown ? BRL(variations.maxDown.diff) : "—"],
+          ["Maior variação percentual absoluta", variations.maxPct?.company ?? "—", PCT(variations.maxPct?.pct ?? null)],
+        ] : [],
+        ranking: isAllCompaniesView ? rankingRows.map((row) => [row.company, BRL(row.atual), BRL(row.anterior), BRL(row.diff), PCT(row.pct), row.headcountDiff.toLocaleString("pt-BR")]) : [],
+        composition: compositionRows.map((row) => ({ label: row.label, current: BRL(row.atual), previous: row.anterior === null ? "—" : BRL(row.anterior), difference: row.diff === null ? "—" : BRL(row.diff), percentage: PCT(row.pct) })),
+      };
+      const { generateDashboardPdf } = await import("@/lib/dashboardPdf");
+      await generateDashboardPdf(data);
+      toast.success("PDF gerencial gerado com sucesso.");
+    } catch {
+      toast.error("Não foi possível gerar o PDF do Dashboard. Tente novamente.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (isPending) return <Card aria-busy="true"><CardHeader><CardTitle>Dashboard Comparativo da Folha</CardTitle></CardHeader><CardContent role="status" className="text-sm text-muted-foreground">Carregando dados do Dashboard...</CardContent></Card>;
   if (!hasPermission("folha.operar")) return <Alert><AlertTitle>Dados do Dashboard indisponíveis</AlertTitle><AlertDescription>Seu perfil não tem acesso aos dados necessários para este painel. Contate o administrador.</AlertDescription></Alert>;
   if (dataError) return <Alert variant="destructive"><AlertTitle>Não foi possível atualizar o Dashboard</AlertTitle><AlertDescription>{dataError} Os indicadores não serão exibidos enquanto houver erro de carregamento.</AlertDescription></Alert>;
@@ -318,7 +370,7 @@ const Dashboard: React.FC = () => {
         <div className="space-y-2"><p className="text-sm font-medium">Competência base</p><Select value={baseKey} onValueChange={setBaseKey} disabled={!selectableCompetences.length}><SelectTrigger><SelectValue placeholder="Sem competência disponível" /></SelectTrigger><SelectContent>{selectableCompetences.map((c) => <SelectItem key={`${c.month}/${c.year}`} value={`${c.month}/${c.year}`}>{new Date(c.year, c.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</SelectItem>)}</SelectContent></Select></div>
         <div className="space-y-2"><p className="text-sm font-medium">Comparar com</p><Select value={compareKey || "none"} onValueChange={(value) => setCompareKey(value === "none" ? "" : value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Sem comparação</SelectItem>{selectableCompetences.filter((c) => `${c.month}/${c.year}` !== baseKey).map((c) => <SelectItem key={`${c.month}/${c.year}`} value={`${c.month}/${c.year}`}>{new Date(c.year, c.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</SelectItem>)}</SelectContent></Select></div>
         <div className="space-y-2"><p className="text-sm font-medium">Empresa</p><Select value={companyId} onValueChange={setCompanyId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todas as empresas</SelectItem>{companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-        <div className="md:col-span-2 flex items-end justify-end gap-2"><Button disabled={!selectionValid} onClick={() => setAppliedFilters({ baseKey, compareKey, companyId })}><Filter className="mr-2 h-4 w-4" />Aplicar filtros</Button><Tooltip><TooltipTrigger asChild><span><Button variant="outline" disabled><Download className="mr-2 h-4 w-4" />Exportar</Button></span></TooltipTrigger><TooltipContent>Exportação do dashboard será implementada em etapa futura.</TooltipContent></Tooltip></div>
+        <div className="md:col-span-2 flex flex-wrap items-end justify-end gap-2"><Button disabled={!selectionValid} onClick={() => setAppliedFilters({ baseKey, compareKey, companyId })}><Filter className="mr-2 h-4 w-4" />Aplicar filtros</Button><Tooltip><TooltipTrigger asChild><span tabIndex={exportDisabledReason ? 0 : undefined}><Button variant="outline" disabled={Boolean(exportDisabledReason)} onClick={handleExportPdf}><Download className="mr-2 h-4 w-4" />{isExporting ? "Gerando PDF..." : "Exportar PDF"}</Button></span></TooltipTrigger>{exportDisabledReason && <TooltipContent className="max-w-xs">{exportDisabledReason}</TooltipContent>}</Tooltip></div>
       </CardContent>
     </Card>
 
@@ -335,12 +387,8 @@ const Dashboard: React.FC = () => {
     {!appliedFiltersValid ? <Alert><AlertDescription>{availableCompetences.length ? "Selecione filtros válidos e clique em Aplicar filtros." : "Nenhuma competência disponível para consulta nas empresas acessíveis."}</AlertDescription></Alert> : !hasBaseData ? <Alert><AlertDescription>Não há lançamentos na competência base para a empresa selecionada.</AlertDescription></Alert> : null}
     {hasBaseData && appliedFilters.compareKey && !hasComparisonData && <Alert><AlertDescription>A competência de comparação não possui lançamentos para esta seleção. Os valores comparativos estão indisponíveis.</AlertDescription></Alert>}
 
-    {hasBaseData && <div className="grid grid-cols-1 gap-3 xl:grid-cols-5">{cardMetrics.map((metric) => {
-      const atual = getMetricValue(baseDataset, metric.key);
-      const anterior = hasComparisonData && getMetricRow(compareDataset, metric.key) ? getMetricValue(compareDataset, metric.key) : null;
-      const diff = anterior === null || !getMetricRow(baseDataset, metric.key) ? null : atual - anterior;
-      const pct = diff === null ? null : calcPct(atual, anterior);
-      return <Card key={metric.label}><CardContent className="p-4 space-y-2"><div className="flex items-start gap-1"><p className="text-sm font-semibold">{metric.label}</p>{metric.description && <Tooltip><TooltipTrigger asChild><button type="button" aria-label={`Sobre ${metric.label}`} className="shrink-0 rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Info className="h-4 w-4" /></button></TooltipTrigger><TooltipContent className="max-w-xs">{metric.description}</TooltipContent></Tooltip>}</div><div className="text-xs text-muted-foreground">Atual</div><div className="font-semibold">{getMetricRow(baseDataset, metric.key) ? metric.format(atual) : "—"}</div><div className="text-xs text-muted-foreground">Anterior</div><div>{anterior === null ? "—" : metric.format(anterior)}</div><div className={`text-sm font-semibold ${diff === null ? "text-muted-foreground" : diff >= 0 ? "text-green-600" : "text-red-600"}`}>Variação: {diff === null ? "—" : `${metric.format(diff)} (${PCT(pct)})`}</div></CardContent></Card>;
+    {hasBaseData && <div className="grid grid-cols-1 gap-3 xl:grid-cols-5">{displayedMetrics.map((metric) => {
+      return <Card key={metric.label}><CardContent className="p-4 space-y-2"><div className="flex items-start gap-1"><p className="text-sm font-semibold">{metric.label}</p>{metric.description && <Tooltip><TooltipTrigger asChild><button type="button" aria-label={`Sobre ${metric.label}`} className="shrink-0 rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Info className="h-4 w-4" /></button></TooltipTrigger><TooltipContent className="max-w-xs">{metric.description}</TooltipContent></Tooltip>}</div><div className="text-xs text-muted-foreground">Atual</div><div className="font-semibold">{metric.atual === null ? "—" : metric.format(metric.atual)}</div><div className="text-xs text-muted-foreground">Anterior</div><div>{metric.anterior === null ? "—" : metric.format(metric.anterior)}</div><div className={`text-sm font-semibold ${metric.diff === null ? "text-muted-foreground" : metric.diff >= 0 ? "text-green-600" : "text-red-600"}`}>Variação: {metric.diff === null ? "—" : `${metric.format(metric.diff)} (${PCT(metric.pct)})`}</div></CardContent></Card>;
     })}</div>}
 
     <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
