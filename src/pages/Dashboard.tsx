@@ -75,24 +75,49 @@ const Dashboard: React.FC = () => {
     (!appliedFilters.compareKey || (appliedFilters.compareKey !== appliedFilters.baseKey && hasCompetence(appliedFilters.compareKey, appliedFilters.companyId)));
   const filtersChanged = baseKey !== appliedFilters.baseKey || compareKey !== appliedFilters.compareKey || companyId !== appliedFilters.companyId;
 
+  const didInitializeDefaultFilters = React.useRef(false);
+
   React.useEffect(() => {
     if (!canRead) return;
     if (companyId !== "all" && !companies.some((company) => company.id === companyId)) {
       setCompanyId("all");
       return;
     }
+
+    if (!didInitializeDefaultFilters.current) {
+      // Na primeira abertura, comparar o mês corrente com o anterior, quando disponíveis.
+      // Sem folha no mês corrente, usar a competência mais recente e a anterior disponível.
+      const today = new Date();
+      const currentKey = `${today.getMonth() + 1}/${today.getFullYear()}`;
+      const latest = availableCompetences.find((c) => hasCompetence(`${c.month}/${c.year}`, companyId));
+      const initialBaseKey = hasCompetence(currentKey, companyId)
+        ? currentKey
+        : latest ? `${latest.month}/${latest.year}` : "";
+      if (!initialBaseKey) return;
+
+      const { month, year } = resolveMonth(initialBaseKey);
+      const previous = new Date(year, month - 2, 1);
+      const previousKey = `${previous.getMonth() + 1}/${previous.getFullYear()}`;
+      const earlier = availableCompetences.find((c) =>
+        (c.year < year || (c.year === year && c.month < month)) &&
+        hasCompetence(`${c.month}/${c.year}`, companyId));
+      const initialCompareKey = hasCompetence(previousKey, companyId)
+        ? previousKey
+        : earlier ? `${earlier.month}/${earlier.year}` : "";
+
+      didInitializeDefaultFilters.current = true;
+      setBaseKey(initialBaseKey);
+      setCompareKey(initialCompareKey);
+      setAppliedFilters({ baseKey: initialBaseKey, compareKey: initialCompareKey, companyId });
+      return;
+    }
+
+    // Após a abertura, manter o fluxo manual de Aplicar filtros.
     const latest = availableCompetences.find((c) => hasCompetence(`${c.month}/${c.year}`, companyId));
     const nextBaseKey = hasCompetence(baseKey, companyId) ? baseKey : latest ? `${latest.month}/${latest.year}` : "";
     if (nextBaseKey !== baseKey) setBaseKey(nextBaseKey);
     if (compareKey && (compareKey === nextBaseKey || !hasCompetence(compareKey, companyId))) setCompareKey("");
-  }, [canRead, companies, companyId, availableCompetences, hasCompetence, baseKey, compareKey]);
-
-  React.useEffect(() => {
-    // Inicializa uma única vez após o carregamento; escolhas posteriores exigem Aplicar filtros.
-    if (canRead && !appliedFilters.baseKey && selectionValid) {
-      setAppliedFilters({ baseKey, compareKey, companyId });
-    }
-  }, [canRead, appliedFilters.baseKey, selectionValid, baseKey, compareKey, companyId]);
+  }, [canRead, companies, companyId, availableCompetences, hasCompetence, baseKey, compareKey, resolveMonth]);
 
   const baseDataset = React.useMemo(() => {
     if (!canRead || !appliedFiltersValid) return null;
