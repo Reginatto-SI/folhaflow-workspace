@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { buildReportSummaryData } from "@/lib/reportSummaryData";
+import { resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const PCT = (value: number | null) => (value === null ? "—" : `${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`);
@@ -86,13 +87,39 @@ const Dashboard: React.FC = () => {
     });
   }, [appliedFilters.compareKey, companies, allPayrollBatches, allEmployees, allPayrollEntries, resolveMonth, rubrics]);
 
-  // Comentário: dashboard somente compara dados já consolidados (sem recálculo da folha).
+  // O resumo usa UUIDs nas linhas de rubrica; as chaves gerenciais permanecem literais.
+  const metricRubricIds = React.useMemo(() => {
+    const activeRubrics = (rubrics ?? []).filter((rubric) => rubric.isActive);
+    const canonical = resolveCanonicalDerivedRubricIds(activeRubrics);
+    const classifiedId = (classification: "salario_ctps" | "outros_rendimentos") => {
+      const candidates = activeRubrics.filter((rubric) => rubric.type === "provento" && rubric.classification === classification);
+      const byCode = candidates.filter((rubric) => rubric.code.trim().toLowerCase() === classification);
+      if (byCode.length === 1) return byCode[0].id;
+      // Outros Rendimentos também classifica Comissão/Prêmio: não escolher uma rubrica arbitrária desse grupo.
+      return classification === "salario_ctps" && candidates.length === 1 ? candidates[0].id : null;
+    };
+    return {
+      salario_liquido: canonical.salarioLiquidoId,
+      salario_real: canonical.salarioRealId,
+      g2_complemento: canonical.g2ComplementoId,
+      salario_ctps: classifiedId("salario_ctps"),
+      outros_rendimentos: classifiedId("outros_rendimentos"),
+    };
+  }, [rubrics]);
+
+  const getMetricRow = React.useCallback((dataset: typeof baseDataset | null, key: string) => {
+    const rowKey = Object.prototype.hasOwnProperty.call(metricRubricIds, key)
+      ? metricRubricIds[key as keyof typeof metricRubricIds]
+      : key;
+    return rowKey ? dataset?.rows.find((row) => row.key === rowKey) : undefined;
+  }, [metricRubricIds]);
+
+  // Dashboard somente lê valores já consolidados, sem recálculo ou escrita.
   const getMetricValue = React.useCallback((dataset: typeof baseDataset | null, key: string) => {
-    if (!dataset) return 0;
-    const row = dataset.rows.find((r) => r.key === key);
+    const row = getMetricRow(dataset, key);
     if (!row) return 0;
     return appliedFilters.companyId === "all" ? row.total : (row.valuesByCompanyId[appliedFilters.companyId] ?? 0);
-  }, [appliedFilters.companyId]);
+  }, [appliedFilters.companyId, getMetricRow]);
 
   const calcPct = (current: number, previous: number): number | null => {
     if (previous === 0) return null;
@@ -134,8 +161,8 @@ const Dashboard: React.FC = () => {
   const rankingRows = React.useMemo(() => {
     if (!compareDataset) return [];
     return baseDataset.companies.map((company) => {
-      const baseNet = baseDataset.rows.find((r) => r.key === "salario_liquido")?.valuesByCompanyId[company.id] ?? 0;
-      const compareNet = compareDataset.rows.find((r) => r.key === "salario_liquido")?.valuesByCompanyId[company.id] ?? 0;
+      const baseNet = getMetricRow(baseDataset, "salario_liquido")?.valuesByCompanyId[company.id] ?? 0;
+      const compareNet = getMetricRow(compareDataset, "salario_liquido")?.valuesByCompanyId[company.id] ?? 0;
       const baseHeadcount = baseDataset.rows.find((r) => r.key === "__headcount__")?.valuesByCompanyId[company.id] ?? 0;
       const compareHeadcount = compareDataset.rows.find((r) => r.key === "__headcount__")?.valuesByCompanyId[company.id] ?? 0;
       const diff = baseNet - compareNet;
@@ -148,7 +175,7 @@ const Dashboard: React.FC = () => {
         headcountDiff: baseHeadcount - compareHeadcount,
       };
     }).sort((a, b) => b.diff - a.diff);
-  }, [baseDataset, compareDataset]);
+  }, [baseDataset, compareDataset, getMetricRow]);
 
   // Comentário: composição usa apenas chaves estáveis do dataset (row.key), sem heurística por label.
   const compositionMap = [
@@ -161,7 +188,7 @@ const Dashboard: React.FC = () => {
   ];
 
   const compositionRows = compositionMap
-    .filter((item) => baseDataset.rows.some((row) => row.key === item.key) && (compareDataset ? compareDataset.rows.some((row) => row.key === item.key) : true))
+    .filter((item) => getMetricRow(baseDataset, item.key) && (!compareDataset || getMetricRow(compareDataset, item.key)))
     .map((item) => {
       const atual = getMetricValue(baseDataset, item.key);
       const anterior = getMetricValue(compareDataset, item.key);
