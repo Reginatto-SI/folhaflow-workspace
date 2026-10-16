@@ -13,6 +13,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useAuth } from "@/contexts/AuthContext";
 import { usePayroll } from "@/contexts/PayrollContext";
 import { buildReportSummaryData } from "@/lib/reportSummaryData";
 import { resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
@@ -21,50 +23,66 @@ const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency"
 const PCT = (value: number | null) => (value === null ? "—" : `${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`);
 
 const Dashboard: React.FC = () => {
-  const { activeCompanies, allPayrollBatches, allEmployees, allPayrollEntries, rubrics, selectedMonth } = usePayroll();
-  const companies = activeCompanies ?? [];
+  const { activeCompanies, allPayrollBatches, allEmployees, allPayrollEntries, rubrics, isLoading, loadError, payrollCatalogErrors } = usePayroll();
+  const { hasPermission, loading: authLoading } = useAuth();
+  const companies = React.useMemo(() => activeCompanies ?? [], [activeCompanies]);
+  const dataError = loadError || payrollCatalogErrors.payrollEntries;
+  const isPending = isLoading || authLoading;
+  const canRead = !isPending && !dataError && hasPermission("folha.operar");
 
   const availableCompetences = React.useMemo(() => {
     const seen = new Map<string, { month: number; year: number }>();
-    (allPayrollBatches ?? []).filter((b) => !b.isArchived).forEach((b) => {
+    (allPayrollBatches ?? []).filter((b) => !b.isArchived && companies.some((company) => company.id === b.companyId)).forEach((b) => {
       const key = `${b.month}/${b.year}`;
       if (!seen.has(key)) seen.set(key, { month: b.month, year: b.year });
     });
     return Array.from(seen.values()).sort((a, b) => (b.year - a.year) || (b.month - a.month));
-  }, [allPayrollBatches]);
+  }, [allPayrollBatches, companies]);
 
   const resolveMonth = React.useCallback((key: string) => {
     const [month, year] = key.split("/").map(Number);
     return { month, year };
   }, []);
 
-  const selectedMonthKey = `${selectedMonth.month}/${selectedMonth.year}`;
-  const [baseKey, setBaseKey] = React.useState(selectedMonthKey);
+  const [baseKey, setBaseKey] = React.useState("");
   const [compareKey, setCompareKey] = React.useState("");
   const [companyId, setCompanyId] = React.useState("all");
-  const [appliedFilters, setAppliedFilters] = React.useState({ baseKey: selectedMonthKey, compareKey: "", companyId: "all" });
+  const [appliedFilters, setAppliedFilters] = React.useState({ baseKey: "", compareKey: "", companyId: "all" });
+
+  const hasCompetence = React.useCallback((key: string, targetCompanyId: string) =>
+    availableCompetences.some((c) => `${c.month}/${c.year}` === key) &&
+    (targetCompanyId === "all" || (allPayrollBatches ?? []).some((batch) =>
+      !batch.isArchived && batch.companyId === targetCompanyId && `${batch.month}/${batch.year}` === key)),
+  [availableCompetences, allPayrollBatches]);
+  const selectableCompetences = availableCompetences.filter((c) => hasCompetence(`${c.month}/${c.year}`, companyId));
+  const selectionValid = (companyId === "all" || companies.some((company) => company.id === companyId)) &&
+    hasCompetence(baseKey, companyId) && (!compareKey || (compareKey !== baseKey && hasCompetence(compareKey, companyId)));
+  const appliedFiltersValid = (appliedFilters.companyId === "all" || companies.some((company) => company.id === appliedFilters.companyId)) &&
+    hasCompetence(appliedFilters.baseKey, appliedFilters.companyId) &&
+    (!appliedFilters.compareKey || (appliedFilters.compareKey !== appliedFilters.baseKey && hasCompetence(appliedFilters.compareKey, appliedFilters.companyId)));
+  const filtersChanged = baseKey !== appliedFilters.baseKey || compareKey !== appliedFilters.compareKey || companyId !== appliedFilters.companyId;
 
   React.useEffect(() => {
-    const baseExists = availableCompetences.some((c) => `${c.month}/${c.year}` === baseKey);
-    const normalizedBaseKey = baseExists ? baseKey : selectedMonthKey;
-
-    const baseIndex = availableCompetences.findIndex((c) => `${c.month}/${c.year}` === normalizedBaseKey);
-    const previous = baseIndex >= 0 ? availableCompetences[baseIndex + 1] : undefined;
-    const suggestedCompareKey = previous ? `${previous.month}/${previous.year}` : "";
-
-    if (normalizedBaseKey !== baseKey) setBaseKey(normalizedBaseKey);
-    if (!compareKey || compareKey === normalizedBaseKey || !availableCompetences.some((c) => `${c.month}/${c.year}` === compareKey)) {
-      setCompareKey(suggestedCompareKey);
+    if (!canRead) return;
+    if (companyId !== "all" && !companies.some((company) => company.id === companyId)) {
+      setCompanyId("all");
+      return;
     }
-  }, [availableCompetences, baseKey, compareKey, selectedMonthKey]);
+    const latest = availableCompetences.find((c) => hasCompetence(`${c.month}/${c.year}`, companyId));
+    const nextBaseKey = hasCompetence(baseKey, companyId) ? baseKey : latest ? `${latest.month}/${latest.year}` : "";
+    if (nextBaseKey !== baseKey) setBaseKey(nextBaseKey);
+    if (compareKey && (compareKey === nextBaseKey || !hasCompetence(compareKey, companyId))) setCompareKey("");
+  }, [canRead, companies, companyId, availableCompetences, hasCompetence, baseKey, compareKey]);
 
   React.useEffect(() => {
-    if (!appliedFilters.compareKey && compareKey) {
+    // Inicializa uma única vez após o carregamento; escolhas posteriores exigem Aplicar filtros.
+    if (canRead && !appliedFilters.baseKey && selectionValid) {
       setAppliedFilters({ baseKey, compareKey, companyId });
     }
-  }, [appliedFilters.compareKey, baseKey, compareKey, companyId]);
+  }, [canRead, appliedFilters.baseKey, selectionValid, baseKey, compareKey, companyId]);
 
   const baseDataset = React.useMemo(() => {
+    if (!canRead || !appliedFiltersValid) return null;
     return buildReportSummaryData({
       month: resolveMonth(appliedFilters.baseKey),
       companies,
@@ -73,10 +91,10 @@ const Dashboard: React.FC = () => {
       allEntries: allPayrollEntries ?? [],
       rubrics: rubrics ?? [],
     });
-  }, [appliedFilters.baseKey, companies, allPayrollBatches, allEmployees, allPayrollEntries, resolveMonth, rubrics]);
+  }, [canRead, appliedFiltersValid, appliedFilters.baseKey, companies, allPayrollBatches, allEmployees, allPayrollEntries, resolveMonth, rubrics]);
 
   const compareDataset = React.useMemo(() => {
-    if (!appliedFilters.compareKey) return null;
+    if (!canRead || !appliedFiltersValid || !appliedFilters.compareKey) return null;
     return buildReportSummaryData({
       month: resolveMonth(appliedFilters.compareKey),
       companies,
@@ -85,7 +103,7 @@ const Dashboard: React.FC = () => {
       allEntries: allPayrollEntries ?? [],
       rubrics: rubrics ?? [],
     });
-  }, [appliedFilters.compareKey, companies, allPayrollBatches, allEmployees, allPayrollEntries, resolveMonth, rubrics]);
+  }, [canRead, appliedFiltersValid, appliedFilters.compareKey, companies, allPayrollBatches, allEmployees, allPayrollEntries, resolveMonth, rubrics]);
 
   // O resumo usa UUIDs nas linhas de rubrica; as chaves gerenciais permanecem literais.
   const metricRubricIds = React.useMemo(() => {
@@ -121,6 +139,13 @@ const Dashboard: React.FC = () => {
     return appliedFilters.companyId === "all" ? row.total : (row.valuesByCompanyId[appliedFilters.companyId] ?? 0);
   }, [appliedFilters.companyId, getMetricRow]);
 
+  const hasEntries = React.useCallback((dataset: typeof baseDataset, targetCompanyId: string) => {
+    const row = dataset?.rows.find((item) => item.key === "__headcount__");
+    return (targetCompanyId === "all" ? row?.total ?? 0 : row?.valuesByCompanyId[targetCompanyId] ?? 0) > 0;
+  }, []);
+  const hasBaseData = hasEntries(baseDataset, appliedFilters.companyId);
+  const hasComparisonData = hasEntries(compareDataset, appliedFilters.companyId);
+
   const calcPct = (current: number, previous: number): number | null => {
     if (previous === 0) return null;
     const pct = (current - previous) / previous * 100;
@@ -140,8 +165,11 @@ const Dashboard: React.FC = () => {
 
   // Comentário: filtro de empresa aplicado de forma uniforme no histórico, lendo valuesByCompanyId quando necessário.
   const evolutionData = React.useMemo(() => {
-    const sorted = [...availableCompetences].sort((a, b) => (a.year - b.year) || (a.month - b.month)).slice(-6);
-    return sorted.map((m) => {
+    if (!canRead || !appliedFiltersValid) return [];
+    const sorted = availableCompetences
+      .filter((m) => hasCompetence(`${m.month}/${m.year}`, appliedFilters.companyId))
+      .sort((a, b) => (a.year - b.year) || (a.month - b.month)).slice(-6);
+    return sorted.flatMap((m) => {
       const ds = buildReportSummaryData({
         month: m,
         companies,
@@ -150,17 +178,18 @@ const Dashboard: React.FC = () => {
         allEntries: allPayrollEntries ?? [],
         rubrics: rubrics ?? [],
       });
-      return {
+      if (!hasEntries(ds, appliedFilters.companyId)) return [];
+      return [{
         competencia: new Date(m.year, m.month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "numeric" }),
         rendimentos: getMetricValue(ds, "__rendimentos__"),
-        salarioLiquido: getMetricValue(ds, "salario_liquido"),
-      };
+        salarioLiquido: getMetricRow(ds, "salario_liquido") ? getMetricValue(ds, "salario_liquido") : null,
+      }];
     });
-  }, [availableCompetences, companies, allPayrollBatches, allEmployees, allPayrollEntries, rubrics, getMetricValue]);
+  }, [canRead, appliedFiltersValid, appliedFilters.companyId, availableCompetences, hasCompetence, companies, allPayrollBatches, allEmployees, allPayrollEntries, rubrics, getMetricValue, getMetricRow, hasEntries]);
 
   const rankingRows = React.useMemo(() => {
-    if (!compareDataset) return [];
-    return baseDataset.companies.map((company) => {
+    if (!hasBaseData || !hasComparisonData || !getMetricRow(baseDataset, "salario_liquido") || !getMetricRow(compareDataset, "salario_liquido")) return [];
+    return baseDataset.companies.filter((company) => hasEntries(baseDataset, company.id) && hasEntries(compareDataset, company.id)).map((company) => {
       const baseNet = getMetricRow(baseDataset, "salario_liquido")?.valuesByCompanyId[company.id] ?? 0;
       const compareNet = getMetricRow(compareDataset, "salario_liquido")?.valuesByCompanyId[company.id] ?? 0;
       const baseHeadcount = baseDataset.rows.find((r) => r.key === "__headcount__")?.valuesByCompanyId[company.id] ?? 0;
@@ -175,7 +204,7 @@ const Dashboard: React.FC = () => {
         headcountDiff: baseHeadcount - compareHeadcount,
       };
     }).sort((a, b) => b.diff - a.diff);
-  }, [baseDataset, compareDataset, getMetricRow]);
+  }, [baseDataset, compareDataset, getMetricRow, hasBaseData, hasComparisonData, hasEntries]);
 
   // Comentário: composição usa apenas chaves estáveis do dataset (row.key), sem heurística por label.
   const compositionMap = [
@@ -188,12 +217,12 @@ const Dashboard: React.FC = () => {
   ];
 
   const compositionRows = compositionMap
-    .filter((item) => getMetricRow(baseDataset, item.key) && (!compareDataset || getMetricRow(compareDataset, item.key)))
+    .filter((item) => hasBaseData && getMetricRow(baseDataset, item.key))
     .map((item) => {
       const atual = getMetricValue(baseDataset, item.key);
-      const anterior = getMetricValue(compareDataset, item.key);
-      const diff = atual - anterior;
-      return { label: item.label, atual, anterior, diff, pct: calcPct(atual, anterior) };
+      const anterior = hasComparisonData && getMetricRow(compareDataset, item.key) ? getMetricValue(compareDataset, item.key) : null;
+      const diff = anterior === null ? null : atual - anterior;
+      return { label: item.label, atual, anterior, diff, pct: anterior === null ? null : calcPct(atual, anterior) };
     });
 
   const variations = rankingRows.length > 0 ? {
@@ -204,40 +233,56 @@ const Dashboard: React.FC = () => {
       .sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0))[0] ?? null,
   } : null;
 
+  if (isPending) return <Card aria-busy="true"><CardHeader><CardTitle>Dashboard Comparativo da Folha</CardTitle></CardHeader><CardContent role="status" className="text-sm text-muted-foreground">Carregando dados do Dashboard...</CardContent></Card>;
+  if (!hasPermission("folha.operar")) return <Alert><AlertTitle>Dados do Dashboard indisponíveis</AlertTitle><AlertDescription>Seu perfil não tem acesso aos dados necessários para este painel. Contate o administrador.</AlertDescription></Alert>;
+  if (dataError) return <Alert variant="destructive"><AlertTitle>Não foi possível atualizar o Dashboard</AlertTitle><AlertDescription>{dataError} Os indicadores não serão exibidos enquanto houver erro de carregamento.</AlertDescription></Alert>;
+
+  const comparisonMessage = !appliedFilters.compareKey
+    ? "Selecione uma competência de comparação para visualizar as variações."
+    : "Não há dados comparáveis disponíveis nas duas competências para esta seleção.";
+  const formatCompetence = (key: string) => {
+    const { month, year } = resolveMonth(key);
+    return new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  };
+
   return <div className="space-y-4">
     <Card>
       <CardHeader><CardTitle>Dashboard Comparativo da Folha</CardTitle></CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-5">
-        <div className="space-y-2"><p className="text-sm font-medium">Competência base</p><Select value={baseKey} onValueChange={setBaseKey}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{availableCompetences.map((c) => <SelectItem key={`${c.month}/${c.year}`} value={`${c.month}/${c.year}`}>{new Date(c.year, c.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</SelectItem>)}</SelectContent></Select></div>
-        <div className="space-y-2"><p className="text-sm font-medium">Comparar com</p><Select value={compareKey} onValueChange={setCompareKey}><SelectTrigger><SelectValue placeholder="Sem competência anterior disponível" /></SelectTrigger><SelectContent>{availableCompetences.filter((c) => `${c.month}/${c.year}` !== baseKey).map((c) => <SelectItem key={`${c.month}/${c.year}`} value={`${c.month}/${c.year}`}>{new Date(c.year, c.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</SelectItem>)}</SelectContent></Select></div>
+        <div className="space-y-2"><p className="text-sm font-medium">Competência base</p><Select value={baseKey} onValueChange={setBaseKey} disabled={!selectableCompetences.length}><SelectTrigger><SelectValue placeholder="Sem competência disponível" /></SelectTrigger><SelectContent>{selectableCompetences.map((c) => <SelectItem key={`${c.month}/${c.year}`} value={`${c.month}/${c.year}`}>{new Date(c.year, c.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</SelectItem>)}</SelectContent></Select></div>
+        <div className="space-y-2"><p className="text-sm font-medium">Comparar com</p><Select value={compareKey || "none"} onValueChange={(value) => setCompareKey(value === "none" ? "" : value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Sem comparação</SelectItem>{selectableCompetences.filter((c) => `${c.month}/${c.year}` !== baseKey).map((c) => <SelectItem key={`${c.month}/${c.year}`} value={`${c.month}/${c.year}`}>{new Date(c.year, c.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</SelectItem>)}</SelectContent></Select></div>
         <div className="space-y-2"><p className="text-sm font-medium">Empresa</p><Select value={companyId} onValueChange={setCompanyId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todas as empresas</SelectItem>{companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-        <div className="md:col-span-2 flex items-end justify-end gap-2"><Button disabled={!compareKey} onClick={() => setAppliedFilters({ baseKey, compareKey, companyId })}><Filter className="mr-2 h-4 w-4" />Aplicar filtros</Button><Tooltip><TooltipTrigger asChild><span><Button variant="outline" disabled><Download className="mr-2 h-4 w-4" />Exportar</Button></span></TooltipTrigger><TooltipContent>Exportação do dashboard será implementada em etapa futura.</TooltipContent></Tooltip></div>
+        <div className="md:col-span-2 flex items-end justify-end gap-2"><Button disabled={!selectionValid} onClick={() => setAppliedFilters({ baseKey, compareKey, companyId })}><Filter className="mr-2 h-4 w-4" />Aplicar filtros</Button><Tooltip><TooltipTrigger asChild><span><Button variant="outline" disabled><Download className="mr-2 h-4 w-4" />Exportar</Button></span></TooltipTrigger><TooltipContent>Exportação do dashboard será implementada em etapa futura.</TooltipContent></Tooltip></div>
       </CardContent>
     </Card>
 
-    <div className="grid grid-cols-1 gap-3 xl:grid-cols-5">{cardMetrics.map((metric) => {
+    {filtersChanged && <p role="status" className="text-sm text-muted-foreground">Há filtros selecionados ainda não aplicados.</p>}
+    {appliedFiltersValid && <p className="text-sm text-muted-foreground">Exibindo: {formatCompetence(appliedFilters.baseKey)} · {selectedCompanyName || "Todas as empresas"} · {appliedFilters.compareKey ? `Comparação: ${formatCompetence(appliedFilters.compareKey)}` : "Sem comparação"}</p>}
+    {!appliedFiltersValid ? <Alert><AlertDescription>{availableCompetences.length ? "Selecione filtros válidos e clique em Aplicar filtros." : "Nenhuma competência disponível para consulta nas empresas acessíveis."}</AlertDescription></Alert> : !hasBaseData ? <Alert><AlertDescription>Não há lançamentos na competência base para a empresa selecionada.</AlertDescription></Alert> : null}
+    {hasBaseData && appliedFilters.compareKey && !hasComparisonData && <Alert><AlertDescription>A competência de comparação não possui lançamentos para esta seleção. Os valores comparativos estão indisponíveis.</AlertDescription></Alert>}
+
+    {hasBaseData && <div className="grid grid-cols-1 gap-3 xl:grid-cols-5">{cardMetrics.map((metric) => {
       const atual = getMetricValue(baseDataset, metric.key);
-      const anterior = getMetricValue(compareDataset, metric.key);
-      const diff = atual - anterior;
-      const pct = calcPct(atual, anterior);
-      const positive = diff >= 0;
-      return <Card key={metric.label}><CardContent className="p-4 space-y-2"><p className="text-sm font-semibold">{metric.label}</p><div className="text-xs text-muted-foreground">Atual</div><div className="font-semibold">{metric.format(atual)}</div><div className="text-xs text-muted-foreground">Anterior</div><div>{metric.format(anterior)}</div><div className={`text-sm font-semibold ${positive ? "text-green-600" : "text-red-600"}`}>Variação: {metric.format(diff)} ({PCT(pct)})</div></CardContent></Card>;
-    })}</div>
+      const anterior = hasComparisonData && getMetricRow(compareDataset, metric.key) ? getMetricValue(compareDataset, metric.key) : null;
+      const diff = anterior === null || !getMetricRow(baseDataset, metric.key) ? null : atual - anterior;
+      const pct = diff === null ? null : calcPct(atual, anterior);
+      return <Card key={metric.label}><CardContent className="p-4 space-y-2"><p className="text-sm font-semibold">{metric.label}</p><div className="text-xs text-muted-foreground">Atual</div><div className="font-semibold">{getMetricRow(baseDataset, metric.key) ? metric.format(atual) : "—"}</div><div className="text-xs text-muted-foreground">Anterior</div><div>{anterior === null ? "—" : metric.format(anterior)}</div><div className={`text-sm font-semibold ${diff === null ? "text-muted-foreground" : diff >= 0 ? "text-green-600" : "text-red-600"}`}>Variação: {diff === null ? "—" : `${metric.format(diff)} (${PCT(pct)})`}</div></CardContent></Card>;
+    })}</div>}
 
     <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
       <Card className="xl:col-span-2"><CardHeader><CardTitle>Evolução dos últimos 6 meses</CardTitle></CardHeader><CardContent>
-        <ChartContainer config={{ rendimentos: { label: "Rendimentos (R$)", color: "hsl(var(--chart-1))" }, salarioLiquido: { label: "Salário Líquido (R$)", color: "hsl(var(--chart-2))" } }} className="h-[320px] w-full">
+        {evolutionData.length > 0 ? <ChartContainer config={{ rendimentos: { label: "Rendimentos (R$)", color: "hsl(var(--chart-1))" }, salarioLiquido: { label: "Salário Líquido (R$)", color: "hsl(var(--chart-2))" } }} className="h-[320px] w-full">
           <LineChart data={evolutionData}><CartesianGrid vertical={false} /><XAxis dataKey="competencia" /><YAxis tickFormatter={(v) => `${(v / 1000000).toFixed(1)} mi`} /><ChartTooltip content={<ChartTooltipContent />} /><ChartLegend content={<ChartLegendContent />} /><Line dataKey="rendimentos" stroke="var(--color-rendimentos)" dot={false} /><Line dataKey="salarioLiquido" stroke="var(--color-salarioLiquido)" dot={false} /></LineChart>
-        </ChartContainer>
+        </ChartContainer> : <p className="text-sm text-muted-foreground">Não há dados históricos disponíveis para esta seleção.</p>}
       </CardContent></Card>
-      <Card><CardHeader><CardTitle>Principais variações</CardTitle></CardHeader><CardContent className="space-y-4">{isAllCompaniesView ? (variations && <>
+      <Card><CardHeader><CardTitle>Principais variações</CardTitle></CardHeader><CardContent className="space-y-4">{isAllCompaniesView ? (variations ? <>
         <div className="flex items-center justify-between"><div><p className="text-sm">Maior aumento (R$)</p><p className="text-xs text-muted-foreground">{variations.maxUp.company}</p></div><p className="font-semibold text-green-600">+{BRL(variations.maxUp.diff)}</p></div>
         <div className="flex items-center justify-between"><div><p className="text-sm">Maior redução (R$)</p><p className="text-xs text-muted-foreground">{variations.maxDown.company}</p></div><p className="font-semibold text-red-600">{BRL(variations.maxDown.diff)}</p></div>
         <div className="flex items-center justify-between"><div className="flex items-center gap-2"><Percent className="h-4 w-4 text-primary" /><p className="text-sm">Maior variação percentual</p></div><p className="font-semibold">{variations.maxPct ? `${variations.maxPct.company} (${PCT(variations.maxPct.pct)})` : "—"}</p></div>
-      </>) : <p className="text-sm text-muted-foreground">Ranking disponível apenas na visão Todas as empresas.</p>}</CardContent></Card>
+      </> : <p className="text-sm text-muted-foreground">{comparisonMessage}</p>) : <p className="text-sm text-muted-foreground">Ranking disponível apenas na visão Todas as empresas.</p>}</CardContent></Card>
     </div>
 
-    {isAllCompaniesView ? (
+    {isAllCompaniesView && rankingRows.length > 0 ? (
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         <Card className="xl:col-span-2"><CardHeader><CardTitle>Ranking de variação por empresa</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Empresa</TableHead><TableHead className="text-right">Atual</TableHead><TableHead className="text-right">Anterior</TableHead><TableHead className="text-right">Diferença R$</TableHead><TableHead className="text-right">Diferença %</TableHead><TableHead className="text-right">Funcionários Δ</TableHead></TableRow></TableHeader><TableBody>{rankingRows.map((row) => <TableRow key={row.company}><TableCell>{row.company}</TableCell><TableCell className="text-right">{BRL(row.atual)}</TableCell><TableCell className="text-right">{BRL(row.anterior)}</TableCell><TableCell className={`text-right font-medium ${row.diff >= 0 ? "text-green-600" : "text-red-600"}`}>{BRL(row.diff)}</TableCell><TableCell className="text-right">{PCT(row.pct)}</TableCell><TableCell className="text-right">{row.headcountDiff.toLocaleString("pt-BR")}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
         <Card><CardHeader><CardTitle>Empresas com maior impacto na variação (R$)</CardTitle></CardHeader><CardContent>
@@ -245,10 +290,10 @@ const Dashboard: React.FC = () => {
         </CardContent></Card>
       </div>
     ) : (
-      <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Ranking disponível apenas na visão Todas as empresas.</p></CardContent></Card>
+      <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">{isAllCompaniesView ? comparisonMessage : "Ranking disponível apenas na visão Todas as empresas."}</p></CardContent></Card>
     )}
 
-    <Card><CardHeader><CardTitle>Composição da variação</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Grupo</TableHead><TableHead className="text-right">Atual (R$)</TableHead><TableHead className="text-right">Anterior (R$)</TableHead><TableHead className="text-right">Diferença (R$)</TableHead><TableHead className="text-right">Diferença %</TableHead></TableRow></TableHeader><TableBody>{compositionRows.map((row) => <TableRow key={row.label}><TableCell>{row.label}</TableCell><TableCell className="text-right">{BRL(row.atual)}</TableCell><TableCell className="text-right">{BRL(row.anterior)}</TableCell><TableCell className={`text-right ${row.diff >= 0 ? "text-green-600" : "text-red-600"}`}>{BRL(row.diff)}</TableCell><TableCell className="text-right">{PCT(row.pct)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+    {hasBaseData && <Card><CardHeader><CardTitle>Composição da variação</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Grupo</TableHead><TableHead className="text-right">Atual (R$)</TableHead><TableHead className="text-right">Anterior (R$)</TableHead><TableHead className="text-right">Diferença (R$)</TableHead><TableHead className="text-right">Diferença %</TableHead></TableRow></TableHeader><TableBody>{compositionRows.map((row) => <TableRow key={row.label}><TableCell>{row.label}</TableCell><TableCell className="text-right">{BRL(row.atual)}</TableCell><TableCell className="text-right">{row.anterior === null ? "—" : BRL(row.anterior)}</TableCell><TableCell className={`text-right ${row.diff === null ? "text-muted-foreground" : row.diff >= 0 ? "text-green-600" : "text-red-600"}`}>{row.diff === null ? "—" : BRL(row.diff)}</TableCell><TableCell className="text-right">{PCT(row.pct)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>}
 
     {selectedCompanyName && <p className="text-xs text-muted-foreground">Filtro aplicado para empresa: {selectedCompanyName}</p>}
   </div>;
