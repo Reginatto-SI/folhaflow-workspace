@@ -22,6 +22,14 @@ import { resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const PCT = (value: number | null) => (value === null ? "—" : `${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`);
 
+const chartCurrency = (value: number) => `R$ ${value.toLocaleString("pt-BR", { notation: "compact", maximumFractionDigits: 2 })}`;
+const chartTooltipValue = (value: number | string | (number | string)[], name: number | string) => (
+  <>
+    <span className="text-muted-foreground">{({ rendimentos: "Rendimentos", salarioLiquido: "Salário Líquido", diff: "Impacto" } as Record<string, string>)[name] ?? name}</span>
+    <span className="ml-auto font-mono font-medium tabular-nums">{BRL(Number(value))}</span>
+  </>
+);
+
 const Dashboard: React.FC = () => {
   const { activeCompanies, allPayrollBatches, allEmployees, allPayrollEntries, rubrics, isLoading, loadError, payrollCatalogErrors } = usePayroll();
   const { hasPermission, loading: authLoading } = useAuth();
@@ -270,9 +278,9 @@ const Dashboard: React.FC = () => {
     })}</div>}
 
     <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-      <Card className="xl:col-span-2"><CardHeader><CardTitle>Evolução dos últimos 6 meses</CardTitle></CardHeader><CardContent>
-        {evolutionData.length > 0 ? <ChartContainer config={{ rendimentos: { label: "Rendimentos (R$)", color: "hsl(var(--chart-1))" }, salarioLiquido: { label: "Salário Líquido (R$)", color: "hsl(var(--chart-2))" } }} className="h-[320px] w-full">
-          <LineChart data={evolutionData}><CartesianGrid vertical={false} /><XAxis dataKey="competencia" /><YAxis tickFormatter={(v) => `${(v / 1000000).toFixed(1)} mi`} /><ChartTooltip content={<ChartTooltipContent />} /><ChartLegend content={<ChartLegendContent />} /><Line dataKey="rendimentos" stroke="var(--color-rendimentos)" dot={false} /><Line dataKey="salarioLiquido" stroke="var(--color-salarioLiquido)" dot={false} /></LineChart>
+      <Card className="xl:col-span-2"><CardHeader><CardTitle>Evolução por competência</CardTitle><p className="text-sm text-muted-foreground">{evolutionData.length} {evolutionData.length === 1 ? "competência com dados disponíveis" : "competências com dados disponíveis"}, em ordem cronológica (até 6).</p></CardHeader><CardContent>
+        {evolutionData.length > 0 ? <ChartContainer config={{ rendimentos: { label: "Rendimentos (R$)", color: "hsl(var(--primary))" }, salarioLiquido: { label: "Salário Líquido (R$)", color: "hsl(var(--foreground))" } }} className="h-[320px] w-full">
+          <LineChart data={evolutionData}><CartesianGrid vertical={false} /><XAxis dataKey="competencia" /><YAxis tickFormatter={chartCurrency} width={86} /><ChartTooltip content={<ChartTooltipContent formatter={chartTooltipValue} />} /><ChartLegend content={<ChartLegendContent />} /><Line isAnimationActive={false} dataKey="rendimentos" stroke="var(--color-rendimentos)" strokeWidth={2} dot={{ r: 3 }} /><Line isAnimationActive={false} dataKey="salarioLiquido" stroke="var(--color-salarioLiquido)" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3 }} /></LineChart>
         </ChartContainer> : <p className="text-sm text-muted-foreground">Não há dados históricos disponíveis para esta seleção.</p>}
       </CardContent></Card>
       <Card><CardHeader><CardTitle>Principais variações</CardTitle></CardHeader><CardContent className="space-y-4">{isAllCompaniesView ? (variations ? <>
@@ -286,7 +294,7 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         <Card className="xl:col-span-2"><CardHeader><CardTitle>Ranking de variação por empresa</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Empresa</TableHead><TableHead className="text-right">Atual</TableHead><TableHead className="text-right">Anterior</TableHead><TableHead className="text-right">Diferença R$</TableHead><TableHead className="text-right">Diferença %</TableHead><TableHead className="text-right">Funcionários Δ</TableHead></TableRow></TableHeader><TableBody>{rankingRows.map((row) => <TableRow key={row.company}><TableCell>{row.company}</TableCell><TableCell className="text-right">{BRL(row.atual)}</TableCell><TableCell className="text-right">{BRL(row.anterior)}</TableCell><TableCell className={`text-right font-medium ${row.diff >= 0 ? "text-green-600" : "text-red-600"}`}>{BRL(row.diff)}</TableCell><TableCell className="text-right">{PCT(row.pct)}</TableCell><TableCell className="text-right">{row.headcountDiff.toLocaleString("pt-BR")}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
         <Card><CardHeader><CardTitle>Empresas com maior impacto na variação (R$)</CardTitle></CardHeader><CardContent>
-          <ChartContainer config={{ impact: { label: "Impacto", color: "hsl(var(--chart-1))" } }} className="h-[320px] w-full"><BarChart data={rankingRows.slice(0, 6)} layout="vertical"><CartesianGrid horizontal={false} /><XAxis type="number" /><YAxis type="category" dataKey="company" width={120} /><ChartTooltip content={<ChartTooltipContent />} /><Bar dataKey="diff" fill="var(--color-impact)" radius={4} /></BarChart></ChartContainer>
+          <ChartContainer config={{ impact: { label: "Impacto", color: "hsl(var(--primary))" } }} className="h-[320px] w-full"><BarChart data={rankingRows.slice(0, 6)} layout="vertical"><CartesianGrid horizontal={false} /><XAxis type="number" tickFormatter={chartCurrency} /><YAxis type="category" dataKey="company" width={120} /><ChartTooltip content={<ChartTooltipContent formatter={chartTooltipValue} />} /><Bar isAnimationActive={false} dataKey="diff" fill="var(--color-impact)" radius={4} /></BarChart></ChartContainer>
         </CardContent></Card>
       </div>
     ) : (
