@@ -1,6 +1,6 @@
 import React from "react";
-import { Download, Filter, Percent } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import { Download, Filter, Info, Percent } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,8 +27,8 @@ const PCT = (value: number | null) => (value === null ? "—" : `${value.toLocal
 const chartCurrency = (value: number) => `R$ ${value.toLocaleString("pt-BR", { notation: "compact", maximumFractionDigits: 2 })}`;
 const chartTooltipValue = (value: number | string | (number | string)[], name: number | string) => (
   <>
-    <span className="text-muted-foreground">{({ rendimentos: "Rendimentos", salarioLiquido: "Salário Líquido", diff: "Impacto" } as Record<string, string>)[name] ?? name}</span>
-    <span className="ml-auto font-mono font-medium tabular-nums">{BRL(Number(value))}</span>
+    <span className="text-muted-foreground">{({ rendimentos: "Rendimentos Adicionais", salarioLiquido: "Salário Líquido", diff: "Variação do Salário Líquido" } as Record<string, string>)[name] ?? name}</span>
+    <span className="ml-auto font-mono font-medium tabular-nums">{name === "diff" && Number(value) > 0 ? "+" : ""}{BRL(Number(value))}</span>
   </>
 );
 
@@ -220,11 +220,11 @@ const Dashboard: React.FC = () => {
   const isAllCompaniesView = appliedFilters.companyId === "all";
 
   const cardMetrics = [
-    { label: "Funcionários", key: "__headcount__", format: (v: number) => Math.round(v).toLocaleString("pt-BR") },
-    { label: "Rendimentos", key: "__rendimentos__", format: BRL },
+    { label: "Funcionários", key: "__headcount__", format: (v: number) => Math.round(v).toLocaleString("pt-BR"), description: "Quantidade de participações/registros nas folhas selecionadas, não necessariamente pessoas únicas. Um funcionário pode ser contado em mais de uma empresa." },
+    { label: "Rendimentos Adicionais", key: "__rendimentos__", format: BRL, description: "Total de proventos adicionais classificados, sem incluir os salários-base." },
     { label: "Descontos", key: "__descontos__", format: BRL },
     { label: "Salário Líquido", key: "salario_liquido", format: BRL },
-    { label: "Custo Médio por Funcionário", key: "__custo_medio__", format: BRL },
+    { label: "Salário G Médio por Registro", key: "__custo_medio__", format: BRL, description: "Média calculada pela divisão do Salário G total pela quantidade de registros considerados na folha. Não representa o custo trabalhista completo." },
   ];
 
   // Comentário: filtro de empresa aplicado de forma uniforme no histórico, lendo valuesByCompanyId quando necessário.
@@ -260,6 +260,7 @@ const Dashboard: React.FC = () => {
       const compareHeadcount = compareDataset.rows.find((r) => r.key === "__headcount__")?.valuesByCompanyId[company.id] ?? 0;
       const diff = baseNet - compareNet;
       return {
+        companyId: company.id,
         company: company.name,
         atual: baseNet,
         anterior: compareNet,
@@ -267,7 +268,8 @@ const Dashboard: React.FC = () => {
         pct: calcPct(baseNet, compareNet),
         headcountDiff: baseHeadcount - compareHeadcount,
       };
-    }).sort((a, b) => b.diff - a.diff);
+    }).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff) ||
+      a.company.localeCompare(b.company, "pt-BR") || a.companyId.localeCompare(b.companyId));
   }, [baseDataset, compareDataset, getMetricRow, hasBaseData, hasComparisonData, hasEntries]);
 
   // Comentário: composição usa apenas chaves estáveis do dataset (row.key), sem heurística por label.
@@ -290,11 +292,11 @@ const Dashboard: React.FC = () => {
     });
 
   const variations = rankingRows.length > 0 ? {
-    maxUp: [...rankingRows].sort((a, b) => b.diff - a.diff)[0],
-    maxDown: [...rankingRows].sort((a, b) => a.diff - b.diff)[0],
+    maxUp: rankingRows.filter((row) => row.diff > 0).sort((a, b) => b.diff - a.diff)[0] ?? null,
+    maxDown: rankingRows.filter((row) => row.diff < 0).sort((a, b) => a.diff - b.diff)[0] ?? null,
     maxPct: [...rankingRows]
-      .filter((row) => row.pct !== null)
-      .sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0))[0] ?? null,
+      .filter((row): row is typeof row & { pct: number } => row.pct !== null)
+      .sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))[0] ?? null,
   } : null;
 
   if (isPending) return <Card aria-busy="true"><CardHeader><CardTitle>Dashboard Comparativo da Folha</CardTitle></CardHeader><CardContent role="status" className="text-sm text-muted-foreground">Carregando dados do Dashboard...</CardContent></Card>;
@@ -338,27 +340,27 @@ const Dashboard: React.FC = () => {
       const anterior = hasComparisonData && getMetricRow(compareDataset, metric.key) ? getMetricValue(compareDataset, metric.key) : null;
       const diff = anterior === null || !getMetricRow(baseDataset, metric.key) ? null : atual - anterior;
       const pct = diff === null ? null : calcPct(atual, anterior);
-      return <Card key={metric.label}><CardContent className="p-4 space-y-2"><p className="text-sm font-semibold">{metric.label}</p><div className="text-xs text-muted-foreground">Atual</div><div className="font-semibold">{getMetricRow(baseDataset, metric.key) ? metric.format(atual) : "—"}</div><div className="text-xs text-muted-foreground">Anterior</div><div>{anterior === null ? "—" : metric.format(anterior)}</div><div className={`text-sm font-semibold ${diff === null ? "text-muted-foreground" : diff >= 0 ? "text-green-600" : "text-red-600"}`}>Variação: {diff === null ? "—" : `${metric.format(diff)} (${PCT(pct)})`}</div></CardContent></Card>;
+      return <Card key={metric.label}><CardContent className="p-4 space-y-2"><div className="flex items-start gap-1"><p className="text-sm font-semibold">{metric.label}</p>{metric.description && <Tooltip><TooltipTrigger asChild><button type="button" aria-label={`Sobre ${metric.label}`} className="shrink-0 rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Info className="h-4 w-4" /></button></TooltipTrigger><TooltipContent className="max-w-xs">{metric.description}</TooltipContent></Tooltip>}</div><div className="text-xs text-muted-foreground">Atual</div><div className="font-semibold">{getMetricRow(baseDataset, metric.key) ? metric.format(atual) : "—"}</div><div className="text-xs text-muted-foreground">Anterior</div><div>{anterior === null ? "—" : metric.format(anterior)}</div><div className={`text-sm font-semibold ${diff === null ? "text-muted-foreground" : diff >= 0 ? "text-green-600" : "text-red-600"}`}>Variação: {diff === null ? "—" : `${metric.format(diff)} (${PCT(pct)})`}</div></CardContent></Card>;
     })}</div>}
 
     <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
       <Card className="xl:col-span-2"><CardHeader><CardTitle>Evolução por competência</CardTitle><p className="text-sm text-muted-foreground">{evolutionData.length} {evolutionData.length === 1 ? "competência com dados disponíveis" : "competências com dados disponíveis"}, em ordem cronológica (até 6).</p></CardHeader><CardContent>
-        {evolutionData.length > 0 ? <ChartContainer config={{ rendimentos: { label: "Rendimentos (R$)", color: "hsl(var(--primary))" }, salarioLiquido: { label: "Salário Líquido (R$)", color: "hsl(var(--foreground))" } }} className="h-[320px] w-full">
+        {evolutionData.length > 0 ? <ChartContainer config={{ rendimentos: { label: "Rendimentos Adicionais (R$)", color: "hsl(var(--primary))" }, salarioLiquido: { label: "Salário Líquido (R$)", color: "hsl(var(--foreground))" } }} className="h-[320px] w-full">
           <LineChart data={evolutionData}><CartesianGrid vertical={false} /><XAxis dataKey="competencia" /><YAxis tickFormatter={chartCurrency} width={86} /><ChartTooltip content={<ChartTooltipContent formatter={chartTooltipValue} />} /><ChartLegend content={<ChartLegendContent />} /><Line isAnimationActive={false} dataKey="rendimentos" stroke="var(--color-rendimentos)" strokeWidth={2} dot={{ r: 3 }} /><Line isAnimationActive={false} dataKey="salarioLiquido" stroke="var(--color-salarioLiquido)" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3 }} /></LineChart>
         </ChartContainer> : <p className="text-sm text-muted-foreground">Não há dados históricos disponíveis para esta seleção.</p>}
       </CardContent></Card>
       <Card><CardHeader><CardTitle>Principais variações</CardTitle></CardHeader><CardContent className="space-y-4">{isAllCompaniesView ? (variations ? <>
-        <div className="flex items-center justify-between"><div><p className="text-sm">Maior aumento (R$)</p><p className="text-xs text-muted-foreground">{variations.maxUp.company}</p></div><p className="font-semibold text-green-600">+{BRL(variations.maxUp.diff)}</p></div>
-        <div className="flex items-center justify-between"><div><p className="text-sm">Maior redução (R$)</p><p className="text-xs text-muted-foreground">{variations.maxDown.company}</p></div><p className="font-semibold text-red-600">{BRL(variations.maxDown.diff)}</p></div>
-        <div className="flex items-center justify-between"><div className="flex items-center gap-2"><Percent className="h-4 w-4 text-primary" /><p className="text-sm">Maior variação percentual</p></div><p className="font-semibold">{variations.maxPct ? `${variations.maxPct.company} (${PCT(variations.maxPct.pct)})` : "—"}</p></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-sm">Maior aumento (R$)</p>{variations.maxUp && <p className="text-xs text-muted-foreground">{variations.maxUp.company}</p>}</div><p className={`font-semibold ${variations.maxUp ? "text-success" : "text-muted-foreground"}`}>{variations.maxUp ? `+${BRL(variations.maxUp.diff)}` : "—"}</p></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-sm">Maior redução (R$)</p>{variations.maxDown && <p className="text-xs text-muted-foreground">{variations.maxDown.company}</p>}</div><p className={`font-semibold ${variations.maxDown ? "text-primary" : "text-muted-foreground"}`}>{variations.maxDown ? BRL(variations.maxDown.diff) : "—"}</p></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><Percent className="h-4 w-4 text-primary" /><p className="text-sm">Maior variação percentual absoluta</p></div><p className="font-semibold">{variations.maxPct ? `${variations.maxPct.company} (${PCT(variations.maxPct.pct)})` : "—"}</p></div>
       </> : <p className="text-sm text-muted-foreground">{comparisonMessage}</p>) : <p className="text-sm text-muted-foreground">Ranking disponível apenas na visão Todas as empresas.</p>}</CardContent></Card>
     </div>
 
     {isAllCompaniesView && rankingRows.length > 0 ? (
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-        <Card className="xl:col-span-2"><CardHeader><CardTitle>Ranking de variação por empresa</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Empresa</TableHead><TableHead className="text-right">Atual</TableHead><TableHead className="text-right">Anterior</TableHead><TableHead className="text-right">Diferença R$</TableHead><TableHead className="text-right">Diferença %</TableHead><TableHead className="text-right">Funcionários Δ</TableHead></TableRow></TableHeader><TableBody>{rankingRows.map((row) => <TableRow key={row.company}><TableCell>{row.company}</TableCell><TableCell className="text-right">{BRL(row.atual)}</TableCell><TableCell className="text-right">{BRL(row.anterior)}</TableCell><TableCell className={`text-right font-medium ${row.diff >= 0 ? "text-green-600" : "text-red-600"}`}>{BRL(row.diff)}</TableCell><TableCell className="text-right">{PCT(row.pct)}</TableCell><TableCell className="text-right">{row.headcountDiff.toLocaleString("pt-BR")}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
-        <Card><CardHeader><CardTitle>Empresas com maior impacto na variação (R$)</CardTitle></CardHeader><CardContent>
-          <ChartContainer config={{ impact: { label: "Impacto", color: "hsl(var(--primary))" } }} className="h-[320px] w-full"><BarChart data={rankingRows.slice(0, 6)} layout="vertical"><CartesianGrid horizontal={false} /><XAxis type="number" tickFormatter={chartCurrency} /><YAxis type="category" dataKey="company" width={120} /><ChartTooltip content={<ChartTooltipContent formatter={chartTooltipValue} />} /><Bar isAnimationActive={false} dataKey="diff" fill="var(--color-impact)" radius={4} /></BarChart></ChartContainer>
+        <Card className="xl:col-span-2"><CardHeader><CardTitle>Ranking de variação por empresa</CardTitle><p className="text-sm text-muted-foreground">Ordenado pela variação absoluta do Salário Líquido.</p></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Empresa</TableHead><TableHead className="text-right">Atual</TableHead><TableHead className="text-right">Anterior</TableHead><TableHead className="text-right">Diferença R$</TableHead><TableHead className="text-right">Diferença %</TableHead><TableHead className="text-right">Funcionários Δ</TableHead></TableRow></TableHeader><TableBody>{rankingRows.map((row) => <TableRow key={row.companyId}><TableCell>{row.company}</TableCell><TableCell className="text-right">{BRL(row.atual)}</TableCell><TableCell className="text-right">{BRL(row.anterior)}</TableCell><TableCell className={`text-right font-medium ${row.diff >= 0 ? "text-green-600" : "text-red-600"}`}>{BRL(row.diff)}</TableCell><TableCell className="text-right">{PCT(row.pct)}</TableCell><TableCell className="text-right">{row.headcountDiff.toLocaleString("pt-BR")}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+        <Card><CardHeader><CardTitle>Maiores variações do Salário Líquido por empresa</CardTitle><p className="text-sm text-muted-foreground">Empresas com maior variação absoluta entre as competências selecionadas.</p><div className="flex flex-wrap gap-3 text-xs"><span className="text-success">Aumentos</span><span className="text-primary">Reduções</span></div></CardHeader><CardContent>
+          <ChartContainer config={{ aumento: { label: "Aumentos", color: "hsl(var(--success))" }, reducao: { label: "Reduções", color: "hsl(var(--primary))" }, neutro: { label: "Sem variação", color: "hsl(var(--muted-foreground))" } }} className="h-[320px] w-full"><BarChart data={rankingRows.slice(0, 6)} layout="vertical"><CartesianGrid horizontal={false} /><XAxis type="number" tickFormatter={chartCurrency} domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)]} /><YAxis type="category" dataKey="company" width={120} /><ReferenceLine x={0} stroke="hsl(var(--muted-foreground))" /><ChartTooltip content={<ChartTooltipContent formatter={chartTooltipValue} />} /><Bar isAnimationActive={false} dataKey="diff" fill="var(--color-neutro)" radius={4}>{rankingRows.slice(0, 6).map((row) => <Cell key={row.companyId} fill={`var(--color-${row.diff > 0 ? "aumento" : row.diff < 0 ? "reducao" : "neutro"})`} />)}</Bar></BarChart></ChartContainer>
         </CardContent></Card>
       </div>
     ) : (
