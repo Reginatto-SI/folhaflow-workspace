@@ -1,5 +1,5 @@
 import React from "react";
-import { Download, Filter, Info, Percent } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, Filter, Info, Percent } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,53 @@ import { toast } from "sonner";
 
 const BRL = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const PCT = (value: number | null) => (value === null ? "—" : `${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`);
+
+type SortDirection = "asc" | "desc";
+type RankingSortKey = "company" | "atual" | "anterior" | "diff" | "pct" | "headcountDiff";
+type CompositionSortKey = "label" | "atual" | "anterior" | "diff" | "pct";
+type SortSelection<Key extends string> = { key: Key; direction: SortDirection } | null;
+
+const compareNullableNumbers = (a: number | null, b: number | null, direction: SortDirection) => {
+  // Valores indisponíveis permanecem no fim, inclusive na ordenação crescente.
+  if (a === null) return b === null ? 0 : 1;
+  if (b === null) return -1;
+  return (a - b) * (direction === "asc" ? 1 : -1);
+};
+
+const rankingSortColumns: { key: RankingSortKey; label: string; numeric: boolean }[] = [
+  { key: "company", label: "Empresa", numeric: false },
+  { key: "atual", label: "Atual", numeric: true },
+  { key: "anterior", label: "Anterior", numeric: true },
+  { key: "diff", label: "Diferença R$", numeric: true },
+  { key: "pct", label: "Diferença %", numeric: true },
+  { key: "headcountDiff", label: "Funcionários Δ", numeric: true },
+];
+const compositionSortColumns: { key: CompositionSortKey; label: string; numeric: boolean }[] = [
+  { key: "label", label: "Grupo", numeric: false },
+  { key: "atual", label: "Atual (R$)", numeric: true },
+  { key: "anterior", label: "Anterior (R$)", numeric: true },
+  { key: "diff", label: "Diferença (R$)", numeric: true },
+  { key: "pct", label: "Diferença %", numeric: true },
+];
+
+const SortableHead: React.FC<{
+  label: string;
+  numeric: boolean;
+  direction: SortDirection | null;
+  onSort: () => void;
+  defaultMagnitude?: boolean;
+}> = ({ label, numeric, direction, onSort, defaultMagnitude = false }) => (
+  <TableHead className={numeric ? "text-right" : undefined}
+    aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : defaultMagnitude ? "other" : "none"}>
+    <button type="button" onClick={onSort} aria-label={`Ordenar por ${label}`}
+      className={`flex w-full items-center gap-1 rounded-sm py-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${numeric ? "justify-end text-right" : "justify-start text-left"}`}>
+      <span>{label}</span>
+      {direction === "asc" ? <ArrowUp className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> :
+        direction === "desc" ? <ArrowDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> :
+        <ArrowUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden="true" />}
+    </button>
+  </TableHead>
+);
 
 const chartCurrency = (value: number) => `R$ ${value.toLocaleString("pt-BR", { notation: "compact", maximumFractionDigits: 2 })}`;
 const chartTooltipValue = (value: number | string | (number | string)[], name: number | string) => (
@@ -61,6 +108,8 @@ const Dashboard: React.FC = () => {
   const [companyId, setCompanyId] = React.useState("all");
   const [appliedFilters, setAppliedFilters] = React.useState({ baseKey: "", compareKey: "", companyId: "all" });
   const [isExporting, setIsExporting] = React.useState(false);
+  const [rankingSort, setRankingSort] = React.useState<SortSelection<RankingSortKey>>(null);
+  const [compositionSort, setCompositionSort] = React.useState<SortSelection<CompositionSortKey>>(null);
 
   const hasCompetence = React.useCallback((key: string, targetCompanyId: string) =>
     availableCompetences.some((c) => `${c.month}/${c.year}` === key) &&
@@ -300,6 +349,27 @@ const Dashboard: React.FC = () => {
       a.company.localeCompare(b.company, "pt-BR") || a.companyId.localeCompare(b.companyId));
   }, [baseDataset, compareDataset, getMetricRow, hasBaseData, hasComparisonData, hasEntries]);
 
+  // A tabela pode ser reordenada sem alterar o ranking-base por impacto absoluto,
+  // preservado no gráfico de seis empresas e nos destaques gerenciais.
+  const visibleRankingRows = React.useMemo(() => {
+    if (!rankingSort) return rankingRows;
+    return [...rankingRows].sort((a, b) => {
+      const comparison = rankingSort.key === "company"
+        ? a.company.localeCompare(b.company, "pt-BR") * (rankingSort.direction === "asc" ? 1 : -1)
+        : compareNullableNumbers(a[rankingSort.key], b[rankingSort.key], rankingSort.direction);
+      return comparison || a.company.localeCompare(b.company, "pt-BR") || a.companyId.localeCompare(b.companyId);
+    });
+  }, [rankingRows, rankingSort]);
+
+  const handleRankingSort = (key: RankingSortKey) => {
+    setRankingSort((previous) => ({
+      key,
+      direction: previous?.key === key
+        ? previous.direction === "asc" ? "desc" : "asc"
+        : key === "company" ? "asc" : "desc",
+    }));
+  };
+
   // Comentário: composição usa apenas chaves estáveis do dataset (row.key), sem heurística por label.
   const compositionMap = [
     { label: "Salário CTPS", key: "salario_ctps" },
@@ -318,6 +388,24 @@ const Dashboard: React.FC = () => {
       const diff = anterior === null ? null : atual - anterior;
       return { label: item.label, atual, anterior, diff, pct: anterior === null ? null : calcPct(atual, anterior) };
     });
+
+  const visibleCompositionRows = compositionSort
+    ? [...compositionRows].sort((a, b) => {
+      const comparison = compositionSort.key === "label"
+        ? a.label.localeCompare(b.label, "pt-BR") * (compositionSort.direction === "asc" ? 1 : -1)
+        : compareNullableNumbers(a[compositionSort.key], b[compositionSort.key], compositionSort.direction);
+      return comparison || a.label.localeCompare(b.label, "pt-BR");
+    })
+    : compositionRows;
+
+  const handleCompositionSort = (key: CompositionSortKey) => {
+    setCompositionSort((previous) => ({
+      key,
+      direction: previous?.key === key
+        ? previous.direction === "asc" ? "desc" : "asc"
+        : key === "label" ? "asc" : "desc",
+    }));
+  };
 
   const variations = rankingRows.length > 0 ? {
     maxUp: rankingRows.filter((row) => row.diff > 0).sort((a, b) => b.diff - a.diff)[0] ?? null,
@@ -363,8 +451,8 @@ const Dashboard: React.FC = () => {
           ["Maior redução (R$)", variations.maxDown?.company ?? "—", variations.maxDown ? BRL(variations.maxDown.diff) : "—"],
           ["Maior variação percentual absoluta", variations.maxPct?.company ?? "—", PCT(variations.maxPct?.pct ?? null)],
         ] : [],
-        ranking: isAllCompaniesView ? rankingRows.map((row) => [row.company, BRL(row.atual), BRL(row.anterior), BRL(row.diff), PCT(row.pct), row.headcountDiff.toLocaleString("pt-BR")]) : [],
-        composition: compositionRows.map((row) => ({ label: row.label, current: BRL(row.atual), previous: row.anterior === null ? "—" : BRL(row.anterior), difference: row.diff === null ? "—" : BRL(row.diff), percentage: PCT(row.pct) })),
+        ranking: isAllCompaniesView ? visibleRankingRows.map((row) => [row.company, BRL(row.atual), BRL(row.anterior), BRL(row.diff), PCT(row.pct), row.headcountDiff.toLocaleString("pt-BR")]) : [],
+        composition: visibleCompositionRows.map((row) => ({ label: row.label, current: BRL(row.atual), previous: row.anterior === null ? "—" : BRL(row.anterior), difference: row.diff === null ? "—" : BRL(row.diff), percentage: PCT(row.pct) })),
       };
       const { generateDashboardPdf } = await import("@/lib/dashboardPdf");
       await generateDashboardPdf(data);
@@ -431,7 +519,30 @@ const Dashboard: React.FC = () => {
 
     {isAllCompaniesView && rankingRows.length > 0 ? (
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-        <Card className="xl:col-span-2"><CardHeader><CardTitle>Ranking de variação por empresa</CardTitle><p className="text-sm text-muted-foreground">Ordenado pela variação absoluta do Salário Líquido.</p></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Empresa</TableHead><TableHead className="text-right">Atual</TableHead><TableHead className="text-right">Anterior</TableHead><TableHead className="text-right">Diferença R$</TableHead><TableHead className="text-right">Diferença %</TableHead><TableHead className="text-right">Funcionários Δ</TableHead></TableRow></TableHeader><TableBody>{rankingRows.map((row) => <TableRow key={row.companyId}><TableCell>{row.company}</TableCell><TableCell className="text-right">{BRL(row.atual)}</TableCell><TableCell className="text-right">{BRL(row.anterior)}</TableCell><TableCell className={`text-right font-medium ${row.diff >= 0 ? "text-green-600" : "text-red-600"}`}>{BRL(row.diff)}</TableCell><TableCell className="text-right">{PCT(row.pct)}</TableCell><TableCell className="text-right">{row.headcountDiff.toLocaleString("pt-BR")}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+        <Card className="xl:col-span-2">
+          <CardHeader>
+            <CardTitle>Ranking de variação por empresa</CardTitle>
+            <p className="text-sm text-muted-foreground">Clique nos títulos das colunas para ordenar. {rankingSort
+              ? `Ordem: ${rankingSortColumns.find((column) => column.key === rankingSort.key)?.label} (${rankingSort.direction === "asc" ? "crescente" : "decrescente"}).`
+              : "Ordem padrão: maior impacto absoluto do Salário Líquido."}</p>
+            {rankingSort && <div><Button size="sm" variant="outline" onClick={() => setRankingSort(null)}>Restaurar ordem padrão</Button></div>}
+          </CardHeader>
+          <CardContent><Table><TableHeader><TableRow>
+            {rankingSortColumns.map((column) => <SortableHead key={column.key} label={column.label} numeric={column.numeric}
+              direction={rankingSort?.key === column.key ? rankingSort.direction : null}
+              defaultMagnitude={!rankingSort && column.key === "diff"}
+              onSort={() => handleRankingSort(column.key)} />)}
+          </TableRow></TableHeader><TableBody>
+            {visibleRankingRows.map((row) => <TableRow key={row.companyId}>
+              <TableCell>{row.company}</TableCell>
+              <TableCell className="text-right">{BRL(row.atual)}</TableCell>
+              <TableCell className="text-right">{BRL(row.anterior)}</TableCell>
+              <TableCell className={`text-right font-medium ${row.diff >= 0 ? "text-green-600" : "text-red-600"}`}>{BRL(row.diff)}</TableCell>
+              <TableCell className="text-right">{PCT(row.pct)}</TableCell>
+              <TableCell className="text-right">{row.headcountDiff.toLocaleString("pt-BR")}</TableCell>
+            </TableRow>)}
+          </TableBody></Table></CardContent>
+        </Card>
         <Card><CardHeader><CardTitle>Maiores variações do Salário Líquido por empresa</CardTitle><p className="text-sm text-muted-foreground">Empresas com maior variação absoluta entre as competências selecionadas.</p><div className="flex flex-wrap gap-3 text-xs"><span className="text-success">Aumentos</span><span className="text-primary">Reduções</span></div></CardHeader><CardContent>
           <ChartContainer config={{ aumento: { label: "Aumentos", color: "hsl(var(--success))" }, reducao: { label: "Reduções", color: "hsl(var(--primary))" }, neutro: { label: "Sem variação", color: "hsl(var(--muted-foreground))" } }} className="h-[320px] w-full"><BarChart data={rankingRows.slice(0, 6)} layout="vertical"><CartesianGrid horizontal={false} /><XAxis type="number" tickFormatter={chartCurrency} domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)]} /><YAxis type="category" dataKey="company" width={120} /><ReferenceLine x={0} stroke="hsl(var(--muted-foreground))" /><ChartTooltip content={<ChartTooltipContent formatter={chartTooltipValue} />} /><Bar isAnimationActive={false} dataKey="diff" fill="var(--color-neutro)" radius={4}>{rankingRows.slice(0, 6).map((row) => <Cell key={row.companyId} fill={`var(--color-${row.diff > 0 ? "aumento" : row.diff < 0 ? "reducao" : "neutro"})`} />)}</Bar></BarChart></ChartContainer>
         </CardContent></Card>
@@ -440,7 +551,26 @@ const Dashboard: React.FC = () => {
       <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">{isAllCompaniesView ? comparisonMessage : "Ranking disponível apenas na visão Todas as empresas."}</p></CardContent></Card>
     )}
 
-    {hasBaseData && <Card><CardHeader><CardTitle>Composição da variação</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Grupo</TableHead><TableHead className="text-right">Atual (R$)</TableHead><TableHead className="text-right">Anterior (R$)</TableHead><TableHead className="text-right">Diferença (R$)</TableHead><TableHead className="text-right">Diferença %</TableHead></TableRow></TableHeader><TableBody>{compositionRows.map((row) => <TableRow key={row.label}><TableCell>{row.label}</TableCell><TableCell className="text-right">{BRL(row.atual)}</TableCell><TableCell className="text-right">{row.anterior === null ? "—" : BRL(row.anterior)}</TableCell><TableCell className={`text-right ${row.diff === null ? "text-muted-foreground" : row.diff >= 0 ? "text-green-600" : "text-red-600"}`}>{row.diff === null ? "—" : BRL(row.diff)}</TableCell><TableCell className="text-right">{PCT(row.pct)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>}
+    {hasBaseData && <Card>
+      <CardHeader>
+        <CardTitle>Composição da variação</CardTitle>
+        <p className="text-sm text-muted-foreground">Clique nos títulos das colunas para ordenar os grupos.</p>
+        {compositionSort && <div><Button size="sm" variant="outline" onClick={() => setCompositionSort(null)}>Restaurar ordem padrão</Button></div>}
+      </CardHeader>
+      <CardContent><Table><TableHeader><TableRow>
+        {compositionSortColumns.map((column) => <SortableHead key={column.key} label={column.label} numeric={column.numeric}
+          direction={compositionSort?.key === column.key ? compositionSort.direction : null}
+          onSort={() => handleCompositionSort(column.key)} />)}
+      </TableRow></TableHeader><TableBody>
+        {visibleCompositionRows.map((row) => <TableRow key={row.label}>
+          <TableCell>{row.label}</TableCell>
+          <TableCell className="text-right">{BRL(row.atual)}</TableCell>
+          <TableCell className="text-right">{row.anterior === null ? "—" : BRL(row.anterior)}</TableCell>
+          <TableCell className={`text-right ${row.diff === null ? "text-muted-foreground" : row.diff >= 0 ? "text-green-600" : "text-red-600"}`}>{row.diff === null ? "—" : BRL(row.diff)}</TableCell>
+          <TableCell className="text-right">{PCT(row.pct)}</TableCell>
+        </TableRow>)}
+      </TableBody></Table></CardContent>
+    </Card>}
 
     {selectedCompanyName && <p className="text-xs text-muted-foreground">Filtro aplicado para empresa: {selectedCompanyName}</p>}
   </div>;
