@@ -14,15 +14,22 @@ begin
   lock table public.rubricas, public.rubrica_formula_items in share row exclusive mode;
 
   select count(*) into _count from public.rubricas
-  where lower(btrim(code)) in ('g2_complemento', 'salario_g2_complemento');
+  where lower(btrim(code)) in ('g2_complemento', 'salario_g2_complemento', '16');
   if _count <> 1 then
-    raise exception 'G2: esperado um único code g2_complemento ou salario_g2_complemento; encontrados %', _count;
+    raise exception 'G2: esperado um único code g2_complemento, salario_g2_complemento ou 16; encontrados %', _count;
   end if;
   select id into _g2_id from public.rubricas
-  where lower(btrim(code)) in ('g2_complemento', 'salario_g2_complemento')
-    and is_active and nature = 'calculada' and calculation_method = 'formula';
+  where lower(btrim(code)) in ('g2_complemento', 'salario_g2_complemento', '16')
+    and is_active and nature = 'calculada' and calculation_method = 'formula'
+    -- O code 16 só é aceito junto ao nome legado normalizado confirmado.
+    -- normalize é nativo do PostgreSQL: não depende da extensão unaccent.
+    and (btrim(code) <> '16' or
+      btrim(regexp_replace(regexp_replace(regexp_replace(
+        normalize(lower(name), NFD), U&'[\0300-\036f]', '', 'g'),
+        '[.\-_/]+', ' ', 'g'), '\s+', ' ', 'g'))
+      in ('salario g2 complem', 'salario g2 complemento'));
   if _g2_id is null then
-    raise exception 'G2: rubrica deve estar ativa, calculada e com método formula';
+    raise exception 'G2: rubrica deve estar ativa, calculada e com método formula; code 16 exige nome legado Salário G2 complem./complemento';
   end if;
 
   -- 18 é o code da Comissão no cadastro suportado, não display_order nem nome.
