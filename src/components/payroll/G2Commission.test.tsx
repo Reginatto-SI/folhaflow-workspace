@@ -26,6 +26,7 @@ const existingG2 = [item("2", "add", 1), item("salario_fiscal", "subtract", 2),
 const derived = (code: string, formulaItems: RubricFormulaItem[]): Rubric => ({
   ...base(code), nature: "calculada", calculationMethod: "formula", classification: null,
   formulaItems, allowManualOverride: false,
+  ...(code === "16" ? { name: "Salário G2 complem." } : {}),
 });
 const rubrics = (code: string, corrected: boolean): Rubric[] => [
   base("2"), base("salario_fiscal"), base("18"), ...additions.map((c) => base(c)),
@@ -45,7 +46,7 @@ const entry = (commission: number): PayrollEntry => ({ id: "p", employeeId: "e",
     "id-g2_complemento": 600, "id-salario_liquido": 9999 },
   deductions: { "id-10": 360 }, notes: "" });
 
-describe.each(["g2_complemento", "salario_g2_complemento"])("Comissão no G2 (%s)", (code) => {
+describe.each(["g2_complemento", "salario_g2_complemento", "16"])("Comissão no G2 (%s)", (code) => {
   it.each([700, 0])("preserva fiscal/líquido e alinha Central e Excel com comissão %s", async (commission) => {
     const before = rubrics(code, false);
     const after = rubrics(code, true);

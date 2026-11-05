@@ -86,6 +86,49 @@ class MigrationTests(unittest.TestCase):
         sql(MIGRATION)
         self.assertEqual(sql(f"select count(*) from public.rubrica_formula_items where rubrica_id='{self.g2}';"), '2')
 
+    def use_numeric_g2(self, name="Salário G2 complem."):
+        sql(f"update public.rubricas set code='16',name='{name}',display_order=55 where id='{self.g2}';")
+
+    def test_numeric_code_normalized_name_append_and_idempotence(self):
+        for name in ('Salário G2 complem.', '  SALARIO  G2 COMPLEM.  ', 'Salário G2 Complemento', 'Sala\u0301rio G2 complem.'):
+            with self.subTest(name=name):
+                self.use_numeric_g2(name)
+                self.test_append_and_repeat_preserve_every_existing_row_and_policy()
+                sql(f"delete from public.rubrica_formula_items where rubrica_id='{self.g2}' and source_rubrica_id='{self.commission}';")
+
+    def test_numeric_code_requires_compatible_name(self):
+        for name in ('Outra rubrica', 'Salário G2 complem. extra', 'Salário G2', ''):
+            with self.subTest(name=name):
+                self.use_numeric_g2(name)
+                self.assert_abort_without_changes('code 16 exige nome legado')
+
+    def test_numeric_code_inactive_or_not_formula(self):
+        self.use_numeric_g2()
+        sql(f"update public.rubricas set is_active=false where id='{self.g2}';")
+        self.assert_abort_without_changes('G2: rubrica deve estar ativa')
+        sql(f"update public.rubricas set is_active=true,calculation_method='valor_fixo' where id='{self.g2}';")
+        self.assert_abort_without_changes('G2: rubrica deve estar ativa')
+
+    def test_numeric_and_canonical_codes_are_ambiguous(self):
+        self.use_numeric_g2()
+        rubric('g2_complemento', True)
+        self.assert_abort_without_changes('G2: esperado um único code')
+
+    def test_numeric_and_legacy_codes_are_ambiguous(self):
+        self.use_numeric_g2()
+        rubric('salario_g2_complemento', True)
+        self.assert_abort_without_changes('G2: esperado um único code')
+
+    def test_duplicate_numeric_codes_are_ambiguous(self):
+        self.use_numeric_g2()
+        rubric(' 16 ', True)
+        self.assert_abort_without_changes('G2: esperado um único code')
+
+    def test_legacy_name_with_other_numeric_code_is_not_selected(self):
+        self.use_numeric_g2()
+        sql(f"update public.rubricas set code='160' where id='{self.g2}';")
+        self.assert_abort_without_changes('G2: esperado um único code')
+
     def assert_abort_without_changes(self, message):
         before = snapshot()
         self.assertIn(message, sql(MIGRATION, fail=True))
