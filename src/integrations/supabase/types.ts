@@ -219,33 +219,36 @@ export type Database = {
       }
       payroll_batches: {
         Row: {
+          batch_type: string
           company_id: string
           created_at: string
           id: string
           is_archived: boolean
-          month: number
+          month: number | null
           payment_date: string | null
           status: string
           updated_at: string
           year: number
         }
         Insert: {
+          batch_type?: string
           company_id: string
           created_at?: string
           id?: string
           is_archived?: boolean
-          month: number
+          month?: number | null
           payment_date?: string | null
           status?: string
           updated_at?: string
           year: number
         }
         Update: {
+          batch_type?: string
           company_id?: string
           created_at?: string
           id?: string
           is_archived?: boolean
-          month?: number
+          month?: number | null
           payment_date?: string | null
           status?: string
           updated_at?: string
@@ -274,7 +277,7 @@ export type Database = {
           employee_id: string
           id: string
           inss_amount: number
-          month: number
+          month: number | null
           net_salary: number
           notes: string | null
           payroll_batch_id: string | null
@@ -294,7 +297,7 @@ export type Database = {
           employee_id: string
           id?: string
           inss_amount?: number
-          month: number
+          month?: number | null
           net_salary?: number
           notes?: string | null
           payroll_batch_id?: string | null
@@ -314,7 +317,7 @@ export type Database = {
           employee_id?: string
           id?: string
           inss_amount?: number
-          month?: number
+          month?: number | null
           net_salary?: number
           notes?: string | null
           payroll_batch_id?: string | null
@@ -589,7 +592,7 @@ export type Database = {
           employee_id: string
           id: string
           inss_amount: number
-          month: number
+          month: number | null
           net_salary: number
           notes: string | null
           payroll_batch_id: string | null
