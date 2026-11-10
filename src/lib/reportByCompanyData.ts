@@ -1,4 +1,5 @@
 import { Company, Employee, PayrollBatch, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
+import { formatCompetenceLabel, isThirteenthMonth } from "@/lib/competence";
 import { calculatePayrollFromEntry, resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
 
 export type ReportFixedColumnKey = "name" | "department" | "jobRole" | "admissionRegistration";
@@ -49,7 +50,7 @@ export type ReportByCompanyDataset = {
 };
 
 const monthLabel = (month: number, year: number) =>
-  new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "2-digit" }).toUpperCase();
+  isThirteenthMonth(month) ? formatCompetenceLabel(month, year).toUpperCase() : new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "2-digit" }).toUpperCase();
 
 const toNumber = (value: unknown) => {
   const n = Number(value);

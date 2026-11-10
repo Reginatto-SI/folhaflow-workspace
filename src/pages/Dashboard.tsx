@@ -1,4 +1,5 @@
 import React from "react";
+import { formatCompetenceLabel, formatCompetenceShortLabel, isThirteenthMonth } from "@/lib/competence";
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, Filter, Info, Percent } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -321,7 +322,7 @@ const Dashboard: React.FC = () => {
       });
       if (!hasEntries(ds, appliedFilters.companyId)) return [];
       return [{
-        competencia: new Date(m.year, m.month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "numeric" }),
+        competencia: isThirteenthMonth(m.month) ? formatCompetenceShortLabel(m.month, m.year) : new Date(m.year, m.month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "numeric" }),
         rendimentos: getMetricValue(ds, "__rendimentos__"),
         salarioLiquido: getMetricRow(ds, "salario_liquido") ? getMetricValue(ds, "salario_liquido") : null,
       }];
@@ -480,8 +481,8 @@ const Dashboard: React.FC = () => {
     <Card>
       <CardHeader><CardTitle>Dashboard Comparativo da Folha</CardTitle></CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-5">
-        <div className="space-y-2"><p className="text-sm font-medium">Competência base</p><Select value={baseKey} onValueChange={setBaseKey} disabled={!selectableCompetences.length}><SelectTrigger><SelectValue placeholder="Sem competência disponível" /></SelectTrigger><SelectContent>{selectableCompetences.map((c) => <SelectItem key={`${c.month}/${c.year}`} value={`${c.month}/${c.year}`}>{new Date(c.year, c.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</SelectItem>)}</SelectContent></Select></div>
-        <div className="space-y-2"><p className="text-sm font-medium">Comparar com</p><Select value={compareKey || "none"} onValueChange={(value) => setCompareKey(value === "none" ? "" : value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Sem comparação</SelectItem>{selectableCompetences.filter((c) => `${c.month}/${c.year}` !== baseKey).map((c) => <SelectItem key={`${c.month}/${c.year}`} value={`${c.month}/${c.year}`}>{new Date(c.year, c.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</SelectItem>)}</SelectContent></Select></div>
+        <div className="space-y-2"><p className="text-sm font-medium">Competência base</p><Select value={baseKey} onValueChange={setBaseKey} disabled={!selectableCompetences.length}><SelectTrigger><SelectValue placeholder="Sem competência disponível" /></SelectTrigger><SelectContent>{selectableCompetences.map((c) => <SelectItem key={`${c.month}/${c.year}`} value={`${c.month}/${c.year}`}>{formatCompetenceLabel(c.month, c.year)}</SelectItem>)}</SelectContent></Select></div>
+        <div className="space-y-2"><p className="text-sm font-medium">Comparar com</p><Select value={compareKey || "none"} onValueChange={(value) => setCompareKey(value === "none" ? "" : value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Sem comparação</SelectItem>{selectableCompetences.filter((c) => `${c.month}/${c.year}` !== baseKey).map((c) => <SelectItem key={`${c.month}/${c.year}`} value={`${c.month}/${c.year}`}>{formatCompetenceLabel(c.month, c.year)}</SelectItem>)}</SelectContent></Select></div>
         <div className="space-y-2"><p className="text-sm font-medium">Empresa</p><Select value={companyId} onValueChange={setCompanyId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todas as empresas</SelectItem>{companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
         <div className="md:col-span-2 flex flex-wrap items-end justify-end gap-2"><Button disabled={!selectionValid} onClick={() => setAppliedFilters({ baseKey, compareKey, companyId })}><Filter className="mr-2 h-4 w-4" />Aplicar filtros</Button><Tooltip><TooltipTrigger asChild><span tabIndex={exportDisabledReason ? 0 : undefined}><Button variant="outline" disabled={Boolean(exportDisabledReason)} onClick={handleExportPdf}><Download className="mr-2 h-4 w-4" />{isExporting ? "Gerando PDF..." : "Exportar PDF"}</Button></span></TooltipTrigger>{exportDisabledReason && <TooltipContent className="max-w-xs">{exportDisabledReason}</TooltipContent>}</Tooltip></div>
       </CardContent>

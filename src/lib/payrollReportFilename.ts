@@ -1,3 +1,5 @@
+import { THIRTEENTH_FIRST_CODE, THIRTEENTH_SECOND_CODE } from "@/lib/competence";
+
 const PT_BR_MONTHS = [
   "janeiro",
   "fevereiro",
@@ -51,6 +53,9 @@ const normalizeYear = (year: unknown): string | null => {
 const fromMonthYear = (month: unknown, year: unknown) => {
   const monthNumber = Number(month);
   const yearSuffix = normalizeYear(year);
+  // Comentário: folhas de 13º (códigos internos 13/14) não têm mês.
+  if (monthNumber === THIRTEENTH_FIRST_CODE && yearSuffix) return { monthName: "13º SALÁRIO 1ª PARCELA", yearSuffix };
+  if (monthNumber === THIRTEENTH_SECOND_CODE && yearSuffix) return { monthName: "13º SALÁRIO 2ª PARCELA", yearSuffix };
 
   if (Number.isInteger(monthNumber) && monthNumber >= 1 && monthNumber <= 12 && yearSuffix) {
     return { monthName: PT_BR_MONTHS[monthNumber - 1].toLocaleUpperCase("pt-BR"), yearSuffix };

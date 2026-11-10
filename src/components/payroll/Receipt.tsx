@@ -6,6 +6,7 @@
 import React from "react";
 import { PayrollEntry, Employee, Company, Department, JobRole, Rubric } from "@/types/payroll";
 import { buildReceiptData } from "@/lib/receiptData";
+import { THIRTEENTH_FIRST_CODE, THIRTEENTH_SECOND_CODE } from "@/lib/competence";
 import { noTranslateAttributes, withNoTranslateClass } from "@/lib/noTranslate";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -23,6 +24,8 @@ const formatReceiptLineLabel = (prefix: string, label: string) => {
 const MESES_PT = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
 
 const formatCompetencia = (month: number, year: number) => {
+  if (month === THIRTEENTH_FIRST_CODE) return `13º SALÁRIO — 1ª PARCELA / ${year}`;
+  if (month === THIRTEENTH_SECOND_CODE) return `13º SALÁRIO — 2ª PARCELA / ${year}`;
   const m = MESES_PT[Math.max(0, Math.min(11, month - 1))] || "";
   const y = String(year).slice(-2);
   return `${m}-${y}`;
@@ -50,7 +53,11 @@ const Receipt: React.FC<ReceiptProps> = ({ entry, employee, company, department,
   const data = buildReceiptData(entry, rubrics);
   const competencia = formatCompetencia(entry.month, entry.year);
   // Comentário: observação do recibo é fixa por competência; não vem do Drawer/lançamento.
-  const observacao = `Saldo salário - ${competencia}`;
+  const observacao = entry.month === THIRTEENTH_FIRST_CODE
+    ? `Adiantamento do 13º Salário — ${entry.year}`
+    : entry.month === THIRTEENTH_SECOND_CODE
+      ? `Pagamento da 2ª Parcela do 13º Salário — ${entry.year}`
+      : `Saldo salário - ${competencia}`;
   // Comentário: cidade/UF vêm do cadastro da empresa; recibo apenas exibe os dados já existentes.
   const location = `${company?.city?.trim() || "____"} - ${company?.state?.trim() || "____"}`;
   // Comentário: data do recibo vem da folha (payment_date), não da data atual do computador.
@@ -77,7 +84,7 @@ const Receipt: React.FC<ReceiptProps> = ({ entry, employee, company, department,
             <tr><td className="rk">EMPRESA:</td><td className="rv">{company?.name || "—"}</td></tr>
             <tr><td className="rk">SETOR:</td><td className="rv">{department?.name || employee.department || "—"}</td></tr>
             <tr><td className="rk">FUNÇÃO:</td><td className="rv">{jobRole?.name || employee.role || "—"}</td></tr>
-            <tr><td className="rk">MÊS:</td><td className="rv">{competencia}</td></tr>
+            <tr><td className="rk">{entry.month === THIRTEENTH_FIRST_CODE || entry.month === THIRTEENTH_SECOND_CODE ? "COMPETÊNCIA:" : "MÊS:"}</td><td className="rv">{competencia}</td></tr>
             <tr><td className={withNoTranslateClass("rk")} {...noTranslateAttributes}>VALOR RECEBIDO:</td><td className={withNoTranslateClass("rv")} {...noTranslateAttributes}>{fmt(data.netSalary)}</td></tr>
             <tr><td className={withNoTranslateClass("rk")} {...noTranslateAttributes}>Valor por Extenso:</td><td className={withNoTranslateClass("rv")} {...noTranslateAttributes}>{data.valorExtenso}</td></tr>
             <tr><td className="rk">Observação:</td><td className="rv">{observacao}</td></tr>

@@ -1,4 +1,5 @@
 import React from "react";
+import { formatCompetenceLabel, formatCompetenceShortLabel } from "@/lib/competence";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -269,7 +270,7 @@ const ReportsCompany: React.FC = () => {
               <SelectTrigger><SelectValue placeholder="Selecione a competência" /></SelectTrigger>
               <SelectContent>
                 {availableCompetences.map((batch) => {
-                  const label = new Date(batch.year, batch.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+                  const label = formatCompetenceLabel(batch.month, batch.year);
                   return <SelectItem key={batch.id} value={`${batch.month}/${batch.year}`}>{label}</SelectItem>;
                 })}
               </SelectContent>

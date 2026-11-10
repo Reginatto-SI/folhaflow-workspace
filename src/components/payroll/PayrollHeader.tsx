@@ -1,4 +1,5 @@
 import React from "react";
+import { formatCompetenceLabel, formatCompetenceShortLabel } from "@/lib/competence";
 import { getSuggestedPaymentDate, usePayroll } from "@/contexts/PayrollContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -96,10 +97,9 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
   const monthItems = React.useMemo(
     () =>
       availableCompetences.map((item) => {
-        const date = new Date(item.year, item.month - 1, 1);
         return {
           value: `${item.month}-${item.year}`,
-          label: date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+          label: formatCompetenceLabel(item.month, item.year),
         };
       }),
     [availableCompetences],
@@ -125,7 +125,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
   const currentStatusVisual = STATUS_VISUAL[currentStatus];
   const CurrentStatusIcon = currentStatusVisual.icon;
   const statusLabel = currentBatch ? (STATUS_LABEL[currentBatch.status] ?? STATUS_LABEL[currentStatus]) : STATUS_LABEL[currentStatus];
-  const competenceLabel = new Date(selectedMonth.year, selectedMonth.month - 1, 1).toLocaleDateString("pt-BR", { month: "2-digit", year: "numeric" });
+  const competenceLabel = formatCompetenceShortLabel(selectedMonth.month, selectedMonth.year);
   const companyName = selectedCompany?.name || "empresa selecionada";
   const suggestedPaymentDate = React.useMemo(() => {
     // Comentário: header reutiliza helper oficial da folha para manter regra única da sugestão.

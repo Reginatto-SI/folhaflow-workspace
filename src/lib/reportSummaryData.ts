@@ -1,4 +1,5 @@
 import { Company, Employee, PayrollBatch, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
+import { formatCompetenceLabel, isThirteenthMonth } from "@/lib/competence";
 import { buildReportByCompanyData } from "@/lib/reportByCompanyData";
 import { resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
 
@@ -39,6 +40,7 @@ export type ReportSummaryDataset = {
 };
 
 const monthLabelLegacy = (month: number, year: number) => {
+  if (isThirteenthMonth(month)) return formatCompetenceLabel(month, year).toUpperCase();
   // Comentário: legado usa "ABRIL-26" (mês em caixa-alta + 2 dígitos do ano).
   const full = new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long" });
   return `${full.toUpperCase()}-${String(year).slice(-2)}`;

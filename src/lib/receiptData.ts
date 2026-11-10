@@ -4,6 +4,7 @@
 import { PayrollEntry, Rubric, RubricClassification } from "@/types/payroll";
 import { calculatePayrollFromEntry } from "@/lib/payrollSpreadsheet";
 import { valorPorExtenso } from "@/lib/numberToWords";
+import { THIRTEENTH_FIRST_CODE, THIRTEENTH_SECOND_CODE } from "@/lib/competence";
 
 export type ReceiptLine = {
   label: string;
@@ -301,6 +302,16 @@ export function buildReceiptData(entry: PayrollEntry, rubrics: Rubric[]): Receip
       : result.netSalary;
 
   lines.push({ label: "Líquido a receber", prefix: "(=)", value: netSalary, highlight: true });
+
+  // Comentário: folhas de 13º reaproveitam o mesmo recibo; muda somente a identificação
+  // das linhas (sem renomear rubricas e sem alterar valores).
+  if (entry.month === THIRTEENTH_FIRST_CODE || entry.month === THIRTEENTH_SECOND_CODE) {
+    const grossLabel = entry.month === THIRTEENTH_FIRST_CODE ? "13º Salário — 1ª Parcela" : "13º Salário";
+    lines.forEach((line) => {
+      if (line.label === "Salário Bruto") line.label = grossLabel;
+      if (entry.month === THIRTEENTH_SECOND_CODE && line.label === "Adiant. Gerencial") line.label = "Adiantamento da 1ª Parcela";
+    });
+  }
 
   return {
     baseSalary,
