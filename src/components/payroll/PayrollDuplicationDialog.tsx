@@ -1,5 +1,5 @@
 import React from "react";
-import { formatCompetenceLabel, formatCompetenceShortLabel } from "@/lib/competence";
+import { THIRTEENTH_FIRST_CODE, THIRTEENTH_SECOND_CODE, formatCompetenceLabel, formatCompetenceShortLabel, isThirteenthMonth } from "@/lib/competence";
 import { CheckCircle2, Copy, Loader2 } from "lucide-react";
 import { usePayroll, PayrollDuplicationResult } from "@/contexts/PayrollContext";
 import { PayrollMonth, Rubric } from "@/types/payroll";
@@ -169,6 +169,7 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
     if (mode === "single" && !companyId) return "Selecione uma empresa.";
     if (creationType === "duplicate" && !baseCompetence) return "Selecione a folha/competência base.";
     if (!targetCompetence) return "Informe a nova competência.";
+    if (isThirteenthMonth(targetCompetence.month) && !(targetCompetence.year >= 2000)) return "Informe o exercício do 13º salário.";
     if (creationType === "duplicate" && baseCompetence && baseCompetence.month === targetCompetence.month && baseCompetence.year === targetCompetence.year) {
       return "A nova competência deve ser diferente da competência base.";
     }
@@ -320,11 +321,42 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
                 )}
                 <div className="space-y-2">
                   <Label>Nova competência</Label>
-                  <Input
-                    type="month"
-                    value={toMonthInputValue(targetCompetence)}
-                    onChange={(event) => setTargetCompetence(parseMonthInput(event.target.value))}
-                  />
+                  {/* Comentário: 13º é competência independente (sem mês), identificada por exercício + parcela. */}
+                  <Select
+                    value={targetCompetence && isThirteenthMonth(targetCompetence.month) ? String(targetCompetence.month) : "mensal"}
+                    onValueChange={(value) => {
+                      if (value === "mensal") {
+                        setTargetCompetence(null);
+                        return;
+                      }
+                      const year = targetCompetence?.year || new Date().getFullYear();
+                      setTargetCompetence({ month: Number(value), year });
+                    }}
+                  >
+                    <SelectTrigger aria-label="Tipo da competência">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mensal">Folha mensal</SelectItem>
+                      <SelectItem value={String(THIRTEENTH_FIRST_CODE)}>13º Salário — 1ª Parcela</SelectItem>
+                      <SelectItem value={String(THIRTEENTH_SECOND_CODE)}>13º Salário — 2ª Parcela</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {targetCompetence && isThirteenthMonth(targetCompetence.month) ? (
+                    <Input
+                      type="number"
+                      min={2000}
+                      aria-label="Exercício do 13º"
+                      value={targetCompetence.year || ""}
+                      onChange={(event) => setTargetCompetence({ month: targetCompetence.month, year: Number(event.target.value) })}
+                    />
+                  ) : (
+                    <Input
+                      type="month"
+                      value={toMonthInputValue(targetCompetence)}
+                      onChange={(event) => setTargetCompetence(parseMonthInput(event.target.value))}
+                    />
+                  )}
                 </div>
               </div>
 
