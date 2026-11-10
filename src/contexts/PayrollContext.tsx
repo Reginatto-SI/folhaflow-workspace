@@ -497,7 +497,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [allJobRoles, setAllJobRoles] = useState<JobRole[]>([]);
-  const [allPayrollEntries, setAllPayrollEntries] = useState<PayrollEntry[]>([]);
+  const [rawPayrollEntries, setAllPayrollEntries] = useState<PayrollEntry[]>([]);
   const [allPayrollBatches, setAllPayrollBatches] = useState<PayrollBatch[]>([]);
   const [rubrics, setRubrics] = useState<Rubric[]>([]);
   const [payrollCatalogErrors, setPayrollCatalogErrors] = useState<{ departments?: string; jobRoles?: string; payrollEntries?: string }>({});
@@ -842,6 +842,20 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Comentário: empresas ativas precisam estar disponíveis antes dos callbacks que dependem delas.
   const activeCompanies = React.useMemo(() => companies.filter((c) => c.isActive), [companies]);
+
+  // Comentário: lançamentos de 13º têm month NULL no banco; herdamos a competência
+  // interna (13/14) do lote vinculado para que recibos/relatórios os identifiquem sem misturar com mensais.
+  const allPayrollEntries = React.useMemo(() => {
+    const thirteenthBatchMonth = new Map<string, number>();
+    allPayrollBatches.forEach((batch) => {
+      if (isThirteenthMonth(batch.month)) thirteenthBatchMonth.set(batch.id, batch.month);
+    });
+    if (!thirteenthBatchMonth.size) return rawPayrollEntries;
+    return rawPayrollEntries.map((entry) => {
+      const month = entry.payrollBatchId ? thirteenthBatchMonth.get(entry.payrollBatchId) : undefined;
+      return month ? { ...entry, month } : entry;
+    });
+  }, [allPayrollBatches, rawPayrollEntries]);
 
   const selectedBatch = React.useMemo(() => {
     if (!selectedCompany) return null;
