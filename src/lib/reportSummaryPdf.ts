@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { formatCompetenceLabel, isThirteenthMonth } from "@/lib/competence";
 import autoTable from "jspdf-autotable";
 import type { ReportSummaryDataset } from "@/lib/reportSummaryData";
 import { buildManagerialSummary } from "@/lib/reportSummaryManagerial";
@@ -34,7 +35,7 @@ const normalizeFileToken = (value: string): string =>
     .replace(/^-|-$/g, "");
 
 const buildFileName = (month: number, year: number) => {
-  const competence = new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const competence = isThirteenthMonth(month) ? formatCompetenceLabel(month, year) : new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   return `resumo-folha-${normalizeFileToken(competence || `${month}-${year}`)}.pdf`;
 };
 
