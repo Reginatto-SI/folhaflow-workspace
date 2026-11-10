@@ -4,6 +4,7 @@ import { stripDerivedRubricsFromPayload } from "@/lib/payrollDuplicationGuard";
 import { calculatePayroll } from "@/lib/payrollSpreadsheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { batchTypeFromMonth, isThirteenthMonth, monthFromDb, toDbMonth } from "@/lib/competence";
 
 export type PayrollDuplicationMode = "single" | "all";
 
@@ -107,7 +108,9 @@ const mapCompanyRowToModel = (row: { id: string; name: string; cnpj: string; add
   state: row.state || "",
   isActive: row.is_active,
 });
-export const getSuggestedPaymentDate = (month: number, year: number) => {
+export const getSuggestedPaymentDate = (month: number, year: number): string | null => {
+  // Comentário: folhas de 13º não têm mês — data de pagamento é informada manualmente.
+  if (isThirteenthMonth(month)) return null;
   // Comentário: sugestão padrão da folha é sempre dia 5 do mês seguinte à competência.
   const nextMonth = month === 12 ? 1 : month + 1;
   const nextYear = month === 12 ? year + 1 : year;
@@ -400,7 +403,7 @@ type PayrollEntryRow = {
   payroll_batch_id: string | null;
   employee_id: string;
   company_id: string;
-  month: number;
+  month: number | null;
   year: number;
   base_salary: number;
   earnings: Record<string, number> | null;
@@ -419,7 +422,8 @@ const mapPayrollEntryRowToModel = (row: PayrollEntryRow): PayrollEntry => ({
   payrollBatchId: row.payroll_batch_id,
   employeeId: row.employee_id,
   companyId: row.company_id,
-  month: row.month,
+  // Comentário: lançamento de 13º tem month NULL; o vínculo real é payroll_batch_id.
+  month: row.month ?? 0,
   year: row.year,
   baseSalary: Number(row.base_salary || 0),
   earnings: row.earnings || {},
@@ -437,7 +441,7 @@ const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
   payroll_batch_id: entry.payrollBatchId ?? null,
   employee_id: entry.employeeId,
   company_id: entry.companyId,
-  month: entry.month,
+  month: toDbMonth(entry.month),
   year: entry.year,
   base_salary: entry.baseSalary,
   earnings: entry.earnings,
@@ -451,15 +455,17 @@ const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
 const mapPayrollBatchRowToModel = (row: {
   id: string;
   company_id: string;
-  month: number;
+  month: number | null;
   year: number;
   status: string;
   is_archived?: boolean | null;
   payment_date?: string | null;
+  batch_type?: string | null;
 }): PayrollBatch => ({
   id: row.id,
   companyId: row.company_id,
-  month: row.month,
+  // Comentário: 13º (month NULL) vira código interno 13/14; ver src/lib/competence.ts.
+  month: monthFromDb(row.month, row.batch_type),
   year: row.year,
   status: row.status as PayrollBatch["status"],
   isArchived: Boolean(row.is_archived),
@@ -472,7 +478,7 @@ const RUBRICA_SELECT_WITH_ITEMS =
   "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, nature, calculation_method, classification, fixed_value, percentage_value, percentage_base_rubrica_id, uses_complementary_quantity, complementary_quantity_label, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
 
 const PAYROLL_ENTRY_SELECT = "id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary, rubric_meta, conferido";
-const PAYROLL_BATCH_SELECT = "id, company_id, month, year, status, is_archived, payment_date";
+const PAYROLL_BATCH_SELECT = "id, company_id, month, year, status, is_archived, payment_date, batch_type";
 
 const isSameCompetence = (a: PayrollMonth, b: PayrollMonth) => a.month === b.month && a.year === b.year;
 
@@ -895,8 +901,9 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .from("payroll_batches")
       .insert({
         company_id: selectedCompany.id,
-        month: selectedMonth.month,
+        month: toDbMonth(selectedMonth.month),
         year: selectedMonth.year,
+        batch_type: batchTypeFromMonth(selectedMonth.month),
         status: "em_edicao",
         payment_date: getSuggestedPaymentDate(selectedMonth.month, selectedMonth.year),
       })
@@ -1152,8 +1159,9 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .from("payroll_batches")
           .insert({
             company_id: company.id,
-            month: input.targetMonth.month,
+            month: toDbMonth(input.targetMonth.month),
             year: input.targetMonth.year,
+            batch_type: batchTypeFromMonth(input.targetMonth.month),
             // Nova folha duplicada nasce em `em_edicao` (rascunho conceitual do PRD-09),
             // sem criar novo status e sem interferir nos cálculos/lançamentos copiados.
             status: "em_edicao",
@@ -1178,7 +1186,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 payroll_batch_id: newBatch.id,
                 employee_id: entry.employeeId,
                 company_id: company.id,
-                month: input.targetMonth.month,
+                month: toDbMonth(input.targetMonth.month),
                 year: input.targetMonth.year,
                 // base_salary ainda é fallback legado em recibos/migrations; não pode nascer zerado
                 // quando salários/proventos manuais selecionados foram copiados.
@@ -1194,7 +1202,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 payroll_batch_id: newBatch.id,
                 employee_id: employee.id,
                 company_id: company.id,
-                month: input.targetMonth.month,
+                month: toDbMonth(input.targetMonth.month),
                 year: input.targetMonth.year,
                 // Folha zerada nasce sem valores manuais persistidos.
                 base_salary: 0,
