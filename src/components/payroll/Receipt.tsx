@@ -84,7 +84,7 @@ const Receipt: React.FC<ReceiptProps> = ({ entry, employee, company, department,
             <tr><td className="rk">EMPRESA:</td><td className="rv">{company?.name || "—"}</td></tr>
             <tr><td className="rk">SETOR:</td><td className="rv">{department?.name || employee.department || "—"}</td></tr>
             <tr><td className="rk">FUNÇÃO:</td><td className="rv">{jobRole?.name || employee.role || "—"}</td></tr>
-            <tr><td className="rk">MÊS:</td><td className="rv">{competencia}</td></tr>
+            <tr><td className="rk">{entry.month === THIRTEENTH_FIRST_CODE || entry.month === THIRTEENTH_SECOND_CODE ? "COMPETÊNCIA:" : "MÊS:"}</td><td className="rv">{competencia}</td></tr>
             <tr><td className={withNoTranslateClass("rk")} {...noTranslateAttributes}>VALOR RECEBIDO:</td><td className={withNoTranslateClass("rv")} {...noTranslateAttributes}>{fmt(data.netSalary)}</td></tr>
             <tr><td className={withNoTranslateClass("rk")} {...noTranslateAttributes}>Valor por Extenso:</td><td className={withNoTranslateClass("rv")} {...noTranslateAttributes}>{data.valorExtenso}</td></tr>
             <tr><td className="rk">Observação:</td><td className="rv">{observacao}</td></tr>
