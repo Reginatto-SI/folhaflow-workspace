@@ -8,6 +8,13 @@
       "when": 1794317739773,
       "tag": "0000_add_13th_salary_batches",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794318206502,
+      "tag": "0001_scope_role_permissions_select",
+      "breakpoints": true
     }
   ]
 }
