@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
+import { formatCompetenceLabel, formatCompetenceShortLabel } from "@/lib/competence";
 import { usePayroll } from "@/contexts/PayrollContext";
 import PayrollHeader from "@/components/payroll/PayrollHeader";
 import TotalsBar from "@/components/payroll/TotalsBar";
@@ -170,7 +171,7 @@ const Index = () => {
   }, [activeCompanies, allPayrollBatches, persistedFilters, setSelectedCompany, setSelectedMonth]);
 
   const competenceLabel = useMemo(
-    () => new Date(selectedMonth.year, selectedMonth.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+    () => formatCompetenceLabel(selectedMonth.month, selectedMonth.year),
     [selectedMonth.month, selectedMonth.year]
   );
 

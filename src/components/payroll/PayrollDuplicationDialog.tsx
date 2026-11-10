@@ -1,4 +1,5 @@
 import React from "react";
+import { formatCompetenceLabel, formatCompetenceShortLabel } from "@/lib/competence";
 import { CheckCircle2, Copy, Loader2 } from "lucide-react";
 import { usePayroll, PayrollDuplicationResult } from "@/contexts/PayrollContext";
 import { PayrollMonth, Rubric } from "@/types/payroll";
@@ -19,11 +20,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
-const formatCompetence = (competence: PayrollMonth) =>
-  new Date(competence.year, competence.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+const formatCompetence = (competence: PayrollMonth) => formatCompetenceLabel(competence.month, competence.year);
 
-const formatCompetenceShort = (competence: PayrollMonth) =>
-  `${String(competence.month).padStart(2, "0")}/${competence.year}`;
+const formatCompetenceShort = (competence: PayrollMonth) => formatCompetenceShortLabel(competence.month, competence.year);
 
 const competenceValue = (competence: PayrollMonth) => `${competence.month}-${competence.year}`;
 
