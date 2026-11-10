@@ -1,5 +1,5 @@
 import React from "react";
-import { formatCompetenceLabel, formatCompetenceShortLabel } from "@/lib/competence";
+import { formatCompetenceLabel, formatCompetenceShortLabel, isThirteenthMonth } from "@/lib/competence";
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, Filter, Info, Percent } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -322,7 +322,7 @@ const Dashboard: React.FC = () => {
       });
       if (!hasEntries(ds, appliedFilters.companyId)) return [];
       return [{
-        competencia: formatCompetenceShortLabel(m.month, m.year),
+        competencia: isThirteenthMonth(m.month) ? formatCompetenceShortLabel(m.month, m.year) : new Date(m.year, m.month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "numeric" }),
         rendimentos: getMetricValue(ds, "__rendimentos__"),
         salarioLiquido: getMetricRow(ds, "salario_liquido") ? getMetricValue(ds, "salario_liquido") : null,
       }];
