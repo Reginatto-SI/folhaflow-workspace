@@ -90,7 +90,8 @@ export const buildManagerialSummary = (dataset: ReportSummaryDataset): Manageria
   const totalRendimentos = rendimentosRow?.total ?? 0;
 
   const salarioCtpsRow = getRubricRowByKeyOrLabelFallback(dataset.rows, ["salario_ctps"], ["Salário CTPS"]);
-  const salarioGRow = getRubricRowByKeyOrLabelFallback(dataset.rows, ["salario_g"], ["Salário G"]);
+  const salarioGRow = dataset.rows.find((row) => row.kind === "rubric" && row.manualPresence) ??
+    getRubricRowByKeyOrLabelFallback(dataset.rows, ["salario_g"], ["Salário G"]);
   const salarioFiscalRow =
     getCanonicalRowByKey(dataset.rows, "salario_real") ??
     dataset.rows.find((row) => row.isCanonical && normalize(row.label) === "SALARIO REAL") ??
@@ -101,7 +102,7 @@ export const buildManagerialSummary = (dataset: ReportSummaryDataset): Manageria
 
   const compositionCandidates = [
     { key: "salario_ctps", label: "Salário CTPS", value: salarioCtpsRow?.total ?? 0 },
-    { key: "salario_g", label: "Salário G", value: salarioGRow?.total ?? 0 },
+    { key: "salario_g", label: salarioGRow?.manualPresence ? salarioGRow.label : "Salário G", value: salarioGRow?.total ?? 0 },
     { key: "salario_fiscal", label: "Salário Fiscal", value: salarioFiscalRow?.total ?? 0 },
     { key: "outros_rendimentos", label: "Outros Rendimentos", value: outrosRendimentosRow?.total ?? 0 },
     { key: "descontos", label: "Descontos", value: descontosRow?.total ?? 0 },

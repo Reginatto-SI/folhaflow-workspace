@@ -68,6 +68,7 @@ export interface PayrollEntry {
   month: number;
   year: number;
   baseSalary: number;
+  thirteenthSalaryReference?: number | null;
   earnings: Record<string, number>;
   deductions: Record<string, number>;
   notes: string;

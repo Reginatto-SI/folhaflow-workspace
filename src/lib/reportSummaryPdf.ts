@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import { formatCompetenceLabel, isThirteenthMonth } from "@/lib/competence";
 import autoTable from "jspdf-autotable";
-import type { ReportSummaryDataset } from "@/lib/reportSummaryData";
+import { getSummaryDisplayValue, type ReportSummaryDataset } from "@/lib/reportSummaryData";
 import { buildManagerialSummary } from "@/lib/reportSummaryManagerial";
 
 // Comentário: PDF do Resumo Completo da Folha — fiel ao modelo legado "Resumo Completo DF.pdf".
@@ -77,7 +77,7 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   ];
 
   // Comentário: linha headcount usa inteiros; demais usam BRL.
-  const formatCell = (value: number, isInteger?: boolean) =>
+  const formatCell = (value: number | undefined, isInteger?: boolean) => value === undefined ? "" :
     isInteger ? String(Math.round(value)) : formatBRL(value);
 
   const mainRows = dataset.rows.filter((row) => !["rendimentos", "descontos", "custo_medio"].includes(row.kind));
@@ -85,9 +85,9 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
 
   const body = mainRows.map((row) => [
     row.label,
-    ...companyColumns.map((c) => formatCell(row.valuesByCompanyId[c.id] ?? 0, row.isInteger)),
-    formatCell(row.total, row.isInteger),
-    formatCell(row.semImob, row.isInteger),
+    ...companyColumns.map((c) => formatCell(getSummaryDisplayValue(row, "company", c.id), row.isInteger)),
+    formatCell(getSummaryDisplayValue(row, "total"), row.isInteger),
+    formatCell(getSummaryDisplayValue(row, "semImob"), row.isInteger),
   ]);
 
   // Mapa de destaque por índice de linha (para didParseCell).
@@ -172,9 +172,9 @@ export const generateReportSummaryPdf = (dataset: ReportSummaryDataset) => {
   // Bloco inferior separado (Rendimentos, Descontos, Custo médio por Func.), igual ao legado.
   const summaryBody = summaryRows.map((row) => [
     row.label,
-    ...companyColumns.map((c) => formatCell(row.valuesByCompanyId[c.id] ?? 0, row.isInteger)),
-    formatCell(row.total, row.isInteger),
-    formatCell(row.semImob, row.isInteger),
+    ...companyColumns.map((c) => formatCell(getSummaryDisplayValue(row, "company", c.id), row.isInteger)),
+    formatCell(getSummaryDisplayValue(row, "total"), row.isInteger),
+    formatCell(getSummaryDisplayValue(row, "semImob"), row.isInteger),
   ]);
   const summaryBoldRows = new Set<number>();
   summaryRows.forEach((row, idx) => {

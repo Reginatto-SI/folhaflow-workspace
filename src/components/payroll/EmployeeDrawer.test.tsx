@@ -682,3 +682,55 @@ describe("EmployeeDrawer", () => {
     expect(screen.getByText("Configuração canônica incompleta: verifique salario_real, g2_complemento e salario_liquido.")).toBeInTheDocument();
   });
 });
+
+it("salva e reabre os campos manuais de cada parcela sem incluir a referência no líquido", async () => {
+  const managerial: Rubric = { ...baseRubric, id: "gerencial", code: "salario_g", classification: "salario_g" };
+  const first: PayrollEntry = { ...entry, month: 13, payrollBatchId: "primeira" };
+  const second: PayrollEntry = { ...entry, id: "entry-2", month: 14, payrollBatchId: "segunda" };
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  const drawer = (current: PayrollEntry) => (
+    <EmployeeDrawer open onOpenChange={() => {}} entry={current} employee={employee}
+      rubrics={[managerial]} onSave={onSave} />
+  );
+  const { rerender } = render(drawer(first));
+  const reference = () => screen.getByLabelText<HTMLInputElement>("Salário Total");
+  const amount = () => screen.getByLabelText<HTMLInputElement>("Salário G. 13º");
+  expect(reference().value).toBe("");
+  expect(amount().value).toBe("");
+
+  fireEvent.change(reference(), { target: { value: "3.003,60" } });
+  expect(amount().value).toBe("");
+  fireEvent.change(amount(), { target: { value: "1.725,20" } });
+  fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+  await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+  const saved = onSave.mock.calls[0][1] as Partial<PayrollEntry>;
+  expect(saved).toMatchObject({
+    thirteenthSalaryReference: 3003.60,
+    earnings: { gerencial: 1725.20 },
+    earningsTotal: 1725.20,
+    netSalary: 1725.20,
+  });
+
+  rerender(drawer(second));
+  expect(reference().value).toBe("");
+  expect(amount().value).toBe("");
+  fireEvent.change(amount(), { target: { value: "0,00" } });
+  fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+  await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
+  expect(onSave).toHaveBeenLastCalledWith(second.id, expect.objectContaining({
+    thirteenthSalaryReference: null,
+    earnings: { gerencial: 0 },
+  }));
+
+  rerender(drawer({ ...first, ...saved }));
+  expect(reference().value).toBe("3.003,60");
+  expect(amount().value).toBe("1.725,20");
+  fireEvent.change(amount(), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+  await waitFor(() => expect(onSave).toHaveBeenCalledTimes(3));
+  expect(onSave.mock.calls[2][1].earnings).not.toHaveProperty("gerencial");
+
+  rerender(drawer(entry));
+  expect(screen.queryByLabelText("Salário Total")).toBeNull();
+  expect(screen.queryByLabelText("Salário G. 13º")).toBeNull();
+});

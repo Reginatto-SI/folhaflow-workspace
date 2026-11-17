@@ -29,3 +29,5 @@ Relatório é leitura e consolidação visual dos dados existentes.
 - Relatório visual, PDF, Excel e dashboard devem consumir a mesma regra/dataset consolidado.
 - O módulo de relatórios não recalcula Salário Real, Salário Fiscal, G2 Complemento nem Salário Líquido; apenas exibe valores já calculados na Central de Folha.
 - Rubricas canônicas continuam vindo do cálculo principal da Central de Folha (PRD-01/PRD-03/PRD-12), sem lógica paralela no relatório.
+
+Nas competências de 13º salário, a apresentação dos campos manuais segue o PRD-13 — Campos Manuais do 13º Salário.

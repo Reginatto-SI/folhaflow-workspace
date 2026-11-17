@@ -20,6 +20,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { buttonVariants } from "@/components/ui/button";
+import { isThirteenthMonth } from "@/lib/competence";
+import { readManualThirteenthSalary, resolveManualThirteenthRubric } from "@/lib/manualThirteenthSalary";
 import { cn } from "@/lib/utils";
 import {
   calculatePayroll,
@@ -48,6 +50,13 @@ const parseCurrency = (value: string): number => {
   const parsed = Number(decimalNormalized);
 
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+};
+
+const parseThirteenthAmount = (value: string): number | null => {
+  const text = value.trim();
+  if (!/^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?$/.test(text)) return null;
+  const amount = parseCurrency(text);
+  return amount < 1e12 ? amount : null;
 };
 
 type RubricValueInput = {
@@ -220,6 +229,9 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   const [rubricValues, setRubricValues] = useState<Record<string, number>>({});
   // PRD-07: quantidade complementar (ex.: dias) por rubrica. Apenas descritiva.
   const [rubricQuantities, setRubricQuantities] = useState<Record<string, number>>({});
+  const isThirteenth = !!entry && isThirteenthMonth(entry.month);
+  const [salaryReference, setSalaryReference] = useState("");
+  const [managerialSalary, setManagerialSalary] = useState("");
   const [notes, setNotes] = useState("");
   const hydratedEntryIdRef = useRef<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -230,8 +242,9 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     [rubrics]
   );
 
+  const managerialRubric = isThirteenth ? resolveManualThirteenthRubric(activeRubricsOrdered) : undefined;
   const groupedRubrics = useMemo(() => {
-    const editable = activeRubricsOrdered.filter((rubric) => !isDerivedRubric(rubric));
+    const editable = activeRubricsOrdered.filter((rubric) => !isDerivedRubric(rubric) && rubric.id !== managerialRubric?.id);
 
     return {
       // Agrupamento guiado por metadado técnico da rubrica (type/nature), nunca por label.
@@ -242,12 +255,14 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       descontos: editable.filter((rubric) => rubric.type === "desconto"),
       resultados: activeRubricsOrdered.filter(isDerivedRubric),
     };
-  }, [activeRubricsOrdered]);
+  }, [activeRubricsOrdered, managerialRubric]);
 
   const entryFormSeed = useMemo(() => {
     if (!entry) return null;
     return JSON.stringify({
       id: entry.id,
+      month: entry.month,
+      thirteenthSalaryReference: entry.thirteenthSalaryReference,
       notes: entry.notes || "",
       earnings: entry.earnings || {},
       deductions: entry.deductions || {},
@@ -262,6 +277,11 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       acc[rubric.id] = 0;
       return acc;
     }, {});
+
+    const reference = entry?.thirteenthSalaryReference;
+    setSalaryReference(reference == null ? "" : formatEditCurrency(reference));
+    const managerial = entry && managerialRubric ? readManualThirteenthSalary(entry, managerialRubric) : undefined;
+    setManagerialSalary(managerial === undefined ? "" : formatEditCurrency(managerial));
 
     if (isCreateMode || !entry) {
       setRubricValues(emptyValues);
@@ -289,7 +309,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     // Comentário: barreira de hidratação para não emitir preview antes
     // do formulário do entry atual estar completamente inicializado.
     hydratedEntryIdRef.current = entry.id;
-  }, [activeRubricsOrdered, entryFormSeed, isCreateMode, open]);
+  }, [activeRubricsOrdered, entryFormSeed, isCreateMode, managerialRubric, open]);
 
   // Cálculo único da tela: usado para prévia, derivados readonly e totais persistidos.
   const spreadsheetPreview = useMemo(
@@ -354,7 +374,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     const deductionsPayload: Record<string, number> = {};
 
     activeRubricsOrdered.forEach((rubric) => {
-      if (isDerivedRubric(rubric)) return;
+      if (isDerivedRubric(rubric) || (rubric.id === managerialRubric?.id && !managerialSalary.trim())) return;
       const value = rubricValues[rubric.id] || 0;
       if (rubric.type === "desconto") {
         deductionsPayload[rubric.id] = value;
@@ -372,6 +392,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
     });
 
     return {
+      ...(isThirteenth ? { thirteenthSalaryReference: parseThirteenthAmount(salaryReference) } : {}),
       baseSalary: spreadsheetPreview.baseSalary,
       earnings: earningsPayload,
       deductions: deductionsPayload,
@@ -385,7 +406,7 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
       netSalary: canonicalDerivedRubricIds.salarioLiquidoId ? spreadsheetPreview.salarioLiquido : spreadsheetPreview.netSalary,
       rubricMeta: rubricMetaPayload,
     };
-  }, [activeRubricsOrdered, canonicalDerivedRubricIds.salarioLiquidoId, notes, rubricQuantities, rubricValues, spreadsheetPreview]);
+  }, [activeRubricsOrdered, canonicalDerivedRubricIds.salarioLiquidoId, isThirteenth, managerialRubric, managerialSalary, notes, rubricQuantities, rubricValues, salaryReference, spreadsheetPreview]);
 
   useEffect(() => {
     if (!onPreviewChange) return;
@@ -415,6 +436,11 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
   const handleSave = async () => {
     if (!entry) {
       toast.error("Lançamento não encontrado para salvar.");
+      return;
+    }
+
+    if (isThirteenth && [salaryReference, managerialSalary].some((text) => text.trim() && parseThirteenthAmount(text) === null)) {
+      toast.error("Informe valores válidos para os salários do 13º.");
       return;
     }
 
@@ -514,6 +540,27 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
                 </SelectContent>
               </Select>
             </div>
+          )}
+
+          {isThirteenth && (
+            <section className="border rounded-md p-2 space-y-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                <Label className="space-y-1">
+                  <span>Salário Total</span>
+                  <Input inputMode="decimal" value={salaryReference} disabled={!canEditValues}
+                    onChange={(event) => setSalaryReference(event.target.value)} />
+                </Label>
+                <Label className="space-y-1">
+                  <span>Salário G. 13º</span>
+                  <Input inputMode="decimal" value={managerialSalary} disabled={!canEditValues || !managerialRubric}
+                    onChange={(event) => {
+                      setManagerialSalary(event.target.value);
+                      if (managerialRubric) updateRubricValue({ rubricId: managerialRubric.id, value: parseThirteenthAmount(event.target.value) ?? 0 });
+                    }} />
+                </Label>
+              </div>
+              {!managerialRubric && <p className="text-xs text-muted-foreground">Configure a rubrica manual Salário G para informar esse valor.</p>}
+            </section>
           )}
 
           {groupedRubrics.salariosBase.length > 0 && (

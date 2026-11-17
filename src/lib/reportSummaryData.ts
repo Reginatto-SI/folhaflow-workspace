@@ -1,6 +1,7 @@
 import { Company, Employee, PayrollBatch, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
 import { formatCompetenceLabel, isThirteenthMonth } from "@/lib/competence";
 import { buildReportByCompanyData } from "@/lib/reportByCompanyData";
+import { resolveManualThirteenthRubric } from "@/lib/manualThirteenthSalary";
 import { resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
 
 // Comentário (PRD-08/PRD-12): este helper NÃO recalcula folha.
@@ -8,7 +9,7 @@ import { resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
 // `buildReportByCompanyData` (mesma fonte usada pelo Relatório por Empresa) e
 // consolida os totais por rubrica em uma única matriz [linha=rubrica, coluna=empresa].
 
-export type SummaryRowKind = "headcount" | "rubric" | "rendimentos" | "descontos" | "custo_medio";
+export type SummaryRowKind = "headcount" | "reference" | "rubric" | "rendimentos" | "descontos" | "custo_medio";
 
 export type SummaryRow = {
   key: string;            // identificador estável (id da rubrica ou chave da linha derivada)
@@ -20,6 +21,7 @@ export type SummaryRow = {
   isBold?: boolean;       // destaque visual (linhas finais e canônicas)
   isInteger?: boolean;    // headcount renderiza inteiro, demais como BRL
   valuesByCompanyId: Record<string, number>;
+  manualPresence?: { total: boolean; semImob: boolean };
   total: number;
   semImob: number;        // TOTAL - IMOBILIÁRIA (não é "sem movimento")
 };
@@ -37,6 +39,11 @@ export type ReportSummaryDataset = {
   year: number;
   companies: SummaryCompanyColumn[];
   rows: SummaryRow[];
+};
+
+export const getSummaryDisplayValue = (row: SummaryRow, scope: "company" | "total" | "semImob", companyId = "") => {
+  if (scope === "company") return row.valuesByCompanyId[companyId] ?? (row.manualPresence ? undefined : 0);
+  return row.manualPresence && !row.manualPresence[scope] ? undefined : row[scope];
 };
 
 const monthLabelLegacy = (month: number, year: number) => {
@@ -142,8 +149,39 @@ export function buildReportSummaryData(params: {
     ),
   );
 
+  const manualColumns = [...datasetByCompany.values()][0]?.dynamicColumns.filter((column) => column.manualThirteenthField) ?? [];
+  const managerialRubric = isThirteenthMonth(month.month) ? resolveManualThirteenthRubric(rubrics) : undefined;
+  manualColumns.forEach((column) => {
+    const valuesByCompanyId: Record<string, number> = {};
+    let total = 0;
+    let semImob = 0;
+    let hasNonImobValue = false;
+    columns.forEach(({ id }) => {
+      const value = datasetByCompany.get(id)?.totalsByRubricId[column.rubricId];
+      if (value === undefined) return;
+      valuesByCompanyId[id] = value;
+      total += value;
+      if (id !== imobCompanyId) {
+        semImob += value;
+        hasNonImobValue = true;
+      }
+    });
+    const isManagerial = column.manualThirteenthField === "managerial";
+    rows.push({
+      key: column.rubricId,
+      label: column.rubricName,
+      kind: isManagerial ? "rubric" : "reference",
+      ...(isManagerial && managerialRubric ? { rubricId: managerialRubric.id, rubricType: managerialRubric.type } : {}),
+      valuesByCompanyId,
+      total,
+      semImob,
+      manualPresence: { total: Object.keys(valuesByCompanyId).length > 0, semImob: hasNonImobValue },
+    });
+  });
+
   // Linhas por rubrica (na ordem oficial). Reaproveita totalsByRubricId já consolidado.
   activeRubrics.forEach((rubric) => {
+    if (rubric.id === managerialRubric?.id) return;
     const isCanonical =
       rubric.id === canonical.salarioRealId ||
       rubric.id === canonical.g2ComplementoId ||

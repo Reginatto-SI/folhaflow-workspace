@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePayroll } from "@/contexts/PayrollContext";
-import { buildReportSummaryData } from "@/lib/reportSummaryData";
+import { buildReportSummaryData, getSummaryDisplayValue } from "@/lib/reportSummaryData";
 import { generateReportSummaryPdf } from "@/lib/reportSummaryPdf";
 import { generateReportSummaryExcel } from "@/lib/reportSummaryExcel";
 import { buildManagerialSummary } from "@/lib/reportSummaryManagerial";
@@ -213,20 +213,20 @@ const ReportsSummary: React.FC = () => {
                 <TableBody>
                   {mainRows.map((row) => {
                     const cellClass = row.isBold ? "font-semibold bg-muted/40" : "";
-                    const format = (v: number) => (row.isInteger ? String(Math.round(v)) : BRL(v));
+                    const format = (v: number | undefined) => v === undefined ? "—" : (row.isInteger ? String(Math.round(v)) : BRL(v));
                     return (
                       <TableRow key={row.key}>
                         <TableCell className={cellClass}>{row.label}</TableCell>
                         {dataset.companies.map((c) => (
                           <TableCell key={`${row.key}-${c.id}`} className={`text-right ${cellClass}`}>
-                            {format(row.valuesByCompanyId[c.id] ?? 0)}
+                            {format(getSummaryDisplayValue(row, "company", c.id))}
                           </TableCell>
                         ))}
                         <TableCell className={`text-right font-semibold ${cellClass}`}>
-                          {format(row.total)}
+                          {format(getSummaryDisplayValue(row, "total"))}
                         </TableCell>
                         <TableCell className={`text-right font-semibold ${cellClass}`}>
-                          {format(row.semImob)}
+                          {format(getSummaryDisplayValue(row, "semImob"))}
                         </TableCell>
                       </TableRow>
                     );
@@ -239,20 +239,20 @@ const ReportsSummary: React.FC = () => {
                   <TableBody>
                     {summaryRows.map((row) => {
                       const cellClass = row.isBold ? "font-semibold bg-muted/40" : "";
-                      const format = (v: number) => (row.isInteger ? String(Math.round(v)) : BRL(v));
+                      const format = (v: number | undefined) => v === undefined ? "—" : (row.isInteger ? String(Math.round(v)) : BRL(v));
                       return (
                         <TableRow key={row.key}>
                           <TableCell className={cellClass}>{row.label}</TableCell>
                           {dataset.companies.map((c) => (
                             <TableCell key={`${row.key}-${c.id}`} className={`text-right ${cellClass}`}>
-                              {format(row.valuesByCompanyId[c.id] ?? 0)}
+                              {format(getSummaryDisplayValue(row, "company", c.id))}
                             </TableCell>
                           ))}
                           <TableCell className={`text-right font-semibold ${cellClass}`}>
-                            {format(row.total)}
+                            {format(getSummaryDisplayValue(row, "total"))}
                           </TableCell>
                           <TableCell className={`text-right font-semibold ${cellClass}`}>
-                            {format(row.semImob)}
+                            {format(getSummaryDisplayValue(row, "semImob"))}
                           </TableCell>
                         </TableRow>
                       );
