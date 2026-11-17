@@ -542,35 +542,36 @@ const EmployeeDrawer: React.FC<EmployeeDrawerProps> = ({
             </div>
           )}
 
-          {isThirteenth && (
-            <section className="border rounded-md p-2 space-y-1.5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                <Label className="space-y-1">
-                  <span>Salário Total</span>
-                  <Input inputMode="decimal" value={salaryReference} disabled={!canEditValues}
-                    onChange={(event) => setSalaryReference(event.target.value)} />
-                </Label>
-                <Label className="space-y-1">
-                  <span>Salário G. 13º</span>
-                  <Input inputMode="decimal" value={managerialSalary} disabled={!canEditValues || !managerialRubric}
-                    onChange={(event) => {
-                      setManagerialSalary(event.target.value);
-                      if (managerialRubric) updateRubricValue({ rubricId: managerialRubric.id, value: parseThirteenthAmount(event.target.value) ?? 0 });
-                    }} />
-                </Label>
-              </div>
-              {!managerialRubric && <p className="text-xs text-muted-foreground">Configure a rubrica manual Salário G para informar esse valor.</p>}
-            </section>
-          )}
-
-          {groupedRubrics.salariosBase.length > 0 && (
+          {(groupedRubrics.salariosBase.length > 0 || isThirteenth) && (
             <section className="border rounded-md border-slate-200 bg-slate-50/70 p-2 space-y-1.5">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Salários Base</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
                 {groupedRubrics.salariosBase.map((rubric) => (
                   <NumericRubricInput key={rubric.id} rubric={rubric} value={rubricValues[rubric.id] || 0} quantity={rubricQuantities[rubric.id] || 0} disabled={!canEditValues} onChange={updateRubricValue} onQuantityChange={updateRubricQuantity} />
                 ))}
+                {isThirteenth && (
+                  <>
+                    <div className="min-w-0 space-y-1 lg:border-l lg:border-slate-200 lg:pl-2">
+                      <Label htmlFor="thirteenth-salary-reference" className="text-[11px] leading-tight text-muted-foreground">Salário Total</Label>
+                      <Input id="thirteenth-salary-reference" className="h-8 w-full min-w-0 text-right tabular-nums text-sm font-medium"
+                        inputMode="decimal" value={salaryReference} disabled={!canEditValues}
+                        onChange={(event) => setSalaryReference(event.target.value)} />
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <Label htmlFor="thirteenth-managerial-salary" className="text-[11px] leading-tight text-muted-foreground">Salário G. 13º</Label>
+                      <Input id="thirteenth-managerial-salary" className="h-8 w-full min-w-0 text-right tabular-nums text-sm font-medium"
+                        inputMode="decimal" value={managerialSalary} disabled={!canEditValues || !managerialRubric}
+                        onChange={(event) => {
+                          setManagerialSalary(event.target.value);
+                          if (managerialRubric) updateRubricValue({ rubricId: managerialRubric.id, value: parseThirteenthAmount(event.target.value) ?? 0 });
+                        }} />
+                    </div>
+                  </>
+                )}
               </div>
+              {isThirteenth && !managerialRubric && (
+                <p className="text-xs text-muted-foreground">Configure a rubrica manual Salário G para informar esse valor.</p>
+              )}
             </section>
           )}
 
