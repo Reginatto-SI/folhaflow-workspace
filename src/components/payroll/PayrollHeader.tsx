@@ -193,8 +193,8 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
       <div className="mb-3 rounded-md border bg-muted/20 px-2.5 py-2">
         {/* Comentário: header em duas áreas horizontais — esquerda (campos) e direita (ação principal + menu), mantendo leitura limpa e profissional. */}
         <div className="flex flex-col gap-2.5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="flex flex-1 flex-wrap items-end gap-2.5">
-            <div className="w-full space-y-1 sm:w-[220px]">
+          <div className="grid w-full min-w-0 grid-cols-1 items-end gap-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,0.9fr)] xl:max-w-[950px] xl:flex-1">
+            <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               <Building2 className="h-3 w-3" />
               Empresa
@@ -206,7 +206,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
               placeholder="Selecione a empresa"
               searchPlaceholder="Buscar empresa..."
               emptyMessage="Nenhuma empresa encontrada."
-              className="h-8 py-0 font-medium text-foreground sm:w-[220px]"
+              className="h-8 w-full min-w-0 overflow-hidden py-0 font-medium text-foreground"
               onValueChange={(id) => {
                 const c = activeCompanies.find((c) => c.id === id);
                 if (c) setSelectedCompany(c);
@@ -214,7 +214,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
             />
             </div>
 
-            <div className="w-full space-y-1 sm:w-[190px]">
+            <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               <CalendarDays className="h-3 w-3" />
               Competência
@@ -226,7 +226,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
               placeholder="Selecione a competência"
               searchPlaceholder="Buscar competência..."
               emptyMessage="Nenhuma folha cadastrada para esta empresa."
-              className="h-8 py-0 font-medium text-foreground sm:w-[190px]"
+              className="h-8 w-full min-w-0 overflow-hidden py-0 font-medium text-foreground"
               onValueChange={(v) => {
                 if (!v) return;
                 const [m, y] = v.split("-").map(Number);
@@ -234,7 +234,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
               }}
             />
             </div>
-            <div className="w-full space-y-1 sm:w-[190px]">
+            <div className="min-w-0 space-y-1">
               <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Data de pagamento</div>
               <Input
                 type="date"
@@ -254,7 +254,7 @@ const PayrollHeader: React.FC<PayrollHeaderProps> = ({ onNewEntry, onGenerateRec
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start xl:self-end">
+          <div className="flex shrink-0 items-center gap-2 self-start xl:self-end">
             <Button size="sm" onClick={onNewEntry} className="h-8 px-3" disabled={!currentBatch}>
               <Plus className="h-4 w-4 mr-1" />
               Novo lançamento
