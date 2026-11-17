@@ -15,6 +15,13 @@
       "when": 1794318206502,
       "tag": "0001_scope_role_permissions_select",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794954823920,
+      "tag": "0002_manual_thirteenth_salary",
+      "breakpoints": true
     }
   ]
 }

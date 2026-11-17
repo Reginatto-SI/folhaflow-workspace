@@ -42,7 +42,8 @@ vi.mock("@/components/ui/select", () => ({
   SelectValue: () => null,
 }));
 
-vi.mock("@/lib/reportSummaryData", () => ({
+vi.mock("@/lib/reportSummaryData", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/reportSummaryData")>(),
   buildReportSummaryData: ({ month }: MockSummaryInput) => ({
     title: `Resumo de Folha de Pagamento - ${month.month}/${month.year}`,
     competenceLabel: `${month.month}/${month.year}`,

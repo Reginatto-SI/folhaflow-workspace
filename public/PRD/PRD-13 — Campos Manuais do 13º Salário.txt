@@ -1,0 +1,31 @@
+# PRD-13 — Campos Manuais do 13º Salário
+
+## Objetivo
+
+Recuperar os dois campos independentes que o sistema anterior permitia digitar em cada parcela do 13º salário.
+
+- Salário Total é a referência informativa daquela folha. Exemplo: R$ 3.003,60.
+- Salário G. 13º é o valor gerencial manual da rubrica Salário G. Exemplo: R$ 1.501,80.
+
+Os números do exemplo são independentes. O sistema não aplica percentual, divisão ou vínculo entre eles.
+
+## Central de Folha e persistência
+
+- As duas parcelas exibem os campos na edição do funcionário. A folha mensal mantém sua apresentação.
+- Salário Total usa a coluna anulável `payroll_entries.thirteenth_salary_reference`. Salário G. 13º usa o valor da rubrica manual `salario_g` em `earnings`.
+- Cada lançamento pertence ao funcionário e ao lote da parcela e do exercício. Um valor vazio fica sem lançamento, enquanto zero digitado é um valor informado.
+- Ao criar ou duplicar uma parcela, ambos os campos começam vazios. As demais rubricas seguem as regras do PRD-09.
+- Folhas anteriores preservam o Salário G existente. O novo campo começa vazio. Se um registro antigo já contiver zero para a rubrica, o sistema mantém esse zero.
+
+## Relatórios e cálculo
+
+Relatório por Empresa e Resumo Completo exibem os mesmos valores em tela, PDF e Excel. O consolidado soma exclusivamente valores informados e mostra vazio quando nenhum lançamento contribuiu. Salário Total fica fora dos indicadores financeiros. Salário G. 13º segue o tratamento vigente da rubrica, uma única vez.
+
+As fórmulas homologadas, as rubricas canônicas, INSS, G2 Complemento, líquido e a lógica financeira dos recibos seguem os PRDs vigentes.
+
+## Critérios de aceite
+
+- Salvar e reabrir dois valores independentes, inclusive zero explícito e campo vazio.
+- Editar uma parcela sem modificar a outra. Criar e duplicar uma parcela com ambos os campos vazios.
+- Conferir os valores da Central na visualização e nas exportações dos dois relatórios.
+- Abrir lançamentos históricos e folhas mensais preservando valores, cálculos e indicadores.

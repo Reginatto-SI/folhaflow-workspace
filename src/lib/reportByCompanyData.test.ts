@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildConsolidatedReportByCompanyData, buildReportByCompanyData } from "@/lib/reportByCompanyData";
 import { buildFinancialSheetData, buildReportByCompanySheetData } from "@/lib/reportByCompanyExcel";
 import { buildPayrollPdfDynamicColumns, buildPayrollPdfEmployeeRows } from "@/lib/reportByCompanyPdf";
+import { buildReportSummaryData, getSummaryDisplayValue } from "@/lib/reportSummaryData";
 import type { Company, Employee, PayrollBatch, PayrollEntry, Rubric } from "@/types/payroll";
 
 const company = {
@@ -432,4 +433,57 @@ describe("buildReportByCompanyData - Salário Fiscal na aba Financeiro", () => {
     expect(dataset.financialRubricIds.salarioFiscalId).toBe("fiscal-1");
     expect(dataset.rows[0].rubricValues["fiscal-1"]).toBe(0);
   });
+});
+
+it("exporta valores manuais por parcela e mantém o histórico vazio sem transformar zero informado em vazio", () => {
+  const managerial: Rubric = { ...rubric, id: "gerencial", code: "salario_g", classification: "salario_g" };
+  const firstBatch = { ...batch, id: "primeira", month: 13 };
+  const secondBatch = { ...batch, id: "segunda", month: 14 };
+  const firstEntry = {
+    ...makeEntry("e1", 100),
+    month: 13,
+    payrollBatchId: firstBatch.id,
+    thirteenthSalaryReference: 3003.60,
+    earnings: { salario: 100, gerencial: 1725.20 },
+  };
+  const historical = {
+    ...makeEntry("e1", 50),
+    month: 14,
+    payrollBatchId: secondBatch.id,
+    earnings: { salario: 50, salario_g: 0 },
+  };
+  const allEntries = [firstEntry, historical];
+  const allBatches = [firstBatch, secondBatch];
+  const rubrics = [rubric, managerial];
+
+  for (const selectedBatch of allBatches) {
+    const dataset = buildReportByCompanyData({
+      company, batch: selectedBatch, month: selectedBatch, allBatches, allEntries, rubrics,
+    });
+    const isFirst = selectedBatch.month === 13;
+    const [reference, salaryG] = dataset.dynamicColumns;
+    expect([reference.rubricName, salaryG.rubricName]).toEqual(["Salário Total", "Salário G. 13º"]);
+    expect(dataset.rows).toHaveLength(1);
+    expect(dataset.totalsByRubricId[reference.rubricId]).toBe(isFirst ? 3003.60 : undefined);
+    expect(dataset.totalsByRubricId[salaryG.rubricId]).toBe(isFirst ? 1725.20 : 0);
+
+    const pdfColumns = buildPayrollPdfDynamicColumns(dataset);
+    expect(pdfColumns.slice(0, 2)).toEqual([reference, salaryG]);
+    expect(buildPayrollPdfEmployeeRows(dataset, pdfColumns)[0].slice(4, 6))
+      .toEqual(isFirst ? ["R$ 3.003,60", "R$ 1.725,20"] : ["", "R$ 0,00"]);
+
+    const sheet = buildReportByCompanySheetData(dataset);
+    const referenceIndex = sheet[2].findIndex((cell) => cell.v === "Salário Total");
+    expect(sheet[3].slice(referenceIndex, referenceIndex + 2).map((cell) => cell.v))
+      .toEqual(isFirst ? [3003.60, 1725.20] : ["", 0]);
+
+    const summary = buildReportSummaryData({
+      companies: [company], month: selectedBatch, allBatches, allEntries, allEmployees: [], rubrics,
+    });
+    const summaryReference = summary.rows.find((row) => row.label === "Salário Total")!;
+    const summarySalary = summary.rows.find((row) => row.label === "Salário G. 13º")!;
+    expect(getSummaryDisplayValue(summaryReference, "company", company.id)).toBe(isFirst ? 3003.60 : undefined);
+    expect(getSummaryDisplayValue(summarySalary, "total")).toBe(isFirst ? 1725.20 : 0);
+    expect(summary.rows.filter((row) => row.rubricId === managerial.id)).toHaveLength(1);
+  }
 });

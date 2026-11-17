@@ -406,6 +406,7 @@ type PayrollEntryRow = {
   month: number | null;
   year: number;
   base_salary: number;
+  thirteenth_salary_reference: number | null;
   earnings: Record<string, number> | null;
   deductions: Record<string, number> | null;
   notes: string | null;
@@ -426,6 +427,7 @@ const mapPayrollEntryRowToModel = (row: PayrollEntryRow): PayrollEntry => ({
   month: row.month ?? 0,
   year: row.year,
   baseSalary: Number(row.base_salary || 0),
+  thirteenthSalaryReference: row.thirteenth_salary_reference ?? null,
   earnings: row.earnings || {},
   deductions: row.deductions || {},
   notes: row.notes || "",
@@ -444,6 +446,7 @@ const mapPayrollEntryInsertToRow = (entry: Omit<PayrollEntry, "id">) => ({
   month: toDbMonth(entry.month),
   year: entry.year,
   base_salary: entry.baseSalary,
+  ...(isThirteenthMonth(entry.month) ? { thirteenth_salary_reference: entry.thirteenthSalaryReference ?? null } : {}),
   earnings: entry.earnings,
   deductions: entry.deductions,
   notes: normalizeText(entry.notes),
@@ -477,7 +480,7 @@ const mapPayrollBatchRowToModel = (row: {
 const RUBRICA_SELECT_WITH_ITEMS =
   "id, name, code, category, type, entry_mode, display_order, is_active, allow_manual_override, nature, calculation_method, classification, fixed_value, percentage_value, percentage_base_rubrica_id, uses_complementary_quantity, complementary_quantity_label, rubrica_formula_items:rubrica_formula_items!rubrica_formula_items_rubrica_id_fkey(id, operation, source_rubrica_id, item_order)";
 
-const PAYROLL_ENTRY_SELECT = "id, payroll_batch_id, employee_id, company_id, month, year, base_salary, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary, rubric_meta, conferido";
+const PAYROLL_ENTRY_SELECT = "id, payroll_batch_id, employee_id, company_id, month, year, base_salary, thirteenth_salary_reference, earnings, deductions, notes, earnings_total, deductions_total, inss_amount, net_salary, rubric_meta, conferido";
 const PAYROLL_BATCH_SELECT = "id, company_id, month, year, status, is_archived, payment_date, batch_type";
 
 const isSameCompetence = (a: PayrollMonth, b: PayrollMonth) => a.month === b.month && a.year === b.year;
@@ -965,6 +968,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const updatePayrollEntry = useCallback(
     async (id: string, updates: Partial<PayrollEntry>) => {
       const payload = {
+        ...(updates.thirteenthSalaryReference !== undefined ? { thirteenth_salary_reference: updates.thirteenthSalaryReference } : {}),
         ...(updates.baseSalary !== undefined ? { base_salary: updates.baseSalary } : {}),
         ...(updates.earnings !== undefined ? { earnings: updates.earnings } : {}),
         ...(updates.deductions !== undefined ? { deductions: updates.deductions } : {}),
@@ -1010,7 +1014,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       const createdEntry = mapPayrollEntryRowToModel(data as PayrollEntryRow);
       setAllPayrollEntries((prev) => [createdEntry, ...prev]);
-      return createdEntry;
+      return batch && isThirteenthMonth(batch.month) ? { ...createdEntry, month: batch.month } : createdEntry;
     },
     [ensureCurrentBatch]
   );
@@ -1125,7 +1129,7 @@ export const PayrollProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const withoutDerived = stripDerivedRubricsFromPayload(payload, derivedRubricIds);
       return [...allowedRubricIds].reduce<Record<string, number>>((acc, rubricId) => {
         const rubric = manualRubricsById.get(rubricId);
-        if (!rubric) return acc;
+        if (!rubric || (isThirteenthMonth(input.targetMonth.month) && rubric.classification === "salario_g")) return acc;
         const rawValue = withoutDerived[rubric.id] ?? withoutDerived[rubric.code] ?? withoutDerived[rubric.name];
         const value = Number(rawValue);
         acc[rubric.id] = Number.isFinite(value) ? value : 0;

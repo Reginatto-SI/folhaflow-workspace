@@ -315,7 +315,7 @@ const ReportsCompany: React.FC = () => {
                       <TableCell>{row.admissionRegistration}</TableCell>
                       {dataset.dynamicColumns.map((column) => (
                         <TableCell key={`${row.employeeId}-${column.rubricId}`} className="text-right">
-                          {BRL(row.rubricValues[column.rubricId] ?? 0)}
+                          {column.manualThirteenthField && row.rubricValues[column.rubricId] === undefined ? "—" : BRL(row.rubricValues[column.rubricId] ?? 0)}
                         </TableCell>
                       ))}
                     </TableRow>
@@ -328,7 +328,7 @@ const ReportsCompany: React.FC = () => {
                     <TableCell />
                     {dataset.dynamicColumns.map((column) => (
                       <TableCell key={`total-${column.rubricId}`} className="text-right font-semibold">
-                        {BRL(dataset.totalsByRubricId[column.rubricId] ?? 0)}
+                        {column.manualThirteenthField && dataset.totalsByRubricId[column.rubricId] === undefined ? "—" : BRL(dataset.totalsByRubricId[column.rubricId] ?? 0)}
                       </TableCell>
                     ))}
                   </TableRow>

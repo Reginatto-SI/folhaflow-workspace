@@ -69,6 +69,9 @@ const moneyCell = (value: unknown): CellObject => {
   return { v: Number.isFinite(n) ? Number(n.toFixed(2)) : 0, t: "n", z: BRL_NUMBER_FORMAT };
 };
 
+const reportMoneyCell = (value: number | undefined, isManual: boolean): CellObject =>
+  isManual && value === undefined ? textCell("") : moneyCell(value ?? 0);
+
 export const buildReportByCompanySheetData = (dataset: ReportByCompanyDataset): CellObject[][] => {
   const headerLabels = [
     ...(dataset.isConsolidated ? ["Empresa"] : []),
@@ -89,7 +92,7 @@ export const buildReportByCompanySheetData = (dataset: ReportByCompanyDataset): 
           textCell(row.bankBranch),
           textCell(row.bankAccount),
           textCell(row.bankPixKey),
-          ...dataset.dynamicColumns.map((column) => moneyCell(row.rubricValues[column.rubricId] ?? 0)),
+          ...dataset.dynamicColumns.map((column) => reportMoneyCell(row.rubricValues[column.rubricId], !!column.manualThirteenthField)),
         ])
       )
     : dataset.rows.map((row) => [
@@ -101,7 +104,7 @@ export const buildReportByCompanySheetData = (dataset: ReportByCompanyDataset): 
         textCell(row.bankBranch),
         textCell(row.bankAccount),
         textCell(row.bankPixKey),
-        ...dataset.dynamicColumns.map((column) => moneyCell(row.rubricValues[column.rubricId] ?? 0)),
+        ...dataset.dynamicColumns.map((column) => reportMoneyCell(row.rubricValues[column.rubricId], !!column.manualThirteenthField)),
       ]);
 
   // Comentário: linha de totais — colunas fixas + bancárias ficam vazias; rubricas em formato monetário pt-BR.
@@ -109,7 +112,7 @@ export const buildReportByCompanySheetData = (dataset: ReportByCompanyDataset): 
   const totalsRow: CellObject[] = [
     textCell(dataset.isConsolidated ? "TOTAL GERAL" : "TOTAL"),
     ...Array.from({ length: fixedAndBankBlanks }, () => textCell("")),
-    ...dataset.dynamicColumns.map((column) => moneyCell(dataset.totalsByRubricId[column.rubricId] ?? 0)),
+    ...dataset.dynamicColumns.map((column) => reportMoneyCell(dataset.totalsByRubricId[column.rubricId], !!column.manualThirteenthField)),
   ];
 
   return [

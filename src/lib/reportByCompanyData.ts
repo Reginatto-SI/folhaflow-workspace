@@ -1,5 +1,6 @@
 import { Company, Employee, PayrollBatch, PayrollEntry, PayrollMonth, Rubric } from "@/types/payroll";
 import { formatCompetenceLabel, isThirteenthMonth } from "@/lib/competence";
+import { readManualThirteenthSalary, resolveManualThirteenthRubric } from "@/lib/manualThirteenthSalary";
 import { calculatePayrollFromEntry, resolveCanonicalDerivedRubricIds } from "@/lib/payrollSpreadsheet";
 
 export type ReportFixedColumnKey = "name" | "department" | "jobRole" | "admissionRegistration";
@@ -12,6 +13,7 @@ export type ReportDynamicColumn = {
   rubricClassification: Rubric["classification"];
   order: number;
   isCanonicalSalarioReal: boolean;
+  manualThirteenthField?: "reference" | "managerial";
 };
 
 export type ReportByCompanyRow = {
@@ -199,7 +201,10 @@ export function buildConsolidatedReportByCompanyData(companyDatasets: ReportByCo
   const dynamicColumns = [...dynamicColumnsById.values()].sort((a, b) => (a.order - b.order) || employeeNameCollator.compare(a.rubricName, b.rubricName));
   const [firstCompanyDataset] = orderedCompanyDatasets;
   const totalsByRubricId = dynamicColumns.reduce<Record<string, number>>((acc, column) => {
-    acc[column.rubricId] = orderedCompanyDatasets.reduce((sum, dataset) => sum + toNumber(dataset.totalsByRubricId[column.rubricId]), 0);
+    const values = orderedCompanyDatasets.map((dataset) => dataset.totalsByRubricId[column.rubricId]);
+    if (!column.manualThirteenthField || values.some((value) => value !== undefined)) {
+      acc[column.rubricId] = values.reduce((sum, value) => sum + toNumber(value), 0);
+    }
     return acc;
   }, {});
 
@@ -235,8 +240,10 @@ export function buildReportByCompanyData(params: {
   const canonicalIds = resolveCanonicalDerivedRubricIds(rubrics);
   const financialRubricIds = resolveReportFinancialRubricIds(rubrics, canonicalIds);
 
-  const activeRubrics = [...rubrics]
-    .filter((rubric) => rubric.isActive)
+  const isThirteenth = isThirteenthMonth(month.month);
+  const managerialRubric = isThirteenth ? resolveManualThirteenthRubric(rubrics) : undefined;
+  const activeRubrics: ReportDynamicColumn[] = [...rubrics]
+    .filter((rubric) => rubric.isActive && rubric.id !== managerialRubric?.id)
     .sort((a, b) => a.order - b.order)
     .map((rubric) => ({
       rubricId: rubric.id,
@@ -248,6 +255,17 @@ export function buildReportByCompanyData(params: {
       // Comentário: marca técnica usada somente na apresentação do PDF para remover Salário Real sem depender do nome da coluna.
       isCanonicalSalarioReal: canonicalIds.salarioRealId === rubric.id,
     }));
+
+  if (isThirteenth) {
+    activeRubrics.unshift(
+      { rubricId: "__thirteenth_reference__", rubricCode: "", rubricName: "Salário Total",
+        rubricType: "provento", rubricClassification: null, order: -2,
+        isCanonicalSalarioReal: false, manualThirteenthField: "reference" },
+      { rubricId: managerialRubric?.id ?? "__thirteenth_managerial__", rubricCode: managerialRubric?.code ?? "",
+        rubricName: "Salário G. 13º", rubricType: "provento", rubricClassification: "salario_g", order: -1,
+        isCanonicalSalarioReal: false, manualThirteenthField: "managerial" },
+    );
+  }
 
   const batchesById = new Map(allBatches.map((item) => [item.id, item]));
 
@@ -280,6 +298,12 @@ export function buildReportByCompanyData(params: {
 
     const rubricValues: Record<string, number> = {};
     activeRubrics.forEach((column) => {
+      if (column.manualThirteenthField) {
+        const value = column.manualThirteenthField === "reference" ? entry.thirteenthSalaryReference
+          : managerialRubric && readManualThirteenthSalary(entry, managerialRubric);
+        if (value != null) rubricValues[column.rubricId] = value;
+        return;
+      }
       rubricValues[column.rubricId] = toNumber(readRubricValueFromEntry(entry, {
         id: column.rubricId,
         code: column.rubricCode,
@@ -312,7 +336,10 @@ export function buildReportByCompanyData(params: {
     .map(({ sortName: _sortName, sortCpf: _sortCpf, sourceIndex: _sourceIndex, ...row }) => row);
 
   const totalsByRubricId = activeRubrics.reduce<Record<string, number>>((acc, rubric) => {
-    acc[rubric.rubricId] = rows.reduce((sum, row) => sum + toNumber(row.rubricValues[rubric.rubricId]), 0);
+    const values = rows.map((row) => row.rubricValues[rubric.rubricId]);
+    if (!rubric.manualThirteenthField || values.some((value) => value !== undefined)) {
+      acc[rubric.rubricId] = values.reduce((sum, value) => sum + toNumber(value), 0);
+    }
     return acc;
   }, {});
 

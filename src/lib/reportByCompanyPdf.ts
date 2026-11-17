@@ -10,7 +10,7 @@ const RESULT_HEAD_HIGHLIGHT: [number, number, number] = [82, 97, 121];
 const BORDER_LIGHT: [number, number, number] = [180, 188, 200];
 const TEXT_LIGHT: [number, number, number] = [255, 255, 255];
 
-export const formatPdfCurrencyBlankWhenZero = (value: number | string | null | undefined) => {
+export const formatPdfCurrencyBlankWhenZero = (value: number | string | null | undefined, showZero = false) => {
   if (value === null || value === undefined) return "";
 
   const numericValue = typeof value === "number"
@@ -19,7 +19,7 @@ export const formatPdfCurrencyBlankWhenZero = (value: number | string | null | u
   if (!Number.isFinite(numericValue)) return "";
 
   // Comentário: no PDF, valores monetários zerados ficam em branco para reduzir ruído visual; o número original não é alterado.
-  if (Math.round(numericValue * 100) === 0) return "";
+  if (!showZero && Math.round(numericValue * 100) === 0) return "";
 
   // Comentário: formatação BRL somente na exibição do PDF, sem alterar cálculo, totais ou payload da folha.
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numericValue).replace(/\u00a0/g, " ");
@@ -165,6 +165,8 @@ export const buildPayrollPdfDynamicColumns = (dataset: ReportByCompanyDataset): 
 
   // Comentário: a ordem do PDF segue a sequência oficial informada pelo produto.
   // Salário Real canônico é sempre removido e rubricas inexistentes não são inventadas.
+  const manualColumns = dataset.dynamicColumns.filter((column) => column.manualThirteenthField);
+  manualColumns.forEach((column) => usedRubricIds.add(column.rubricId));
   return OFFICIAL_PAYROLL_PDF_COLUMN_RULES.reduce<PayrollPdfDynamicColumn[]>((columns, rule) => {
     const matches = (candidate: ReportDynamicColumn) =>
       !candidate.isCanonicalSalarioReal && !usedRubricIds.has(candidate.rubricId) && rule.matches(candidate);
@@ -177,7 +179,7 @@ export const buildPayrollPdfDynamicColumns = (dataset: ReportByCompanyDataset): 
     usedRubricIds.add(column.rubricId);
     officialPayrollPdfColumnKeys.set(column, rule.key);
     return [...columns, column];
-  }, []);
+  }, manualColumns);
 };
 
 // Comentário: mapper puro compartilhado pela geração e pelos testes; recebe somente
@@ -190,7 +192,7 @@ export const buildPayrollPdfEmployeeRows = (
   row.department,
   formatJobRoleForPrint(row.jobRole),
   formatAdmissionRegistrationForPrint(row.admissionRegistration),
-  ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(row.rubricValues[column.rubricId])),
+  ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(row.rubricValues[column.rubricId], !!column.manualThirteenthField)),
 ]);
 
 
@@ -337,7 +339,7 @@ export const generateReportByCompanyPdf = (dataset: ReportByCompanyDataset) => {
     "",
     "",
     "",
-    ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(companyDataset.totalsByRubricId[column.rubricId])),
+    ...pdfDynamicColumns.map((column) => formatPdfCurrencyBlankWhenZero(companyDataset.totalsByRubricId[column.rubricId], !!column.manualThirteenthField)),
   ];
 
   const renderTable = (bodyRows: string[][], options?: { sectionHeaderRowIndexes?: Set<number>; totalRowIndexes?: Set<number>; startY?: number }) => {

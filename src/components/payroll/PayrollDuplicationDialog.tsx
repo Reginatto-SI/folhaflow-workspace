@@ -101,6 +101,11 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
     [rubrics]
   );
 
+  const isThirteenthTarget = !!targetCompetence && isThirteenthMonth(targetCompetence.month);
+  const copyableRubrics = isThirteenthTarget
+    ? manualRubrics.filter((rubric) => rubric.classification !== "salario_g")
+    : manualRubrics;
+
   const calculatedRubrics = React.useMemo(
     () => rubrics.filter((rubric) => rubric.isActive && rubric.nature === "calculada").sort((a, b) => a.order - b.order),
     [rubrics]
@@ -366,9 +371,10 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
                 <div>
                   <Label>Rubricas manuais a copiar</Label>
                   <p className="text-xs text-muted-foreground">Rubricas desmarcadas nascerão zeradas/vazias na nova folha.</p>
+                  {isThirteenthTarget && <p className="text-xs text-muted-foreground">Salário Total e Salário G. 13º começam em branco na nova parcela.</p>}
                 </div>
                 <div className="grid max-h-48 gap-2 overflow-auto rounded-md border p-3 sm:grid-cols-2">
-                  {manualRubrics.map((rubric) => (
+                  {copyableRubrics.map((rubric) => (
                     <Label key={rubric.id} className="flex cursor-pointer items-center gap-2 text-sm font-normal">
                       <Checkbox
                         checked={selectedRubricIds.includes(rubric.id)}
@@ -377,7 +383,7 @@ const PayrollDuplicationDialog: React.FC<PayrollDuplicationDialogProps> = ({ ope
                       {rubric.name}
                     </Label>
                   ))}
-                  {manualRubrics.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma rubrica manual ativa encontrada.</p>}
+                  {copyableRubrics.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma rubrica manual ativa encontrada.</p>}
                 </div>
                 {calculatedRubrics.length > 0 && (
                   <p className="text-xs text-muted-foreground">

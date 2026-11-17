@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import type { ReportSummaryDataset } from "@/lib/reportSummaryData";
+import { getSummaryDisplayValue, type ReportSummaryDataset } from "@/lib/reportSummaryData";
 import { buildManagerialSummary } from "@/lib/reportSummaryManagerial";
 
 const normalizeFileToken = (value: string): string =>
@@ -28,7 +28,7 @@ export const generateReportSummaryExcel = (dataset: ReportSummaryDataset) => {
 
   const header = ["Renda", ...dataset.companies.map((company) => company.name), "TOTAL", "SEM IMOB."];
 
-  const formatNumberCell = (value: number, isInteger?: boolean) => ({
+  const formatNumberCell = (value: number | undefined, isInteger?: boolean) => value === undefined ? { v: "", t: "s" as const } : ({
     v: Number.isFinite(value) ? value : 0,
     t: "n" as const,
     z: isInteger ? "0" : BRL_FORMAT,
@@ -36,9 +36,9 @@ export const generateReportSummaryExcel = (dataset: ReportSummaryDataset) => {
 
   const makeRow = (row: ReportSummaryDataset["rows"][number]) => [
     { v: row.label, t: "s" as const },
-    ...dataset.companies.map((company) => formatNumberCell(row.valuesByCompanyId[company.id] ?? 0, row.isInteger)),
-    formatNumberCell(row.total, row.isInteger),
-    formatNumberCell(row.semImob, row.isInteger),
+    ...dataset.companies.map((company) => formatNumberCell(getSummaryDisplayValue(row, "company", company.id), row.isInteger)),
+    formatNumberCell(getSummaryDisplayValue(row, "total"), row.isInteger),
+    formatNumberCell(getSummaryDisplayValue(row, "semImob"), row.isInteger),
   ];
 
   const managerial = buildManagerialSummary(dataset);

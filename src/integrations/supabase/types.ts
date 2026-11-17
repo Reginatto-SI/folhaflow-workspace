@@ -282,6 +282,7 @@ export type Database = {
           notes: string | null
           payroll_batch_id: string | null
           rubric_meta: Json
+          thirteenth_salary_reference: number | null
           updated_at: string
           year: number
         }
@@ -302,6 +303,7 @@ export type Database = {
           notes?: string | null
           payroll_batch_id?: string | null
           rubric_meta?: Json
+          thirteenth_salary_reference?: number | null
           updated_at?: string
           year: number
         }
@@ -322,6 +324,7 @@ export type Database = {
           notes?: string | null
           payroll_batch_id?: string | null
           rubric_meta?: Json
+          thirteenth_salary_reference?: number | null
           updated_at?: string
           year?: number
         }
